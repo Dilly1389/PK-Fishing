@@ -1,37 +1,38 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>Dam Log</title>
+<title>PK Fishing</title>
 <style>
   :root{
-    --dam:#173634;
-    --dam-deep:#0f2624;
-    --khaki:#A9976B;
-    --rust:#C1440E;
-    --cream:#EFE8D8;
-    --paper:#F7F3E8;
+    --dam:#B3121F;
+    --dam-deep:#7A0611;
+    --khaki:#F1B9B9;
+    --rust:#E63946;
+    --cream:#FFFFFF;
+    --paper:#FAFAFA;
     --card-bg:#ffffff;
-    --ink:#211D16;
-    --muted:#6b6349;
-    --line:#d8cfb8;
-    --catch-green:#4C7A52;
+    --ink:#2A1414;
+    --muted:#9C6B6B;
+    --line:#F0D6D6;
+    --catch-green:#A61B2B;
     --radius:14px;
   }
   @media (prefers-color-scheme: dark){
     :root{
-      --dam:#123230;
-      --dam-deep:#081716;
-      --khaki:#c9b88a;
-      --rust:#e2712f;
-      --cream:#EFE8D8;
-      --paper:#100e0a;
-      --card-bg:#1c1912;
-      --ink:#EFE8D8;
-      --muted:#a89f82;
-      --line:#39331f;
-      --catch-green:#6fae76;
+      --dam:#7A0F1A;
+      --dam-deep:#4A0810;
+      --khaki:#E8AFAF;
+      --rust:#FF5464;
+      --cream:#FFFFFF;
+      --paper:#141010;
+      --card-bg:#1F1616;
+      --ink:#F5EAEA;
+      --muted:#C79999;
+      --line:#3A2323;
+      --catch-green:#C83244;
     }
   }
   *{box-sizing:border-box;}
@@ -63,9 +64,20 @@
     padding:22px 16px 16px;
     position:relative;
     overflow:hidden;
+    text-align:center;
   }
-  header.top h1{font-size:24px;margin:0 0 4px;color:#fff;}
+  header.top h1{
+    font-size:24px;margin:0;color:#fff;
+    display:flex;align-items:center;justify-content:center;gap:9px;
+  }
   header.top p{margin:0;color:var(--khaki);font-size:13px;}
+  .status-dot{
+    display:inline-block;width:10px;height:10px;border-radius:50%;
+    background:#9CA3AF;flex-shrink:0;
+    box-shadow:0 0 0 3px rgba(255,255,255,0.15);
+    transition:background .3s ease;
+  }
+  .status-dot.connected{background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,0.8),0 0 0 3px rgba(255,255,255,0.15);}
   #db-status{display:none;background:#b23a1f;color:#fff;padding:8px 14px;font-size:12px;text-align:center;}
   nav.tabs{display:flex;background:var(--dam-deep);position:sticky;top:0;z-index:10;}
   nav.tabs button{
@@ -159,8 +171,12 @@
     border-bottom:1px solid var(--line);gap:8px;flex-wrap:wrap;
   }
   .people-list li:last-child{border-bottom:none;}
-  .people-list .who b{display:block;font-size:15px;}
-  .people-list .who span{font-size:12px;color:var(--muted);}
+  .people-list .who b{font-size:15px;}
+  .people-list .who .pill{
+    display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;
+    background:var(--dam);color:#fff;font-size:11px;font-weight:700;
+    vertical-align:middle;
+  }
   .people-list .actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .mini-btn{
     border:1px solid var(--line);background:var(--card-bg);color:var(--ink);border-radius:7px;
@@ -226,8 +242,7 @@
 <body>
 <div class="app">
   <header class="top">
-    <h1>Dam Log</h1>
-    <p>Rod timers &middot; mieliebom &amp; hook notes &middot; vangste &middot; leaderboard</p>
+    <h1>PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
   </header>
   <div id="db-status"></div>
 
@@ -261,6 +276,10 @@
             <label>Dam</label>
             <input type="text" id="new-person-dam" placeholder="Dam">
           </div>
+        </div>
+        <div class="field">
+          <label>Competition / Weekend</label>
+          <input type="text" id="new-person-competition" placeholder="e.g. October Weekend, Club Comp">
         </div>
         <div class="field">
           <label>Number of rods</label>
@@ -338,10 +357,18 @@ function showDbError(msg){
   const el = document.getElementById('db-status');
   el.textContent = msg;
   el.style.display = 'block';
+  setConnDot(false);
 }
 function clearDbError(){
   const el = document.getElementById('db-status');
   el.style.display = 'none';
+  setConnDot(true);
+}
+function setConnDot(connected){
+  const dot = document.getElementById('conn-dot');
+  if(!dot) return;
+  dot.classList.toggle('connected', connected);
+  dot.title = connected ? 'Connected to database' : 'Not connected to database';
 }
 
 // ---------- Supabase REST helpers ----------
@@ -395,7 +422,7 @@ async function sbDelete(table, filterQuery){
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -403,8 +430,8 @@ async function loadPeople(){
   }
 }
 
-async function insertFisherman(id,name,dam,rods){
-  await sbPost('fishermen', {id,name,dam,rods});
+async function insertFisherman(id,name,dam,rods,competition){
+  await sbPost('fishermen', {id,name,dam,rods,competition});
   const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:''}));
   await sbPost('rod_state', rows);
 }
@@ -745,16 +772,18 @@ setInterval(renderTimers, 1000);
 document.getElementById('add-person-btn').addEventListener('click', async ()=>{
   const name = document.getElementById('new-person-name').value.trim();
   const dam = document.getElementById('new-person-dam').value.trim();
+  const competition = document.getElementById('new-person-competition').value.trim();
   const rods = parseInt(document.getElementById('new-person-rods').value) || 3;
   const st = document.getElementById('schedule-status');
   if(!name){ st.textContent = 'Enter a name.'; return; }
   const id = uid();
   st.textContent = 'Adding...';
   try{
-    await insertFisherman(id, name, dam, rods);
-    people.push({id, name, dam, rods});
+    await insertFisherman(id, name, dam, rods, competition);
+    people.push({id, name, dam, rods, competition});
     document.getElementById('new-person-name').value='';
     document.getElementById('new-person-dam').value='';
+    document.getElementById('new-person-competition').value='';
     st.textContent = 'Added.';
     setTimeout(()=> st.textContent='', 1500);
     populateAnglerSelect();
@@ -771,7 +800,7 @@ function renderPeopleList(){
   if(people.length===0){ el.innerHTML = '<div class="empty">No fishermen added yet.</div>'; return; }
   el.innerHTML = people.map(p=>`
     <li>
-      <div class="who"><b>${escapeHtml(p.name)}</b><span>${escapeHtml(p.dam||'No dam set')}</span></div>
+      <div class="who"><b>${escapeHtml(p.name)}</b>${p.competition ? '<span class="pill">'+escapeHtml(p.competition)+'</span>' : ''}</div>
       <div class="actions">
         <select class="mini-btn rods-select" data-id="${p.id}">
           <option value="1" ${p.rods==1?'selected':''}>1 rod</option>
