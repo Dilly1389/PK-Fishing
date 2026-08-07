@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -658,13 +657,21 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   if(!pendingEntry || !currentPerson) return;
   const entry = pendingEntry;
   const rod = entry.rod;
-  currentPerson.notes[rod] = {bom:entry.bom, hook1:entry.hook1, hook2:entry.hook2};
   currentPerson.catches.push(entry);
+
+  // Clear this rod's notes and reset its timer for the next session
+  currentPerson.notes[rod] = {bom:'', hook1:'', hook2:''};
+  currentPerson.timers[rod] = {running:false, startTs:null, accumulatedMs:0};
+
   const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
   const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
   if(typeEl) typeEl.value='';
   if(weightEl) weightEl.value='';
+
   renderCatchList(rod);
+  renderNotes();
+  renderTimers();
+
   document.getElementById('confirm-modal').classList.remove('open');
   pendingEntry = null;
   await saveRodState(currentPersonId, rod);
