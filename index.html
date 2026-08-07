@@ -172,7 +172,8 @@
   .catch-toggle{display:flex;gap:8px;margin-bottom:12px;}
   .catch-photo-preview{margin-top:8px;}
   .catch-photo-preview img{max-width:130px;border-radius:10px;display:block;border:1px solid var(--line);}
-  .pc-photo{max-width:100%;border-radius:10px;margin-top:8px;display:block;border:1px solid var(--line);}
+  .pc-photo{max-width:100%;border-radius:10px;margin-top:8px;display:block;border:1px solid var(--line);cursor:pointer;}
+  .catch-log-photo{cursor:pointer;}
   .catch-log-photo{width:34px;height:34px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);}
   .catch-toggle button{
     flex:1;padding:10px;border-radius:8px;border:1.5px solid var(--line);
@@ -366,6 +367,13 @@
   <div class="modal-card wide">
     <div id="profile-body"></div>
     <button class="primary-btn" id="profile-close">Close</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="photo-modal">
+  <div class="modal-card" style="max-width:92vw;padding:12px;text-align:center;">
+    <img id="photo-modal-img" src="" alt="Catch photo" style="max-width:100%;max-height:78vh;border-radius:10px;display:block;margin:0 auto;">
+    <button class="primary-btn" id="photo-modal-close" style="margin-top:12px;">Close</button>
   </div>
 </div>
 
@@ -707,7 +715,7 @@ function attachRodCardHandlers(){
         const dataUrl = await resizeImageFile(file);
         pendingPhotos[rod] = dataUrl;
         if(preview){
-          preview.innerHTML = `<img src="${dataUrl}" alt="Catch photo">`;
+          preview.innerHTML = `<img class="pc-photo" src="${dataUrl}" alt="Catch photo" style="max-width:130px;">`;
           preview.style.display = 'block';
         }
       }catch(e){
@@ -920,6 +928,24 @@ async function openProfile(personId){
 }
 document.getElementById('profile-close').addEventListener('click', ()=>{
   document.getElementById('profile-modal').classList.remove('open');
+});
+
+function openPhotoModal(src){
+  document.getElementById('photo-modal-img').src = src;
+  document.getElementById('photo-modal').classList.add('open');
+}
+document.getElementById('photo-modal-close').addEventListener('click', ()=>{
+  document.getElementById('photo-modal').classList.remove('open');
+});
+document.getElementById('photo-modal').addEventListener('click', (e)=>{
+  if(e.target.id === 'photo-modal'){
+    document.getElementById('photo-modal').classList.remove('open');
+  }
+});
+document.addEventListener('click', (e)=>{
+  if(e.target.classList && (e.target.classList.contains('pc-photo') || e.target.classList.contains('catch-log-photo'))){
+    openPhotoModal(e.target.src);
+  }
 });
 
 async function setActivePerson(id){
