@@ -106,14 +106,19 @@
     padding:16px 14px 16px;margin-bottom:14px;
   }
   section.card h2{font-size:15px;margin:0 0 12px;color:var(--khaki);}
+  .rod-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
   .rod-card h3{
-    font-size:17px;margin:0 0 14px;color:var(--ink);display:flex;align-items:center;gap:8px;
+    font-size:17px;margin:0;color:var(--ink);display:flex;align-items:center;gap:8px;flex-shrink:0;
   }
   .rod-card h3::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--rust);flex-shrink:0;}
+  .rod-id-input{
+    flex:1;min-width:110px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;
+    font-size:13px;background:var(--card-bg);color:var(--ink);font-family:inherit;
+  }
 
   .bobber-row{display:flex;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap;}
   .bobber{
-    width:84px;height:84px;flex-shrink:0;border-radius:50%;
+    width:108px;height:108px;flex-shrink:0;border-radius:50%;
     background:var(--dam-deep);
     border:2px solid var(--line);
     display:flex;align-items:center;justify-content:center;
@@ -122,13 +127,16 @@
   .bobber.running{animation:bob 2.6s ease-in-out infinite;}
   @media (prefers-reduced-motion:reduce){.bobber.running{animation:none;}}
   @keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
-  .bobber .time{color:#fff;font-size:13px;font-weight:700;}
-  .bobber-controls{display:flex;gap:6px;flex-wrap:wrap;flex:1;}
+  .bobber .time{color:#fff;font-size:22px;font-weight:800;}
+  .bobber-controls{display:flex;gap:6px;flex-wrap:wrap;flex:1;align-items:center;}
   .btn{
     border:none;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:700;
     cursor:pointer;font-family:inherit;flex:1;min-width:70px;
   }
-  .btn-start{background:var(--catch-green);color:#fff;}
+  .btn-start{
+    background:var(--catch-green);color:#fff;
+    flex:none;padding:7px 14px;font-size:12px;min-width:0;
+  }
   .btn-pause{background:var(--khaki);color:var(--ink);}
   .btn-reset{background:transparent;color:var(--muted);border:1px solid var(--line);}
 
@@ -452,7 +460,7 @@ async function loadPeople(){
 
 async function insertFisherman(id,name,dam,rods,competition){
   await sbPost('fishermen', {id,name,dam,rods,competition});
-  const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:''}));
+  const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:'', identifier:''}));
   await sbPost('rod_state', rows);
 }
 async function deleteFisherman(id){
@@ -481,7 +489,7 @@ async function loadPerson(id){
     RODS.forEach(r=>{
       const row = rodRows.find(x=>x.rod===r);
       timers[r] = row ? {running:row.running, startTs:row.start_ts, accumulatedMs:row.accumulated_ms} : {running:false,startTs:null,accumulatedMs:0};
-      notes[r] = row ? {bom:row.bom||'', hook1:row.hook1_note||'', hook2:row.hook2_note||''} : {bom:'',hook1:'',hook2:''};
+      notes[r] = row ? {bom:row.bom||'', hook1:row.hook1_note||'', hook2:row.hook2_note||'', identifier:row.identifier||''} : {bom:'',hook1:'',hook2:'',identifier:''};
     });
     const catches = catchRows.map(c=>({
       id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
@@ -505,7 +513,7 @@ async function saveRodState(personId, rod){
     await sbUpsert('rod_state', {
       fisherman_id: personId, rod,
       running: t.running, start_ts: t.startTs, accumulated_ms: t.accumulatedMs,
-      bom: n.bom, hook1_note: n.hook1, hook2_note: n.hook2
+      bom: n.bom, hook1_note: n.hook1, hook2_note: n.hook2, identifier: n.identifier
     }, 'fisherman_id,rod');
     clearDbError();
   }catch(e){ console.error(e); showDbError('Could not save to Supabase.'); }
@@ -540,7 +548,10 @@ function populateAnglerSelect(){
 function rodCardHtml(r){
   return `
     <section class="card rod-card" id="rodcard-${r}">
-      <h3>${RID_LABEL[r]}</h3>
+      <div class="rod-title-row">
+        <h3>${RID_LABEL[r]}</h3>
+        <input type="text" class="rod-field rod-id-input" data-rod="${r}" data-key="identifier" placeholder="Add your name...">
+      </div>
       <div class="bobber-row">
         <div class="bobber" id="bobber-${r}"><div class="time mono" id="time-${r}">00:00:00</div></div>
         <div class="bobber-controls">
@@ -704,8 +715,9 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   const rod = entry.rod;
   currentPerson.catches.push(entry);
 
-  // Clear this rod's notes and reset its timer for the next session
-  currentPerson.notes[rod] = {bom:'', hook1:'', hook2:''};
+  // Clear this rod's bait/hook notes and reset its timer for the next session,
+  // but keep the identifier (whoever is fishing that rod stays the same)
+  currentPerson.notes[rod] = {bom:'', hook1:'', hook2:'', identifier: currentPerson.notes[rod].identifier};
   currentPerson.timers[rod] = {running:false, startTs:null, accumulatedMs:0};
 
   const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
@@ -859,7 +871,7 @@ function renderTimers(){
 }
 function renderNotes(){
   RODS.forEach(r=>{
-    ['bom','hook1','hook2'].forEach(k=>{
+    ['bom','hook1','hook2','identifier'].forEach(k=>{
       const el = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="'+k+'"]');
       if(el) el.value = currentPerson ? currentPerson.notes[r][k] : '';
     });
