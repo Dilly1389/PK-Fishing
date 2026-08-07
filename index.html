@@ -301,6 +301,20 @@
     <div class="panel" id="panel-leaderboard">
       <section class="card">
         <h2>Leaderboard</h2>
+        <div class="row2">
+          <div class="field">
+            <label>Dam</label>
+            <select id="lb-filter-dam"><option value="">All dams</option></select>
+          </div>
+          <div class="field">
+            <label>Competition</label>
+            <select id="lb-filter-comp"><option value="">All competitions</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Fish type</label>
+          <select id="lb-filter-type"><option value="">All types</option></select>
+        </div>
         <div id="leaderboard-list"><div class="empty">No catches logged yet.</div></div>
       </section>
       <button class="primary-btn" id="refresh-lb-btn" style="background:var(--dam);">Refresh</button>
@@ -465,7 +479,7 @@ async function loadPerson(id){
       bom:c.bom||'', hook1:c.hook1_note||'', hook2:c.hook2_note||''
     }));
     clearDbError();
-    return {name:f.name, dam:f.dam, rods:f.rods||3, timers, notes, catches};
+    return {name:f.name, dam:f.dam, competition:f.competition||'', rods:f.rods||3, timers, notes, catches};
   }catch(e){
     console.error(e);
     showDbError('Could not reach Supabase. Check the project URL and anon key.');
@@ -558,6 +572,7 @@ function rodCardHtml(r){
             <select class="catch-type" data-rod="${r}">
               <option value="">Select type</option>
               <option value="Carp">Carp</option>
+              <option value="Mirror Carp">Mirror Carp</option>
               <option value="Grass Carp">Grass Carp</option>
               <option value="Bass">Bass</option>
               <option value="Barbel">Barbel (Catfish)</option>
@@ -722,6 +737,20 @@ function catchDetailHtml(c){
   return html;
 }
 
+function buildDistinctOptions(values, current){
+  const set = new Set(values.filter(Boolean));
+  const arr = [...set].sort((a,b)=>a.localeCompare(b));
+  let html = '<option value="">None</option>';
+  arr.forEach(v=>{
+    html += `<option value="${escapeHtml(v)}" ${v===current?'selected':''}>${escapeHtml(v)}</option>`;
+  });
+  if(current && !arr.includes(current)){
+    html += `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>`;
+  }
+  html += `<option value="__other__">+ Add new...</option>`;
+  return html;
+}
+
 async function openProfile(personId){
   const p = people.find(x=>x.id===personId);
   const rec = await loadPerson(personId);
@@ -729,7 +758,22 @@ async function openProfile(personId){
   const catches = rec && rec.catches ? rec.catches.slice().sort((a,b)=> b.time-a.time) : [];
   const caughtOnly = catches.filter(c=>c.caught);
   const totalWeight = caughtOnly.reduce((s,c)=>s+(c.weight||0),0);
-  let html = `<h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.dam||'')}</p>`;
+  const dams = people.map(x=>x.dam);
+  const comps = people.map(x=>x.competition);
+
+  let html = `<h3>${escapeHtml(p.name)}</h3>`;
+  html += `<div class="field">
+      <label>Dam</label>
+      <select id="profile-dam-select">${buildDistinctOptions(dams, p.dam||'')}</select>
+      <input type="text" id="profile-dam-other" placeholder="New dam name" style="display:none;margin-top:6px;">
+    </div>`;
+  html += `<div class="field">
+      <label>Competition / Weekend</label>
+      <select id="profile-comp-select">${buildDistinctOptions(comps, p.competition||'')}</select>
+      <input type="text" id="profile-comp-other" placeholder="New competition / weekend" style="display:none;margin-top:6px;">
+    </div>`;
+  html += `<button class="primary-btn" id="profile-save-btn">Save</button>`;
+  html += `<div class="status" id="profile-save-status"></div>`;
   html += `<div class="profile-summary">
       <div><b>${caughtOnly.length}</b>catches</div>
       <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
@@ -738,6 +782,35 @@ async function openProfile(personId){
   html += catches.length ? catches.map(catchDetailHtml).join('') : '<div class="empty">No entries logged yet.</div>';
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
+
+  document.getElementById('profile-dam-select').addEventListener('change', (e)=>{
+    document.getElementById('profile-dam-other').style.display = e.target.value==='__other__' ? 'block' : 'none';
+  });
+  document.getElementById('profile-comp-select').addEventListener('change', (e)=>{
+    document.getElementById('profile-comp-other').style.display = e.target.value==='__other__' ? 'block' : 'none';
+  });
+  document.getElementById('profile-save-btn').addEventListener('click', async ()=>{
+    const damSel = document.getElementById('profile-dam-select').value;
+    const damOther = document.getElementById('profile-dam-other').value.trim();
+    const compSel = document.getElementById('profile-comp-select').value;
+    const compOther = document.getElementById('profile-comp-other').value.trim();
+    const dam = damSel === '__other__' ? damOther : damSel;
+    const competition = compSel === '__other__' ? compOther : compSel;
+    const st = document.getElementById('profile-save-status');
+    st.textContent = 'Saving...';
+    try{
+      await sbPatch('fishermen', 'id=eq.'+p.id, {dam, competition});
+      p.dam = dam; p.competition = competition;
+      if(currentPersonId===p.id && currentPerson){ currentPerson.dam = dam; currentPerson.competition = competition; }
+      populateAnglerSelect();
+      renderPeopleList();
+      st.textContent = 'Saved.';
+      setTimeout(()=> st.textContent='', 1500);
+    }catch(e){
+      console.error(e);
+      st.textContent = 'Could not save — check the Supabase connection.';
+    }
+  });
 }
 document.getElementById('profile-close').addEventListener('click', ()=>{
   document.getElementById('profile-modal').classList.remove('open');
@@ -848,7 +921,7 @@ function renderPeopleList(){
   if(people.length===0){ el.innerHTML = '<div class="empty">No fishermen added yet.</div>'; return; }
   el.innerHTML = people.map(p=>`
     <li>
-      <div class="who"><b>${escapeHtml(p.name)}</b>${p.competition ? '<span class="pill">'+escapeHtml(p.competition)+'</span>' : ''}</div>
+      <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>${p.competition ? '<span class="pill">'+escapeHtml(p.competition)+'</span>' : ''}</div>
       <div class="actions">
         <select class="mini-btn rods-select" data-id="${p.id}">
           <option value="1" ${p.rods==1?'selected':''}>1 rod</option>
@@ -859,6 +932,9 @@ function renderPeopleList(){
         <button class="mini-btn danger" data-remove="${p.id}">Remove</button>
       </div>
     </li>`).join('');
+  el.querySelectorAll('.lb-name-btn').forEach(b=>{
+    b.addEventListener('click', ()=> openProfile(b.dataset.id));
+  });
   el.querySelectorAll('[data-select]').forEach(b=>{
     b.addEventListener('click', ()=>{ setActivePerson(b.dataset.select); renderPeopleList(); });
   });
@@ -889,20 +965,48 @@ function renderPeopleList(){
 }
 
 // Leaderboard
+function populateSelectPreserving(selectEl, values, allLabel){
+  const current = selectEl.value;
+  const distinct = [...new Set(values.filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  selectEl.innerHTML = `<option value="">${allLabel}</option>` +
+    distinct.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if(distinct.includes(current)) selectEl.value = current;
+}
+
 async function renderLeaderboard(){
   const el = document.getElementById('leaderboard-list');
   el.innerHTML = '<div class="empty">Loading...</div>';
   if(people.length===0){ el.innerHTML = '<div class="empty">No fishermen added yet.</div>'; return; }
-  const stats = [];
+
+  const perPersonCatches = {};
+  const allTypes = [];
   for(const p of people){
     const rec = await loadPerson(p.id);
     const catches = (rec && rec.catches) ? rec.catches.filter(c=>c.caught) : [];
-    const totalWeight = catches.reduce((s,c)=>s+(c.weight||0),0);
-    const biggest = catches.reduce((b,c)=> (c.weight||0) > (b?b.weight:0) ? c : b, null);
-    stats.push({id:p.id, name:p.name, dam:p.dam, count:catches.length, totalWeight, biggest});
+    perPersonCatches[p.id] = catches;
+    catches.forEach(c=>{ if(c.type) allTypes.push(c.type); });
   }
+
+  populateSelectPreserving(document.getElementById('lb-filter-dam'), people.map(p=>p.dam), 'All dams');
+  populateSelectPreserving(document.getElementById('lb-filter-comp'), people.map(p=>p.competition), 'All competitions');
+  populateSelectPreserving(document.getElementById('lb-filter-type'), allTypes, 'All types');
+
+  const damFilter = document.getElementById('lb-filter-dam').value;
+  const compFilter = document.getElementById('lb-filter-comp').value;
+  const typeFilter = document.getElementById('lb-filter-type').value;
+
+  const stats = people
+    .filter(p => (!damFilter || p.dam===damFilter) && (!compFilter || p.competition===compFilter))
+    .map(p=>{
+      let catches = perPersonCatches[p.id] || [];
+      if(typeFilter) catches = catches.filter(c=>c.type===typeFilter);
+      const totalWeight = catches.reduce((s,c)=>s+(c.weight||0),0);
+      const biggest = catches.reduce((b,c)=> (c.weight||0) > (b?b.weight:0) ? c : b, null);
+      return {id:p.id, name:p.name, dam:p.dam, count:catches.length, totalWeight, biggest};
+    });
+
   stats.sort((a,b)=> b.totalWeight - a.totalWeight || b.count - a.count);
-  if(stats.every(s=>s.count===0)){ el.innerHTML = '<div class="empty">No catches logged yet.</div>'; return; }
+  if(stats.length===0 || stats.every(s=>s.count===0)){ el.innerHTML = '<div class="empty">No catches match these filters.</div>'; return; }
   el.innerHTML = stats.map((s,i)=>`
     <div class="lb-item">
       <div class="lb-rank">${i+1}</div>
@@ -920,6 +1024,9 @@ async function renderLeaderboard(){
   });
 }
 document.getElementById('refresh-lb-btn').addEventListener('click', renderLeaderboard);
+document.getElementById('lb-filter-dam').addEventListener('change', renderLeaderboard);
+document.getElementById('lb-filter-comp').addEventListener('change', renderLeaderboard);
+document.getElementById('lb-filter-type').addEventListener('change', renderLeaderboard);
 
 // Init
 (async function init(){
