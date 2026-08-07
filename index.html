@@ -186,6 +186,7 @@
   .pc-photo{max-width:100%;border-radius:10px;margin-top:8px;display:block;border:1px solid var(--line);cursor:pointer;}
   .catch-log-photo{cursor:pointer;}
   .catch-log-photo{width:34px;height:34px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);}
+  .lb-photo{width:44px;height:44px;border-radius:8px;}
   .catch-toggle button{
     flex:1;padding:10px;border-radius:8px;border:1.5px solid var(--line);
     background:var(--card-bg);font-weight:700;font-family:inherit;cursor:pointer;
@@ -1431,9 +1432,13 @@ async function renderLeaderboard(){
     el.innerHTML = `<div class="empty">${IS_SPECTATOR ? 'No fish caught yet for these filters.' : 'No catches match these filters.'}</div>`;
     return;
   }
-  el.innerHTML = visibleStats.map((s,i)=>`
+  el.innerHTML = visibleStats.map((s,i)=>{
+    const bigPhoto = (s.biggest && s.biggest.photos && s.biggest.photos.length) ? s.biggest.photos[0] : null;
+    const photoHtml = bigPhoto ? `<img class="catch-log-photo lb-photo" src="${bigPhoto}" alt="Biggest catch">` : '';
+    return `
     <div class="lb-item">
       <div class="lb-rank">${i+1}</div>
+      ${photoHtml}
       <div>
         ${IS_SPECTATOR
           ? `<div class="lb-name">${escapeHtml(s.name)}</div>`
@@ -1444,7 +1449,8 @@ async function renderLeaderboard(){
         <div><b>${s.totalWeight.toFixed(2)}kg</b> total</div>
         <div>${s.count} catch${s.count===1?'':'es'}${s.biggest? ' · biggest '+s.biggest.weight+'kg '+escapeHtml(s.biggest.type||''):''}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   if(!IS_SPECTATOR){
     el.querySelectorAll('.lb-name-btn').forEach(b=>{
       b.addEventListener('click', ()=> openProfile(b.dataset.id));
