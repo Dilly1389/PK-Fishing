@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>PK Fishing</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#B3121F">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PK Fishing">
 <style>
   :root{
     --dam:#B3121F;
@@ -108,9 +115,15 @@
   section.card h2{font-size:15px;margin:0 0 12px;color:var(--khaki);}
   .rod-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
   .rod-card h3{
-    font-size:17px;margin:0;color:var(--ink);display:flex;align-items:center;gap:8px;flex-shrink:0;
+    font-size:17px;margin:0;color:var(--ink);flex-shrink:0;
   }
-  .rod-card h3::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--rust);flex-shrink:0;}
+  input[type="color"].rod-dot{
+    width:18px;height:18px;flex-shrink:0;padding:0;border:none;border-radius:50%;
+    cursor:pointer;background:none;-webkit-appearance:none;appearance:none;
+  }
+  input[type="color"].rod-dot::-webkit-color-swatch-wrapper{padding:0;border-radius:50%;}
+  input[type="color"].rod-dot::-webkit-color-swatch{border:1px solid var(--line);border-radius:50%;}
+  input[type="color"].rod-dot::-moz-color-swatch{border:1px solid var(--line);border-radius:50%;}
   .rod-id-input{
     flex:1;min-width:110px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;
     font-size:13px;background:var(--card-bg);color:var(--ink);font-family:inherit;
@@ -460,7 +473,7 @@ async function loadPeople(){
 
 async function insertFisherman(id,name,dam,rods,competition){
   await sbPost('fishermen', {id,name,dam,rods,competition});
-  const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:'', identifier:''}));
+  const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:'', identifier:'', dot_color:'#C1440E'}));
   await sbPost('rod_state', rows);
 }
 async function deleteFisherman(id){
@@ -489,7 +502,7 @@ async function loadPerson(id){
     RODS.forEach(r=>{
       const row = rodRows.find(x=>x.rod===r);
       timers[r] = row ? {running:row.running, startTs:row.start_ts, accumulatedMs:row.accumulated_ms} : {running:false,startTs:null,accumulatedMs:0};
-      notes[r] = row ? {bom:row.bom||'', hook1:row.hook1_note||'', hook2:row.hook2_note||'', identifier:row.identifier||''} : {bom:'',hook1:'',hook2:'',identifier:''};
+      notes[r] = row ? {bom:row.bom||'', hook1:row.hook1_note||'', hook2:row.hook2_note||'', identifier:row.identifier||'', dotColor:row.dot_color||'#C1440E'} : {bom:'',hook1:'',hook2:'',identifier:'',dotColor:'#C1440E'};
     });
     const catches = catchRows.map(c=>({
       id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
@@ -513,7 +526,7 @@ async function saveRodState(personId, rod){
     await sbUpsert('rod_state', {
       fisherman_id: personId, rod,
       running: t.running, start_ts: t.startTs, accumulated_ms: t.accumulatedMs,
-      bom: n.bom, hook1_note: n.hook1, hook2_note: n.hook2, identifier: n.identifier
+      bom: n.bom, hook1_note: n.hook1, hook2_note: n.hook2, identifier: n.identifier, dot_color: n.dotColor
     }, 'fisherman_id,rod');
     clearDbError();
   }catch(e){ console.error(e); showDbError('Could not save to Supabase.'); }
@@ -549,6 +562,7 @@ function rodCardHtml(r){
   return `
     <section class="card rod-card" id="rodcard-${r}">
       <div class="rod-title-row">
+        <input type="color" class="rod-dot" data-rod="${r}" value="#C1440E" title="Rod color">
         <h3>${RID_LABEL[r]}</h3>
         <input type="text" class="rod-field rod-id-input" data-rod="${r}" data-key="identifier" placeholder="Add your name...">
       </div>
@@ -642,6 +656,13 @@ function attachRodCardHandlers(){
       await saveRodState(currentPersonId, ta.dataset.rod);
     });
   });
+  document.querySelectorAll('.rod-dot').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      if(!currentPerson) return;
+      currentPerson.notes[inp.dataset.rod].dotColor = inp.value;
+      await saveRodState(currentPersonId, inp.dataset.rod);
+    });
+  });
   document.querySelectorAll('.catch-toggle button').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const rod = btn.dataset.rod;
@@ -716,8 +737,8 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   currentPerson.catches.push(entry);
 
   // Clear this rod's bait/hook notes and reset its timer for the next session,
-  // but keep the identifier (whoever is fishing that rod stays the same)
-  currentPerson.notes[rod] = {bom:'', hook1:'', hook2:'', identifier: currentPerson.notes[rod].identifier};
+  // but keep the identifier and color (whoever is fishing that rod stays the same)
+  currentPerson.notes[rod] = {bom:'', hook1:'', hook2:'', identifier: currentPerson.notes[rod].identifier, dotColor: currentPerson.notes[rod].dotColor};
   currentPerson.timers[rod] = {running:false, startTs:null, accumulatedMs:0};
 
   const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
@@ -875,6 +896,8 @@ function renderNotes(){
       const el = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="'+k+'"]');
       if(el) el.value = currentPerson ? currentPerson.notes[r][k] : '';
     });
+    const dotEl = document.querySelector('.rod-dot[data-rod="'+r+'"]');
+    if(dotEl) dotEl.value = (currentPerson && currentPerson.notes[r].dotColor) || '#C1440E';
   });
 }
 function renderCatchList(rod){
@@ -1104,6 +1127,13 @@ document.getElementById('lb-filter-type').addEventListener('change', renderLeade
   if(activePeople.length>0) await setActivePerson(activePeople[0].id);
   renderPeopleList();
 })();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+
 </script>
 </body>
 </html>
