@@ -196,6 +196,7 @@
   }
   .catch-log-item:last-child{border-bottom:none;}
   .catch-log-item .del{background:none;border:none;color:#c04;font-size:12.5px;cursor:pointer;flex-shrink:0;}
+  .catch-log-item .edit-catch{background:none;border:none;color:var(--dam);font-size:12.5px;font-weight:700;cursor:pointer;flex-shrink:0;margin-right:6px;}
 
   .people-list{list-style:none;padding:0;margin:0;}
   .people-list li{
@@ -391,6 +392,59 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="edit-catch-modal">
+  <div class="modal-card wide">
+    <h3 style="margin-bottom:14px;">Edit catch</h3>
+    <div class="catch-toggle" id="edit-catch-toggle">
+      <button type="button" class="sel-yes" data-yn="yes">Caught a fish</button>
+      <button type="button" class="sel-no" data-yn="no">No catch</button>
+    </div>
+    <div id="edit-catch-fields">
+      <div class="field">
+        <label>Hook</label>
+        <select id="edit-catch-hook">
+          <option value="Hook 1">Hook 1</option>
+          <option value="Hook 2">Hook 2</option>
+        </select>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Type of fish</label>
+          <select id="edit-catch-type">
+            <option value="">Select type</option>
+            <option value="Carp">Carp</option>
+            <option value="Mirror Carp">Mirror Carp</option>
+            <option value="Grass Carp">Grass Carp</option>
+            <option value="Bass">Bass</option>
+            <option value="Barbel">Barbel (Catfish)</option>
+            <option value="Tilapia">Tilapia (Bream)</option>
+            <option value="Yellowfish">Yellowfish</option>
+            <option value="Mudfish">Mudfish (Moggel)</option>
+            <option value="Koi">Koi</option>
+            <option value="Eel">Eel</option>
+            <option value="Other">Other</option>
+          </select>
+          <input type="text" id="edit-catch-type-other" placeholder="Type of fish" style="display:none;margin-top:8px;">
+        </div>
+        <div class="field">
+          <label>Weight (kg)</label>
+          <input type="number" step="0.01" min="0" id="edit-catch-weight" placeholder="e.g. 2.4">
+        </div>
+      </div>
+      <div class="field">
+        <label>Photos</label>
+        <input type="file" accept="image/*" id="edit-catch-photo-input">
+        <div class="catch-photo-preview" id="edit-catch-photo-preview" style="display:none;"></div>
+      </div>
+    </div>
+    <div class="row2" style="margin-top:16px;">
+      <button class="primary-btn" id="edit-catch-cancel" style="background:var(--khaki);color:var(--ink);">Cancel</button>
+      <button class="primary-btn" id="edit-catch-save">Save</button>
+    </div>
+    <div class="status" id="edit-catch-status"></div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = 'https://quptwbxzstepwfeffljq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_nnO3ZffPD-r08e4E1rjcPQ_47mGq7Xu';
@@ -464,6 +518,121 @@ function renderPhotoPreview(rod){
     });
   });
 }
+
+// ---------- Edit an existing catch ----------
+let editingCatchId = null;
+let editCaught = false;
+let editPhotos = [];
+
+function openEditCatch(catchId){
+  if(!currentPerson) return;
+  const c = currentPerson.catches.find(x=>x.id===catchId);
+  if(!c) return;
+  editingCatchId = catchId;
+  editCaught = !!c.caught;
+  editPhotos = (c.photos || []).slice();
+
+  document.querySelectorAll('#edit-catch-toggle button').forEach(b=>{
+    b.classList.toggle('active', (b.dataset.yn === 'yes') === editCaught);
+  });
+  document.getElementById('edit-catch-fields').style.display = editCaught ? 'block' : 'none';
+  document.getElementById('edit-catch-hook').value = c.hook || 'Hook 1';
+
+  const typeSel = document.getElementById('edit-catch-type');
+  const typeOtherEl = document.getElementById('edit-catch-type-other');
+  const knownValues = Array.from(typeSel.options).map(o=>o.value);
+  if(c.type && knownValues.includes(c.type)){
+    typeSel.value = c.type;
+    typeOtherEl.style.display = 'none';
+    typeOtherEl.value = '';
+  }else{
+    typeSel.value = c.type ? 'Other' : '';
+    typeOtherEl.value = c.type || '';
+    typeOtherEl.style.display = c.type ? 'block' : 'none';
+  }
+  document.getElementById('edit-catch-weight').value = c.weight || '';
+  document.getElementById('edit-catch-status').textContent = '';
+  renderEditPhotoPreview();
+  document.getElementById('edit-catch-modal').classList.add('open');
+}
+
+function renderEditPhotoPreview(){
+  const preview = document.getElementById('edit-catch-photo-preview');
+  if(editPhotos.length===0){ preview.innerHTML=''; preview.style.display='none'; return; }
+  preview.style.display = 'flex';
+  preview.innerHTML = editPhotos.map((src, i)=>`
+    <div class="photo-thumb-wrap">
+      <img class="pc-photo" src="${src}" alt="Catch photo">
+      <button type="button" class="photo-remove" data-index="${i}">×</button>
+    </div>`).join('');
+  preview.querySelectorAll('.photo-remove').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      editPhotos.splice(parseInt(btn.dataset.index, 10), 1);
+      renderEditPhotoPreview();
+    });
+  });
+}
+
+document.getElementById('edit-catch-toggle').querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    editCaught = btn.dataset.yn === 'yes';
+    document.querySelectorAll('#edit-catch-toggle button').forEach(b=>b.classList.toggle('active', b===btn));
+    document.getElementById('edit-catch-fields').style.display = editCaught ? 'block' : 'none';
+  });
+});
+
+document.getElementById('edit-catch-type').addEventListener('change', (e)=>{
+  document.getElementById('edit-catch-type-other').style.display = e.target.value === 'Other' ? 'block' : 'none';
+});
+
+document.getElementById('edit-catch-photo-input').addEventListener('change', async ()=>{
+  const inp = document.getElementById('edit-catch-photo-input');
+  const file = inp.files[0];
+  if(!file) return;
+  try{
+    const dataUrl = await resizeImageFile(file);
+    editPhotos.push(dataUrl);
+    renderEditPhotoPreview();
+  }catch(e){ console.error('Photo processing failed', e); }
+  inp.value = '';
+});
+
+document.getElementById('edit-catch-cancel').addEventListener('click', ()=>{
+  editingCatchId = null;
+  document.getElementById('edit-catch-modal').classList.remove('open');
+});
+
+document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
+  if(!editingCatchId || !currentPerson) return;
+  const c = currentPerson.catches.find(x=>x.id===editingCatchId);
+  if(!c) return;
+  const typeSelVal = document.getElementById('edit-catch-type').value;
+  const typeOtherVal = document.getElementById('edit-catch-type-other').value.trim();
+  const typeValue = typeSelVal === 'Other' ? typeOtherVal : typeSelVal;
+
+  c.caught = editCaught;
+  c.hook = editCaught ? document.getElementById('edit-catch-hook').value : '';
+  c.type = editCaught ? typeValue : '';
+  c.weight = editCaught ? (parseFloat(document.getElementById('edit-catch-weight').value) || 0) : 0;
+  c.photos = editCaught ? editPhotos.slice() : [];
+
+  const st = document.getElementById('edit-catch-status');
+  st.textContent = 'Saving...';
+  try{
+    await sbPatch('catches', 'id=eq.'+c.id, {
+      caught: c.caught, hook: c.hook, fish_type: c.type, weight: c.weight,
+      photos: JSON.stringify(c.photos)
+    });
+    editingCatchId = null;
+    document.getElementById('edit-catch-modal').classList.remove('open');
+    renderCatchList(c.rod);
+    clearDbError();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save — check the Supabase connection.';
+  }
+});
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
@@ -717,7 +886,7 @@ function rodCardHtml(r){
         </div>
         <div class="field">
           <label>Photos (optional — add as many as you like)</label>
-          <input type="file" accept="image/*" capture="environment" class="catch-photo" data-rod="${r}">
+          <input type="file" accept="image/*" class="catch-photo" data-rod="${r}">
           <div class="catch-photo-preview" data-rod="${r}" style="display:none;"></div>
         </div>
       </div>
@@ -1063,8 +1232,11 @@ function renderCatchList(rod){
     const thumb = photoCount
       ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" alt="">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
       : '';
-    return `<div class="catch-log-item">${thumb}<span style="flex:1;">${label} · ${time}</span><button class="del" data-id="${c.id}" data-rod="${rod}">Remove</button></div>`;
+    return `<div class="catch-log-item">${thumb}<span style="flex:1;">${label} · ${time}</span><button class="edit-catch" data-id="${c.id}">Edit</button><button class="del" data-id="${c.id}" data-rod="${rod}">Remove</button></div>`;
   }).join('');
+  el.querySelectorAll('.edit-catch').forEach(btn=>{
+    btn.addEventListener('click', ()=> openEditCatch(btn.dataset.id));
+  });
   el.querySelectorAll('.del').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       currentPerson.catches = currentPerson.catches.filter(c=>c.id!==btn.dataset.id);
