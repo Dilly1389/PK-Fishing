@@ -150,6 +150,7 @@
     background:var(--catch-green);color:#fff;
     flex:none;padding:7px 14px;font-size:12px;min-width:0;
   }
+  .start-time-label{font-size:11.5px;color:var(--muted);}
   .btn-pause{background:var(--khaki);color:var(--ink);}
   .btn-reset{background:transparent;color:var(--muted);border:1px solid var(--line);}
 
@@ -170,8 +171,14 @@
   .sub-heading{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 10px;}
 
   .catch-toggle{display:flex;gap:8px;margin-bottom:12px;}
-  .catch-photo-preview{margin-top:8px;}
-  .catch-photo-preview img{max-width:130px;border-radius:10px;display:block;border:1px solid var(--line);}
+  .catch-photo-preview{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;}
+  .photo-thumb-wrap{position:relative;}
+  .photo-thumb-wrap .pc-photo{width:80px;height:80px;max-width:80px;object-fit:cover;margin-top:0;}
+  .photo-remove{
+    position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;
+    background:var(--dam);color:#fff;border:2px solid var(--card-bg);font-size:12px;line-height:1;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
+  }
   .pc-photo{max-width:100%;border-radius:10px;margin-top:8px;display:block;border:1px solid var(--line);cursor:pointer;}
   .catch-log-photo{cursor:pointer;}
   .catch-log-photo{width:34px;height:34px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);}
@@ -312,6 +319,13 @@
             <option value="1">1 rod</option>
             <option value="2">2 rods</option>
             <option value="3" selected>3 rods</option>
+            <option value="4">4 rods</option>
+            <option value="5">5 rods</option>
+            <option value="6">6 rods</option>
+            <option value="7">7 rods</option>
+            <option value="8">8 rods</option>
+            <option value="9">9 rods</option>
+            <option value="10">10 rods</option>
           </select>
         </div>
         <button class="primary-btn" id="add-person-btn">Add fisherman</button>
@@ -381,13 +395,26 @@
 const SUPABASE_URL = 'https://quptwbxzstepwfeffljq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_nnO3ZffPD-r08e4E1rjcPQ_47mGq7Xu';
 
-const RODS = ['rod1','rod2','rod3'];
-const RID_LABEL = {rod1:'Rod 1',rod2:'Rod 2',rod3:'Rod 3'};
+const MAX_RODS = 10;
+const RODS = Array.from({length: MAX_RODS}, (_, i) => 'rod' + (i+1));
+const RID_LABEL = {};
+RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
+
 let people = [];
 let currentPersonId = null;
 let currentPerson = null;
-let catchToggle = {rod1:false, rod2:false, rod3:false};
-let pendingPhotos = {rod1:null, rod2:null, rod3:null};
+let catchToggle = {};
+let pendingPhotos = {};
+RODS.forEach(r => { catchToggle[r] = false; pendingPhotos[r] = []; });
+
+function rodsOptionsHtml(selected){
+  let html = '';
+  for(let i=1; i<=MAX_RODS; i++){
+    html += `<option value="${i}" ${i===selected?'selected':''}>${i} rod${i>1?'s':''}</option>`;
+  }
+  return html;
+}
+
 
 function resizeImageFile(file, maxDim, quality){
   maxDim = maxDim || 800;
@@ -410,6 +437,31 @@ function resizeImageFile(file, maxDim, quality){
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+function renderPhotoPreview(rod){
+  const preview = document.querySelector('.catch-photo-preview[data-rod="'+rod+'"]');
+  if(!preview) return;
+  const photos = pendingPhotos[rod] || [];
+  if(photos.length===0){
+    preview.innerHTML = '';
+    preview.style.display = 'none';
+    return;
+  }
+  preview.style.display = 'flex';
+  preview.innerHTML = photos.map((src, i)=>`
+    <div class="photo-thumb-wrap">
+      <img class="pc-photo" src="${src}" alt="Catch photo">
+      <button type="button" class="photo-remove" data-rod="${rod}" data-index="${i}">×</button>
+    </div>`).join('');
+  preview.querySelectorAll('.photo-remove').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.index, 10);
+      pendingPhotos[rod].splice(idx, 1);
+      renderPhotoPreview(rod);
+    });
   });
 }
 
@@ -544,7 +596,8 @@ async function loadPerson(id){
     const catches = catchRows.map(c=>({
       id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
       time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
-      bom:c.bom||'', hook1:c.hook1_note||'', hook2:c.hook2_note||'', photo:c.photo||null
+      bom:c.bom||'', hook1:c.hook1_note||'', hook2:c.hook2_note||'',
+      photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : [])
     }));
     clearDbError();
     return {name:f.name, dam:f.dam, competition:f.competition||'', rods:f.rods||3, timers, notes, catches};
@@ -575,7 +628,7 @@ async function insertCatch(personId, entry){
       id: entry.id, fisherman_id: personId, rod: entry.rod, hook: entry.hook,
       caught: entry.caught, fish_type: entry.type, weight: entry.weight,
       time: new Date(entry.time).toISOString(), timer_elapsed_ms: entry.timerElapsed,
-      bom: entry.bom, hook1_note: entry.hook1, hook2_note: entry.hook2, photo: entry.photo
+      bom: entry.bom, hook1_note: entry.hook1, hook2_note: entry.hook2, photos: JSON.stringify(entry.photos || [])
     });
     clearDbError();
   }catch(e){ console.error(e); showDbError('Could not save catch to Supabase.'); }
@@ -607,6 +660,7 @@ function rodCardHtml(r){
         <div class="bobber" id="bobber-${r}"><div class="time mono" id="time-${r}">00:00:00</div></div>
         <div class="bobber-controls">
           <button class="btn btn-start" data-rod="${r}" data-action="start">Start</button>
+          <span class="start-time-label" id="start-time-${r}"></span>
         </div>
       </div>
       <div class="field">
@@ -662,7 +716,7 @@ function rodCardHtml(r){
           </div>
         </div>
         <div class="field">
-          <label>Photo (optional)</label>
+          <label>Photos (optional — add as many as you like)</label>
           <input type="file" accept="image/*" capture="environment" class="catch-photo" data-rod="${r}">
           <div class="catch-photo-preview" data-rod="${r}" style="display:none;"></div>
         </div>
@@ -709,18 +763,16 @@ function attachRodCardHandlers(){
     inp.addEventListener('change', async ()=>{
       const rod = inp.dataset.rod;
       const file = inp.files[0];
-      const preview = document.querySelector('.catch-photo-preview[data-rod="'+rod+'"]');
       if(!file){ return; }
       try{
         const dataUrl = await resizeImageFile(file);
-        pendingPhotos[rod] = dataUrl;
-        if(preview){
-          preview.innerHTML = `<img class="pc-photo" src="${dataUrl}" alt="Catch photo" style="max-width:130px;">`;
-          preview.style.display = 'block';
-        }
+        if(!pendingPhotos[rod]) pendingPhotos[rod] = [];
+        pendingPhotos[rod].push(dataUrl);
+        renderPhotoPreview(rod);
       }catch(e){
         console.error('Photo processing failed', e);
       }
+      inp.value = ''; // clear so the same or another photo can be added again
     });
   });
   document.querySelectorAll('.catch-toggle button').forEach(btn=>{
@@ -765,7 +817,7 @@ function attachRodCardHandlers(){
         bom: bomEl.value,
         hook1: hook1El.value,
         hook2: hook2El.value,
-        photo: caught ? pendingPhotos[rod] : null
+        photos: caught ? (pendingPhotos[rod] || []).slice() : []
       };
       showConfirmation(entry);
     });
@@ -787,8 +839,10 @@ function showConfirmation(entry){
   html += `<p>Rod timer: <b>${timerStr}</b></p>`;
   html += `<p style="font-size:12px;">Bom: ${escapeHtml(entry.bom||'—')}</p>`;
   html += `<p style="font-size:12px;">Hook 1: ${escapeHtml(entry.hook1||'—')} · Hook 2: ${escapeHtml(entry.hook2||'—')}</p>`;
-  if(entry.photo){
-    html += `<img class="pc-photo" src="${entry.photo}" alt="Catch photo">`;
+  if(entry.photos && entry.photos.length){
+    html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
+      entry.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      `</div>`;
   }
   document.getElementById('modal-body').innerHTML = html;
   document.getElementById('confirm-modal').classList.add('open');
@@ -809,13 +863,12 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
   const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
   const photoEl = document.querySelector('.catch-photo[data-rod="'+rod+'"]');
-  const photoPreview = document.querySelector('.catch-photo-preview[data-rod="'+rod+'"]');
   if(typeEl) typeEl.value='';
   if(typeOtherEl){ typeOtherEl.value=''; typeOtherEl.style.display='none'; }
   if(weightEl) weightEl.value='';
   if(photoEl) photoEl.value='';
-  if(photoPreview){ photoPreview.innerHTML=''; photoPreview.style.display='none'; }
-  pendingPhotos[rod] = null;
+  pendingPhotos[rod] = [];
+  renderPhotoPreview(rod);
 
   renderCatchList(rod);
   renderNotes();
@@ -844,8 +897,10 @@ function catchDetailHtml(c){
   html += `<div class="pc-line muted">Bom: ${escapeHtml(c.bom||'—')}</div>`;
   html += `<div class="pc-line muted">Hook 1: ${escapeHtml(c.hook1||'—')}</div>`;
   html += `<div class="pc-line muted">Hook 2: ${escapeHtml(c.hook2||'—')}</div>`;
-  if(c.photo){
-    html += `<img class="pc-photo" src="${c.photo}" alt="Catch photo">`;
+  if(c.photos && c.photos.length){
+    html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
+      c.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      `</div>`;
   }
   html += `</div>`;
   return html;
@@ -978,6 +1033,12 @@ function renderTimers(){
     const t = currentPerson ? currentPerson.timers[r] : null;
     el.textContent = fmt(elapsedMs(t));
     document.getElementById('bobber-'+r).classList.toggle('running', !!(t && t.running));
+    const label = document.getElementById('start-time-'+r);
+    if(label){
+      label.textContent = (t && t.running && t.startTs)
+        ? 'Started ' + new Date(t.startTs).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+        : '';
+    }
   });
 }
 function renderNotes(){
@@ -998,7 +1059,10 @@ function renderCatchList(rod){
   el.innerHTML = entries.slice().reverse().map(c=>{
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${c.weight}kg (${escapeHtml(c.hook||'')})` : `No catch`;
     const time = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    const thumb = c.photo ? `<img class="catch-log-photo" src="${c.photo}" alt="">` : '';
+    const photoCount = (c.photos && c.photos.length) || 0;
+    const thumb = photoCount
+      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" alt="">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
+      : '';
     return `<div class="catch-log-item">${thumb}<span style="flex:1;">${label} · ${time}</span><button class="del" data-id="${c.id}" data-rod="${rod}">Remove</button></div>`;
   }).join('');
   el.querySelectorAll('.del').forEach(btn=>{
@@ -1065,9 +1129,7 @@ function renderPeopleList(){
         <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>${p.competition ? '<span class="pill">'+escapeHtml(p.competition)+'</span>' : ''}</div>
         <div class="actions">
           <select class="mini-btn rods-select" data-id="${p.id}">
-            <option value="1" ${p.rods==1?'selected':''}>1 rod</option>
-            <option value="2" ${p.rods==2?'selected':''}>2 rods</option>
-            <option value="3" ${(!p.rods||p.rods==3)?'selected':''}>3 rods</option>
+            ${rodsOptionsHtml(p.rods || 3)}
           </select>
           <button class="mini-btn" data-select="${p.id}">${p.id===currentPersonId?'Active':'Select'}</button>
           <button class="mini-btn" data-archive="${p.id}">Archive</button>
