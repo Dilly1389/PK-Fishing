@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>PK Fishing — Leaderboard</title>
+<title>PK Fishing</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#B3121F">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PK Fishing">
 <style>
   :root{
     --dam:#B3121F;
@@ -16,6 +23,7 @@
     --ink:#2A1414;
     --muted:#9C6B6B;
     --line:#F0D6D6;
+    --catch-green:#A61B2B;
     --radius:14px;
   }
   @media (prefers-color-scheme: dark){
@@ -30,36 +38,185 @@
       --ink:#F5EAEA;
       --muted:#C79999;
       --line:#3A2323;
+      --catch-green:#C83244;
     }
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--dam);}
-  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink);min-height:100vh;}
-  h1,h2{font-family:Rockwell,"Roboto Slab",Georgia,serif;font-weight:700;letter-spacing:-0.01em;}
-  .app{max-width:640px;margin:0 auto;min-height:100vh;background:var(--paper);box-shadow:0 0 60px rgba(0,0,0,0.35);}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    color:var(--ink);
+    min-height:100vh;
+  }
+  h1,h2,h3,.display{
+    font-family:Rockwell,"Roboto Slab",Georgia,serif;
+    font-weight:700;
+    letter-spacing:-0.01em;
+  }
+  .mono{
+    font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+    font-variant-numeric:tabular-nums;
+  }
+  .app{
+    max-width:640px;
+    margin:0 auto;
+    min-height:100vh;
+    background:var(--paper);
+    box-shadow:0 0 60px rgba(0,0,0,0.35);
+  }
   header.top{
     background:linear-gradient(180deg,var(--dam) 0%,var(--dam-deep) 100%);
-    color:var(--cream);padding:22px 16px 16px;text-align:center;
+    color:var(--cream);
+    padding:22px 16px 16px;
+    position:relative;
+    overflow:hidden;
+    text-align:center;
   }
-  header.top h1{font-size:22px;margin:0;color:#fff;display:flex;align-items:center;justify-content:center;gap:9px;}
-  header.top p{margin:6px 0 0;color:var(--khaki);font-size:12.5px;}
+  header.top h1{
+    font-size:24px;margin:0;color:#fff;
+    display:flex;align-items:center;justify-content:center;gap:9px;
+  }
+  header.top p{margin:0;color:var(--khaki);font-size:13px;}
   .status-dot{
-    display:inline-block;width:10px;height:10px;border-radius:50%;background:#9CA3AF;
-    flex-shrink:0;box-shadow:0 0 0 3px rgba(255,255,255,0.15);transition:background .3s ease;
+    display:inline-block;width:10px;height:10px;border-radius:50%;
+    background:#9CA3AF;flex-shrink:0;
+    box-shadow:0 0 0 3px rgba(255,255,255,0.15);
+    transition:background .3s ease;
   }
   .status-dot.connected{background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,0.8),0 0 0 3px rgba(255,255,255,0.15);}
   #db-status{display:none;background:#b23a1f;color:#fff;padding:8px 14px;font-size:12px;text-align:center;}
-  main{padding:16px 14px 40px;}
-  section.card{background:var(--card-bg);border:1px solid var(--line);border-radius:var(--radius);padding:16px 14px;margin-bottom:14px;}
-  section.card h2{font-size:15px;margin:0 0 12px;color:var(--khaki);}
-  .field{margin-bottom:12px;}
-  .field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;color:var(--muted);margin-bottom:5px;}
-  .field select{
-    width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;
-    font-family:inherit;font-size:15px;background:var(--card-bg);color:var(--ink);
+  nav.tabs{display:flex;background:var(--dam-deep);position:sticky;top:0;z-index:10;}
+  nav.tabs button{
+    flex:1;padding:13px 4px;background:transparent;border:none;
+    border-bottom:3px solid transparent;color:rgba(239,232,216,0.55);
+    font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;
+    cursor:pointer;font-family:inherit;
   }
+  nav.tabs button.active{color:#fff;border-bottom-color:var(--rust);}
+  main{padding:16px 14px 60px;}
+  .panel{display:none;}
+  .panel.active{display:block;animation:fadein .25s ease;}
+  @keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+  .angler-bar{
+    display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 12px;
+    background:var(--card-bg);border:1px solid var(--line);border-radius:var(--radius);
+  }
+  .angler-bar label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;flex-shrink:0;}
+  .angler-bar select{
+    flex:1;min-width:0;padding:9px 8px;border-radius:8px;border:1px solid var(--line);
+    background:var(--card-bg);color:var(--ink);font-size:15px;font-family:inherit;
+  }
+
+  section.card{
+    background:var(--card-bg);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 14px 16px;margin-bottom:14px;
+  }
+  section.card h2{font-size:15px;margin:0 0 12px;color:var(--khaki);}
+  .rod-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .rod-card h3{
+    font-size:17px;margin:0;color:var(--ink);flex-shrink:0;
+  }
+  input[type="color"].rod-dot{
+    width:18px;height:18px;flex-shrink:0;padding:0;border:none;border-radius:50%;
+    cursor:pointer;background:none;-webkit-appearance:none;appearance:none;
+  }
+  input[type="color"].rod-dot::-webkit-color-swatch-wrapper{padding:0;border-radius:50%;}
+  input[type="color"].rod-dot::-webkit-color-swatch{border:1px solid var(--line);border-radius:50%;}
+  input[type="color"].rod-dot::-moz-color-swatch{border:1px solid var(--line);border-radius:50%;}
+  .rod-id-input{
+    flex:1;min-width:110px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;
+    font-size:13px;background:var(--card-bg);color:var(--ink);font-family:inherit;
+  }
+
+  .bobber-row{display:flex;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap;}
+  .bobber{
+    width:108px;height:108px;flex-shrink:0;border-radius:50%;
+    background:var(--dam-deep);
+    border:2px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 10px rgba(0,0,0,0.25);
+  }
+  .bobber.running{animation:bob 2.6s ease-in-out infinite;}
+  @media (prefers-reduced-motion:reduce){.bobber.running{animation:none;}}
+  @keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
+  .bobber .time{color:#fff;font-size:22px;font-weight:800;}
+  .bobber-controls{display:flex;gap:6px;flex-wrap:wrap;flex:1;align-items:center;}
+  .btn{
+    border:none;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:700;
+    cursor:pointer;font-family:inherit;flex:1;min-width:70px;
+  }
+  .btn-start{
+    background:var(--catch-green);color:#fff;
+    flex:none;padding:7px 14px;font-size:12px;min-width:0;
+  }
+  .start-time-label{font-size:11.5px;color:var(--muted);}
+  .btn-pause{background:var(--khaki);color:var(--ink);}
+  .btn-reset{background:transparent;color:var(--muted);border:1px solid var(--line);}
+
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
+    font-weight:700;color:var(--muted);margin-bottom:5px;
+  }
+  .field textarea,.field input,.field select{
+    width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;
+    font-family:inherit;font-size:16px;resize:vertical;background:var(--card-bg);color:var(--ink);
+  }
+  .field textarea{min-height:52px;}
   .row2{display:flex;gap:10px;}
   .row2 > div{flex:1;min-width:0;}
+
+  .divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
+  .sub-heading{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 10px;}
+
+  .catch-toggle{display:flex;gap:8px;margin-bottom:12px;}
+  .catch-photo-preview{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;}
+  .photo-thumb-wrap{position:relative;}
+  .photo-thumb-wrap .pc-photo{width:80px;height:80px;max-width:80px;object-fit:cover;margin-top:0;}
+  .photo-remove{
+    position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;
+    background:var(--dam);color:#fff;border:2px solid var(--card-bg);font-size:12px;line-height:1;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
+  }
+  .pc-photo{max-width:100%;border-radius:10px;margin-top:8px;display:block;border:1px solid var(--line);cursor:pointer;}
+  .catch-log-photo{cursor:pointer;}
+  .catch-log-photo{width:34px;height:34px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);}
+  .catch-toggle button{
+    flex:1;padding:10px;border-radius:8px;border:1.5px solid var(--line);
+    background:var(--card-bg);font-weight:700;font-family:inherit;cursor:pointer;
+    color:var(--muted);font-size:13.5px;
+  }
+  .catch-toggle button.sel-yes.active{background:var(--catch-green);color:#fff;border-color:var(--catch-green);}
+  .catch-toggle button.sel-no.active{background:var(--muted);color:var(--card-bg);border-color:var(--muted);}
+
+  .catch-log-item{
+    display:flex;justify-content:space-between;align-items:center;padding:9px 0;
+    border-bottom:1px solid var(--line);font-size:13.5px;gap:8px;
+  }
+  .catch-log-item:last-child{border-bottom:none;}
+  .catch-log-item .del{background:none;border:none;color:#c04;font-size:12.5px;cursor:pointer;flex-shrink:0;}
+  .catch-log-item .edit-catch{background:none;border:none;color:var(--dam);font-size:12.5px;font-weight:700;cursor:pointer;flex-shrink:0;margin-right:6px;}
+
+  .people-list{list-style:none;padding:0;margin:0;}
+  .people-list li{
+    display:flex;justify-content:space-between;align-items:center;padding:10px 0;
+    border-bottom:1px solid var(--line);gap:8px;flex-wrap:wrap;
+  }
+  .people-list li:last-child{border-bottom:none;}
+  .people-list .who b{font-size:15px;}
+  .people-list .who .pill{
+    display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;
+    background:var(--dam);color:#fff;font-size:11px;font-weight:700;
+    vertical-align:middle;
+  }
+  .people-list .actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .mini-btn{
+    border:1px solid var(--line);background:var(--card-bg);color:var(--ink);border-radius:7px;
+    padding:7px 9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+  }
+  .mini-btn.danger{color:#c04;}
+
   .lb-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
   .lb-item:last-child{border-bottom:none;}
   .lb-rank{
@@ -67,65 +224,434 @@
     display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12.5px;flex-shrink:0;
   }
   .lb-item:nth-child(1) .lb-rank{background:var(--rust);}
-  .lb-name{font-weight:700;font-size:14.5px;}
+  .lb-name-btn{
+    background:none;border:none;padding:0;font-family:inherit;color:var(--ink);
+    font-weight:700;font-size:14.5px;cursor:pointer;text-decoration:underline;
+    text-decoration-color:transparent;text-align:left;
+  }
+  .lb-name-btn:hover{text-decoration-color:var(--rust);}
   .lb-dam{font-size:12px;color:var(--muted);}
   .lb-stats{margin-left:auto;text-align:right;font-size:12.5px;color:var(--muted);}
   .lb-stats b{color:var(--ink);font-size:14.5px;}
-  .empty{text-align:center;padding:24px 10px;color:var(--muted);font-size:13.5px;}
+
+  .empty{text-align:center;padding:20px 10px;color:var(--muted);font-size:13.5px;}
   .primary-btn{
-    width:100%;padding:12px;background:var(--dam);color:#fff;border:none;border-radius:9px;
+    width:100%;padding:12px;background:var(--rust);color:#fff;border:none;border-radius:9px;
     font-weight:700;font-size:14.5px;cursor:pointer;font-family:inherit;
   }
-  .updated-line{text-align:center;font-size:11.5px;color:var(--muted);margin-top:10px;}
+  .status{font-size:12px;color:var(--muted);margin-top:8px;min-height:14px;}
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,0.55);display:none;
+    align-items:center;justify-content:center;z-index:200;padding:20px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal-card{
+    background:var(--card-bg);border-radius:16px;padding:24px 22px;max-width:320px;width:100%;
+    text-align:center;border:1px solid var(--line);
+  }
+  .modal-card h3{margin:0 0 10px;font-size:18px;color:var(--ink);}
+  .modal-card p{margin:4px 0;font-size:14px;color:var(--muted);}
+  .modal-card p b{color:var(--ink);}
+  .modal-card .primary-btn{margin-top:18px;}
+  .modal-card.wide{max-width:440px;max-height:82vh;overflow-y:auto;text-align:left;}
+  .profile-summary{
+    display:flex;gap:16px;margin:10px 0 16px;padding-bottom:12px;
+    border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted);
+  }
+  .profile-summary b{color:var(--ink);display:block;font-size:17px;}
+  .profile-catch{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;}
+  .pc-head{font-weight:700;font-size:14px;margin-bottom:4px;color:var(--ink);}
+  .pc-line{font-size:12.5px;margin:2px 0;color:var(--ink);}
+  .pc-line.muted{color:var(--muted);}
+
+  @media (max-width:420px){
+    .bobber-row{flex-direction:column;align-items:stretch;}
+    .bobber{margin:0 auto;}
+    .bobber-controls{justify-content:stretch;}
+  }
 </style>
 </head>
 <body>
 <div class="app">
   <header class="top">
     <h1>PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
-    <p>Leaderboard — spectator view</p>
   </header>
   <div id="db-status"></div>
 
+  <nav class="tabs">
+    <button data-tab="timers" class="active">Timers</button>
+    <button data-tab="schedule">Fisherman</button>
+    <button data-tab="leaderboard">Leaderboard</button>
+  </nav>
+
   <main>
-    <section class="card">
-      <h2>Filters</h2>
-      <div class="row2">
-        <div class="field">
-          <label>Dam</label>
-          <select id="lb-filter-dam"><option value="">All dams</option></select>
+
+    <!-- TIMERS -->
+    <div class="panel active" id="panel-timers">
+      <div class="angler-bar">
+        <label>Fisherman</label>
+        <select id="angler-select"></select>
+      </div>
+      <div id="rod-cards"></div>
+    </div>
+
+    <!-- FISHERMAN -->
+    <div class="panel" id="panel-schedule">
+      <section class="card">
+        <h2>Add fisherman</h2>
+        <div class="row2">
+          <div class="field">
+            <label>Name</label>
+            <input type="text" id="new-person-name" placeholder="Name">
+          </div>
+          <div class="field">
+            <label>Dam</label>
+            <input type="text" id="new-person-dam" placeholder="Dam">
+          </div>
         </div>
         <div class="field">
-          <label>Competition</label>
-          <select id="lb-filter-comp"><option value="">All competitions</option></select>
+          <label>Competition / Weekend</label>
+          <input type="text" id="new-person-competition" placeholder="e.g. October Weekend, Club Comp">
+        </div>
+        <div class="field">
+          <label>Number of rods</label>
+          <select id="new-person-rods">
+            <option value="1">1 rod</option>
+            <option value="2">2 rods</option>
+            <option value="3" selected>3 rods</option>
+            <option value="4">4 rods</option>
+            <option value="5">5 rods</option>
+            <option value="6">6 rods</option>
+            <option value="7">7 rods</option>
+            <option value="8">8 rods</option>
+            <option value="9">9 rods</option>
+            <option value="10">10 rods</option>
+          </select>
+        </div>
+        <button class="primary-btn" id="add-person-btn">Add fisherman</button>
+        <div class="status" id="schedule-status"></div>
+      </section>
+      <section class="card">
+        <h2>Fishermen fishing today</h2>
+        <ul class="people-list" id="people-list"></ul>
+      </section>
+      <section class="card">
+        <h2>Archived</h2>
+        <ul class="people-list" id="archived-list"></ul>
+      </section>
+    </div>
+
+    <!-- LEADERBOARD -->
+    <div class="panel" id="panel-leaderboard">
+      <section class="card">
+        <h2>Leaderboard</h2>
+        <div class="row2">
+          <div class="field">
+            <label>Dam</label>
+            <select id="lb-filter-dam"><option value="">All dams</option></select>
+          </div>
+          <div class="field">
+            <label>Competition</label>
+            <select id="lb-filter-comp"><option value="">All competitions</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Fish type</label>
+          <select id="lb-filter-type"><option value="">All types</option></select>
+        </div>
+        <div id="leaderboard-list"><div class="empty">No catches logged yet.</div></div>
+      </section>
+      <button class="primary-btn" id="refresh-lb-btn" style="background:var(--dam);">Refresh</button>
+    </div>
+
+  </main>
+</div>
+
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-card">
+    <div id="modal-body"></div>
+    <div class="row2" style="margin-top:18px;">
+      <button class="primary-btn" id="confirm-edit" style="background:var(--khaki);color:var(--ink);">Edit</button>
+      <button class="primary-btn" id="confirm-correct">Correct</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="profile-modal">
+  <div class="modal-card wide">
+    <div id="profile-body"></div>
+    <button class="primary-btn" id="profile-close">Close</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="photo-modal">
+  <div class="modal-card" style="max-width:92vw;padding:12px;text-align:center;">
+    <img id="photo-modal-img" src="" alt="Catch photo" style="max-width:100%;max-height:78vh;border-radius:10px;display:block;margin:0 auto;">
+    <button class="primary-btn" id="photo-modal-close" style="margin-top:12px;">Close</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-catch-modal">
+  <div class="modal-card wide">
+    <h3 style="margin-bottom:14px;">Edit catch</h3>
+    <div class="catch-toggle" id="edit-catch-toggle">
+      <button type="button" class="sel-yes" data-yn="yes">Caught a fish</button>
+      <button type="button" class="sel-no" data-yn="no">No catch</button>
+    </div>
+    <div id="edit-catch-fields">
+      <div class="field">
+        <label>Hook</label>
+        <select id="edit-catch-hook">
+          <option value="Hook 1">Hook 1</option>
+          <option value="Hook 2">Hook 2</option>
+        </select>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Type of fish</label>
+          <select id="edit-catch-type">
+            <option value="">Select type</option>
+            <option value="Carp">Carp</option>
+            <option value="Mirror Carp">Mirror Carp</option>
+            <option value="Grass Carp">Grass Carp</option>
+            <option value="Bass">Bass</option>
+            <option value="Barbel">Barbel (Catfish)</option>
+            <option value="Tilapia">Tilapia (Bream)</option>
+            <option value="Yellowfish">Yellowfish</option>
+            <option value="Mudfish">Mudfish (Moggel)</option>
+            <option value="Koi">Koi</option>
+            <option value="Eel">Eel</option>
+            <option value="Other">Other</option>
+          </select>
+          <input type="text" id="edit-catch-type-other" placeholder="Type of fish" style="display:none;margin-top:8px;">
+        </div>
+        <div class="field">
+          <label>Weight (kg)</label>
+          <input type="number" step="0.01" min="0" id="edit-catch-weight" placeholder="e.g. 2.4">
         </div>
       </div>
       <div class="field">
-        <label>Fish type</label>
-        <select id="lb-filter-type"><option value="">All types</option></select>
+        <label>Photos</label>
+        <input type="file" accept="image/*" id="edit-catch-photo-input">
+        <div class="catch-photo-preview" id="edit-catch-photo-preview" style="display:none;"></div>
       </div>
-    </section>
-
-    <section class="card">
-      <h2>Leaderboard</h2>
-      <div id="leaderboard-list"><div class="empty">Loading...</div></div>
-      <div class="updated-line" id="updated-line"></div>
-    </section>
-
-    <button class="primary-btn" id="refresh-btn">Refresh now</button>
-  </main>
+    </div>
+    <div class="row2" style="margin-top:16px;">
+      <button class="primary-btn" id="edit-catch-cancel" style="background:var(--khaki);color:var(--ink);">Cancel</button>
+      <button class="primary-btn" id="edit-catch-save">Save</button>
+    </div>
+    <div class="status" id="edit-catch-status"></div>
+  </div>
 </div>
 
 <script>
 const SUPABASE_URL = 'https://quptwbxzstepwfeffljq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_nnO3ZffPD-r08e4E1rjcPQ_47mGq7Xu';
-const REFRESH_MS = 30000;
+
+const MAX_RODS = 10;
+const RODS = Array.from({length: MAX_RODS}, (_, i) => 'rod' + (i+1));
+const RID_LABEL = {};
+RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
 
 let people = [];
+let currentPersonId = null;
+let currentPerson = null;
+let catchToggle = {};
+let pendingPhotos = {};
+RODS.forEach(r => { catchToggle[r] = false; pendingPhotos[r] = []; });
 
+function rodsOptionsHtml(selected){
+  let html = '';
+  for(let i=1; i<=MAX_RODS; i++){
+    html += `<option value="${i}" ${i===selected?'selected':''}>${i} rod${i>1?'s':''}</option>`;
+  }
+  return html;
+}
+
+
+function resizeImageFile(file, maxDim, quality){
+  maxDim = maxDim || 800;
+  quality = quality || 0.7;
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w = img.width, h = img.height;
+        if(w > h){ if(w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; } }
+        else { if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderPhotoPreview(rod){
+  const preview = document.querySelector('.catch-photo-preview[data-rod="'+rod+'"]');
+  if(!preview) return;
+  const photos = pendingPhotos[rod] || [];
+  if(photos.length===0){
+    preview.innerHTML = '';
+    preview.style.display = 'none';
+    return;
+  }
+  preview.style.display = 'flex';
+  preview.innerHTML = photos.map((src, i)=>`
+    <div class="photo-thumb-wrap">
+      <img class="pc-photo" src="${src}" alt="Catch photo">
+      <button type="button" class="photo-remove" data-rod="${rod}" data-index="${i}">×</button>
+    </div>`).join('');
+  preview.querySelectorAll('.photo-remove').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.index, 10);
+      pendingPhotos[rod].splice(idx, 1);
+      renderPhotoPreview(rod);
+    });
+  });
+}
+
+// ---------- Edit an existing catch ----------
+let editingCatchId = null;
+let editCaught = false;
+let editPhotos = [];
+
+function openEditCatch(catchId){
+  if(!currentPerson) return;
+  const c = currentPerson.catches.find(x=>x.id===catchId);
+  if(!c) return;
+  editingCatchId = catchId;
+  editCaught = !!c.caught;
+  editPhotos = (c.photos || []).slice();
+
+  document.querySelectorAll('#edit-catch-toggle button').forEach(b=>{
+    b.classList.toggle('active', (b.dataset.yn === 'yes') === editCaught);
+  });
+  document.getElementById('edit-catch-fields').style.display = editCaught ? 'block' : 'none';
+  document.getElementById('edit-catch-hook').value = c.hook || 'Hook 1';
+
+  const typeSel = document.getElementById('edit-catch-type');
+  const typeOtherEl = document.getElementById('edit-catch-type-other');
+  const knownValues = Array.from(typeSel.options).map(o=>o.value);
+  if(c.type && knownValues.includes(c.type)){
+    typeSel.value = c.type;
+    typeOtherEl.style.display = 'none';
+    typeOtherEl.value = '';
+  }else{
+    typeSel.value = c.type ? 'Other' : '';
+    typeOtherEl.value = c.type || '';
+    typeOtherEl.style.display = c.type ? 'block' : 'none';
+  }
+  document.getElementById('edit-catch-weight').value = c.weight || '';
+  document.getElementById('edit-catch-status').textContent = '';
+  renderEditPhotoPreview();
+  document.getElementById('edit-catch-modal').classList.add('open');
+}
+
+function renderEditPhotoPreview(){
+  const preview = document.getElementById('edit-catch-photo-preview');
+  if(editPhotos.length===0){ preview.innerHTML=''; preview.style.display='none'; return; }
+  preview.style.display = 'flex';
+  preview.innerHTML = editPhotos.map((src, i)=>`
+    <div class="photo-thumb-wrap">
+      <img class="pc-photo" src="${src}" alt="Catch photo">
+      <button type="button" class="photo-remove" data-index="${i}">×</button>
+    </div>`).join('');
+  preview.querySelectorAll('.photo-remove').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      editPhotos.splice(parseInt(btn.dataset.index, 10), 1);
+      renderEditPhotoPreview();
+    });
+  });
+}
+
+document.getElementById('edit-catch-toggle').querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    editCaught = btn.dataset.yn === 'yes';
+    document.querySelectorAll('#edit-catch-toggle button').forEach(b=>b.classList.toggle('active', b===btn));
+    document.getElementById('edit-catch-fields').style.display = editCaught ? 'block' : 'none';
+  });
+});
+
+document.getElementById('edit-catch-type').addEventListener('change', (e)=>{
+  document.getElementById('edit-catch-type-other').style.display = e.target.value === 'Other' ? 'block' : 'none';
+});
+
+document.getElementById('edit-catch-photo-input').addEventListener('change', async ()=>{
+  const inp = document.getElementById('edit-catch-photo-input');
+  const file = inp.files[0];
+  if(!file) return;
+  try{
+    const dataUrl = await resizeImageFile(file);
+    editPhotos.push(dataUrl);
+    renderEditPhotoPreview();
+  }catch(e){ console.error('Photo processing failed', e); }
+  inp.value = '';
+});
+
+document.getElementById('edit-catch-cancel').addEventListener('click', ()=>{
+  editingCatchId = null;
+  document.getElementById('edit-catch-modal').classList.remove('open');
+});
+
+document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
+  if(!editingCatchId || !currentPerson) return;
+  const c = currentPerson.catches.find(x=>x.id===editingCatchId);
+  if(!c) return;
+  const typeSelVal = document.getElementById('edit-catch-type').value;
+  const typeOtherVal = document.getElementById('edit-catch-type-other').value.trim();
+  const typeValue = typeSelVal === 'Other' ? typeOtherVal : typeSelVal;
+
+  c.caught = editCaught;
+  c.hook = editCaught ? document.getElementById('edit-catch-hook').value : '';
+  c.type = editCaught ? typeValue : '';
+  c.weight = editCaught ? (parseFloat(document.getElementById('edit-catch-weight').value) || 0) : 0;
+  c.photos = editCaught ? editPhotos.slice() : [];
+
+  const st = document.getElementById('edit-catch-status');
+  st.textContent = 'Saving...';
+  try{
+    await sbPatch('catches', 'id=eq.'+c.id, {
+      caught: c.caught, hook: c.hook, fish_type: c.type, weight: c.weight,
+      photos: JSON.stringify(c.photos)
+    });
+    editingCatchId = null;
+    document.getElementById('edit-catch-modal').classList.remove('open');
+    renderCatchList(c.rod);
+    clearDbError();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save — check the Supabase connection.';
+  }
+});
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function fmt(ms){
+  if(ms < 0) ms = 0;
+  const s = Math.floor(ms/1000);
+  const hh = String(Math.floor(s/3600)).padStart(2,'0');
+  const mm = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return hh+':'+mm+':'+ss;
+}
+function elapsedMs(t){
+  if(!t) return 0;
+  return (t.accumulatedMs||0) + (t.running ? (Date.now()-t.startTs) : 0);
+}
 function escapeHtml(s){
   return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
 function showDbError(msg){
   const el = document.getElementById('db-status');
   el.textContent = msg;
@@ -133,7 +659,8 @@ function showDbError(msg){
   setConnDot(false);
 }
 function clearDbError(){
-  document.getElementById('db-status').style.display = 'none';
+  const el = document.getElementById('db-status');
+  el.style.display = 'none';
   setConnDot(true);
 }
 function setConnDot(connected){
@@ -143,19 +670,717 @@ function setConnDot(connected){
   dot.title = connected ? 'Connected to database' : 'Not connected to database';
 }
 
-function sbHeaders(){
-  return {
+// ---------- Supabase REST helpers ----------
+function sbHeaders(extra){
+  return Object.assign({
     'apikey': SUPABASE_ANON_KEY,
     'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
     'Content-Type': 'application/json'
-  };
+  }, extra||{});
 }
 async function sbGet(path){
   const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {headers: sbHeaders()});
   if(!res.ok) throw new Error('GET ' + path + ' failed: ' + res.status);
   return res.json();
 }
+async function sbPost(table, body){
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
+    method:'POST',
+    headers: sbHeaders({'Prefer':'return=representation'}),
+    body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error('POST ' + table + ' failed: ' + res.status + ' ' + await res.text());
+  return res.json();
+}
+async function sbUpsert(table, body, onConflict){
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?on_conflict=' + onConflict, {
+    method:'POST',
+    headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=representation'}),
+    body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error('Upsert ' + table + ' failed: ' + res.status + ' ' + await res.text());
+  return res.json();
+}
+async function sbPatch(table, filterQuery, body){
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + filterQuery, {
+    method:'PATCH',
+    headers: sbHeaders({'Prefer':'return=representation'}),
+    body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error('PATCH ' + table + ' failed: ' + res.status);
+  return res.json();
+}
+async function sbDelete(table, filterQuery){
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + filterQuery, {
+    method:'DELETE',
+    headers: sbHeaders()
+  });
+  if(!res.ok) throw new Error('DELETE ' + table + ' failed: ' + res.status);
+}
 
+// ---------- Data layer (backed by Supabase) ----------
+async function loadPeople(){
+  try{
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived&order=name.asc');
+    clearDbError();
+  }catch(e){
+    console.error(e); people = [];
+    showDbError('Could not reach Supabase. Check the project URL and anon key.');
+  }
+}
+
+async function insertFisherman(id,name,dam,rods,competition){
+  await sbPost('fishermen', {id,name,dam,rods,competition});
+  const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:'', identifier:'', dot_color:'#C1440E'}));
+  await sbPost('rod_state', rows);
+}
+async function deleteFisherman(id){
+  await sbDelete('fishermen', 'id=eq.'+id);
+}
+async function updateFishermanRods(id, rods){
+  await sbPatch('fishermen', 'id=eq.'+id, {rods});
+}
+async function archiveFisherman(id){
+  await sbPatch('fishermen', 'id=eq.'+id, {archived:true});
+}
+async function unarchiveFisherman(id){
+  await sbPatch('fishermen', 'id=eq.'+id, {archived:false});
+}
+
+async function loadPerson(id){
+  try{
+    const [fRows, rodRows, catchRows] = await Promise.all([
+      sbGet('fishermen?id=eq.'+id+'&select=*'),
+      sbGet('rod_state?fisherman_id=eq.'+id+'&select=*'),
+      sbGet('catches?fisherman_id=eq.'+id+'&select=*&order=time.asc')
+    ]);
+    const f = fRows[0];
+    if(!f) return null;
+    const timers={}, notes={};
+    RODS.forEach(r=>{
+      const row = rodRows.find(x=>x.rod===r);
+      timers[r] = row ? {running:row.running, startTs:row.start_ts, accumulatedMs:row.accumulated_ms} : {running:false,startTs:null,accumulatedMs:0};
+      notes[r] = row ? {bom:row.bom||'', hook1:row.hook1_note||'', hook2:row.hook2_note||'', identifier:row.identifier||'', dotColor:row.dot_color||'#C1440E'} : {bom:'',hook1:'',hook2:'',identifier:'',dotColor:'#C1440E'};
+    });
+    const catches = catchRows.map(c=>({
+      id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
+      time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
+      bom:c.bom||'', hook1:c.hook1_note||'', hook2:c.hook2_note||'',
+      photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : [])
+    }));
+    clearDbError();
+    return {name:f.name, dam:f.dam, competition:f.competition||'', rods:f.rods||3, timers, notes, catches};
+  }catch(e){
+    console.error(e);
+    showDbError('Could not reach Supabase. Check the project URL and anon key.');
+    return null;
+  }
+}
+
+async function saveRodState(personId, rod){
+  if(!currentPerson) return;
+  const t = currentPerson.timers[rod];
+  const n = currentPerson.notes[rod];
+  try{
+    await sbUpsert('rod_state', {
+      fisherman_id: personId, rod,
+      running: t.running, start_ts: t.startTs, accumulated_ms: t.accumulatedMs,
+      bom: n.bom, hook1_note: n.hook1, hook2_note: n.hook2, identifier: n.identifier, dot_color: n.dotColor
+    }, 'fisherman_id,rod');
+    clearDbError();
+  }catch(e){ console.error(e); showDbError('Could not save to Supabase.'); }
+}
+
+async function insertCatch(personId, entry){
+  try{
+    await sbPost('catches', {
+      id: entry.id, fisherman_id: personId, rod: entry.rod, hook: entry.hook,
+      caught: entry.caught, fish_type: entry.type, weight: entry.weight,
+      time: new Date(entry.time).toISOString(), timer_elapsed_ms: entry.timerElapsed,
+      bom: entry.bom, hook1_note: entry.hook1, hook2_note: entry.hook2, photos: JSON.stringify(entry.photos || [])
+    });
+    clearDbError();
+  }catch(e){ console.error(e); showDbError('Could not save catch to Supabase.'); }
+}
+async function removeCatch(catchId){
+  try{ await sbDelete('catches', 'id=eq.'+catchId); clearDbError(); }
+  catch(e){ console.error(e); showDbError('Could not delete from Supabase.'); }
+}
+
+// ---------- UI ----------
+function populateAnglerSelect(){
+  const sel = document.getElementById('angler-select');
+  const active = people.filter(p=>!p.archived);
+  sel.innerHTML = active.length
+    ? active.map(p => `<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.dam)}</option>`).join('')
+    : '<option value="">Add a fisherman on the Fisherman tab</option>';
+  if(currentPersonId) sel.value = currentPersonId;
+}
+
+function rodCardHtml(r){
+  return `
+    <section class="card rod-card" id="rodcard-${r}">
+      <div class="rod-title-row">
+        <input type="color" class="rod-dot" data-rod="${r}" value="#C1440E" title="Rod color">
+        <h3>${RID_LABEL[r]}</h3>
+        <input type="text" class="rod-field rod-id-input" data-rod="${r}" data-key="identifier" placeholder="Add your name...">
+      </div>
+      <div class="bobber-row">
+        <div class="bobber" id="bobber-${r}"><div class="time mono" id="time-${r}">00:00:00</div></div>
+        <div class="bobber-controls">
+          <button class="btn btn-start" data-rod="${r}" data-action="start">Start</button>
+          <span class="start-time-label" id="start-time-${r}"></span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Bom</label>
+        <textarea class="rod-field" data-rod="${r}" data-key="bom" placeholder="What's on the mieliebom..."></textarea>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Hook 1</label>
+          <textarea class="rod-field" data-rod="${r}" data-key="hook1" placeholder="Rig, bait, depth..."></textarea>
+        </div>
+        <div class="field">
+          <label>Hook 2</label>
+          <textarea class="rod-field" data-rod="${r}" data-key="hook2" placeholder="Rig, bait, depth..."></textarea>
+        </div>
+      </div>
+      <hr class="divider">
+      <p class="sub-heading">Record a catch</p>
+      <div class="catch-toggle" data-rod="${r}">
+        <button class="sel-yes" data-rod="${r}" data-yn="yes">Caught a fish</button>
+        <button class="sel-no active" data-rod="${r}" data-yn="no">No catch</button>
+      </div>
+      <div class="catch-fields" data-rod="${r}" style="display:none;">
+        <div class="field">
+          <label>Hook</label>
+          <select class="catch-hook" data-rod="${r}">
+            <option value="Hook 1">Hook 1</option>
+            <option value="Hook 2">Hook 2</option>
+          </select>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Type of fish</label>
+            <select class="catch-type" data-rod="${r}">
+              <option value="">Select type</option>
+              <option value="Carp">Carp</option>
+              <option value="Mirror Carp">Mirror Carp</option>
+              <option value="Grass Carp">Grass Carp</option>
+              <option value="Bass">Bass</option>
+              <option value="Barbel">Barbel (Catfish)</option>
+              <option value="Tilapia">Tilapia (Bream)</option>
+              <option value="Yellowfish">Yellowfish</option>
+              <option value="Mudfish">Mudfish (Moggel)</option>
+              <option value="Koi">Koi</option>
+              <option value="Eel">Eel</option>
+              <option value="Other">Other</option>
+            </select>
+            <input type="text" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;">
+          </div>
+          <div class="field">
+            <label>Weight (kg)</label>
+            <input type="number" step="0.01" min="0" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4">
+          </div>
+        </div>
+        <div class="field">
+          <label>Photos (optional — add as many as you like)</label>
+          <input type="file" accept="image/*" class="catch-photo" data-rod="${r}">
+          <div class="catch-photo-preview" data-rod="${r}" style="display:none;"></div>
+        </div>
+      </div>
+      <button class="primary-btn log-catch-btn" data-rod="${r}">Log entry</button>
+      <div class="catch-list" data-rod="${r}" style="margin-top:10px;"></div>
+    </section>`;
+}
+
+function buildRodCards(){
+  document.getElementById('rod-cards').innerHTML = RODS.map(rodCardHtml).join('');
+  attachRodCardHandlers();
+}
+
+function attachRodCardHandlers(){
+  document.querySelectorAll('[data-action]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!currentPerson) return;
+      const rod = btn.dataset.rod;
+      const t = currentPerson.timers[rod];
+      const action = btn.dataset.action;
+      if(action==='start' && !t.running){ t.running=true; t.startTs=Date.now(); }
+      if(action==='pause' && t.running){ t.accumulatedMs += Date.now()-t.startTs; t.running=false; t.startTs=null; }
+      if(action==='reset'){ currentPerson.timers[rod] = {running:false,startTs:null,accumulatedMs:0}; }
+      renderTimers();
+      await saveRodState(currentPersonId, rod);
+    });
+  });
+  document.querySelectorAll('.rod-field').forEach(ta=>{
+    ta.addEventListener('blur', async ()=>{
+      if(!currentPerson) return;
+      currentPerson.notes[ta.dataset.rod][ta.dataset.key] = ta.value;
+      await saveRodState(currentPersonId, ta.dataset.rod);
+    });
+  });
+  document.querySelectorAll('.rod-dot').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      if(!currentPerson) return;
+      currentPerson.notes[inp.dataset.rod].dotColor = inp.value;
+      await saveRodState(currentPersonId, inp.dataset.rod);
+    });
+  });
+  document.querySelectorAll('.catch-photo').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const rod = inp.dataset.rod;
+      const file = inp.files[0];
+      if(!file){ return; }
+      try{
+        const dataUrl = await resizeImageFile(file);
+        if(!pendingPhotos[rod]) pendingPhotos[rod] = [];
+        pendingPhotos[rod].push(dataUrl);
+        renderPhotoPreview(rod);
+      }catch(e){
+        console.error('Photo processing failed', e);
+      }
+      inp.value = ''; // clear so the same or another photo can be added again
+    });
+  });
+  document.querySelectorAll('.catch-toggle button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rod = btn.dataset.rod;
+      const yes = btn.dataset.yn === 'yes';
+      catchToggle[rod] = yes;
+      document.querySelectorAll('.catch-toggle[data-rod="'+rod+'"] button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelector('.catch-fields[data-rod="'+rod+'"]').style.display = yes ? 'block' : 'none';
+    });
+  });
+  document.querySelectorAll('.catch-type').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const otherEl = document.querySelector('.catch-type-other[data-rod="'+sel.dataset.rod+'"]');
+      if(otherEl) otherEl.style.display = sel.value === 'Other' ? 'block' : 'none';
+    });
+  });
+  document.querySelectorAll('.log-catch-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rod = btn.dataset.rod;
+      if(!currentPerson) return;
+      const caught = catchToggle[rod];
+      const hookEl = document.querySelector('.catch-hook[data-rod="'+rod+'"]');
+      const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
+      const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
+      const typeValue = typeEl.value === 'Other' ? typeOtherEl.value : typeEl.value;
+      const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
+      const bomEl = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="bom"]');
+      const hook1El = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="hook1"]');
+      const hook2El = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="hook2"]');
+
+      const entry = {
+        id: uid(),
+        caught,
+        rod,
+        hook: caught ? hookEl.value : '',
+        type: caught ? typeValue : '',
+        weight: caught ? (parseFloat(weightEl.value) || 0) : 0,
+        time: Date.now(),
+        timerElapsed: elapsedMs(currentPerson.timers[rod]),
+        bom: bomEl.value,
+        hook1: hook1El.value,
+        hook2: hook2El.value,
+        photos: caught ? (pendingPhotos[rod] || []).slice() : []
+      };
+      showConfirmation(entry);
+    });
+  });
+}
+
+let pendingEntry = null;
+
+function showConfirmation(entry){
+  pendingEntry = entry;
+  const timeStr = new Date(entry.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const timerStr = fmt(entry.timerElapsed||0);
+  let html = `<h3>${entry.caught ? 'Caught a fish?' : 'No catch?'}</h3>`;
+  html += `<p><b>${RID_LABEL[entry.rod]}</b>${entry.caught ? ' · '+escapeHtml(entry.hook) : ''}</p>`;
+  if(entry.caught){
+    html += `<p>${escapeHtml(entry.type||'Fish')} — <b>${entry.weight}kg</b></p>`;
+  }
+  html += `<p>Time of day: <b>${timeStr}</b></p>`;
+  html += `<p>Rod timer: <b>${timerStr}</b></p>`;
+  html += `<p style="font-size:12px;">Bom: ${escapeHtml(entry.bom||'—')}</p>`;
+  html += `<p style="font-size:12px;">Hook 1: ${escapeHtml(entry.hook1||'—')} · Hook 2: ${escapeHtml(entry.hook2||'—')}</p>`;
+  if(entry.photos && entry.photos.length){
+    html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
+      entry.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      `</div>`;
+  }
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('confirm-modal').classList.add('open');
+}
+
+document.getElementById('confirm-correct').addEventListener('click', async ()=>{
+  if(!pendingEntry || !currentPerson) return;
+  const entry = pendingEntry;
+  const rod = entry.rod;
+  currentPerson.catches.push(entry);
+
+  // Clear this rod's bait/hook notes and reset its timer for the next session,
+  // but keep the identifier and color (whoever is fishing that rod stays the same)
+  currentPerson.notes[rod] = {bom:'', hook1:'', hook2:'', identifier: currentPerson.notes[rod].identifier, dotColor: currentPerson.notes[rod].dotColor};
+  currentPerson.timers[rod] = {running:false, startTs:null, accumulatedMs:0};
+
+  const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
+  const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
+  const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
+  const photoEl = document.querySelector('.catch-photo[data-rod="'+rod+'"]');
+  if(typeEl) typeEl.value='';
+  if(typeOtherEl){ typeOtherEl.value=''; typeOtherEl.style.display='none'; }
+  if(weightEl) weightEl.value='';
+  if(photoEl) photoEl.value='';
+  pendingPhotos[rod] = [];
+  renderPhotoPreview(rod);
+
+  renderCatchList(rod);
+  renderNotes();
+  renderTimers();
+
+  document.getElementById('confirm-modal').classList.remove('open');
+  pendingEntry = null;
+  await saveRodState(currentPersonId, rod);
+  await insertCatch(currentPersonId, entry);
+});
+
+document.getElementById('confirm-edit').addEventListener('click', ()=>{
+  pendingEntry = null;
+  document.getElementById('confirm-modal').classList.remove('open');
+});
+
+function catchDetailHtml(c){
+  const timeStr = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const timerStr = fmt(c.timerElapsed||0);
+  let html = `<div class="profile-catch">
+    <div class="pc-head">${RID_LABEL[c.rod] || c.rod}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</div>`;
+  if(c.caught){
+    html += `<div class="pc-line">${escapeHtml(c.type||'Fish')} — ${c.weight}kg</div>`;
+  }
+  html += `<div class="pc-line muted">Time of day: ${timeStr} &middot; Rod timer: ${timerStr}</div>`;
+  html += `<div class="pc-line muted">Bom: ${escapeHtml(c.bom||'—')}</div>`;
+  html += `<div class="pc-line muted">Hook 1: ${escapeHtml(c.hook1||'—')}</div>`;
+  html += `<div class="pc-line muted">Hook 2: ${escapeHtml(c.hook2||'—')}</div>`;
+  if(c.photos && c.photos.length){
+    html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
+      c.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      `</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function buildDistinctOptions(values, current){
+  const set = new Set(values.filter(Boolean));
+  const arr = [...set].sort((a,b)=>a.localeCompare(b));
+  let html = '<option value="">None</option>';
+  arr.forEach(v=>{
+    html += `<option value="${escapeHtml(v)}" ${v===current?'selected':''}>${escapeHtml(v)}</option>`;
+  });
+  if(current && !arr.includes(current)){
+    html += `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>`;
+  }
+  html += `<option value="__other__">+ Add new...</option>`;
+  return html;
+}
+
+async function openProfile(personId){
+  const p = people.find(x=>x.id===personId);
+  const rec = await loadPerson(personId);
+  if(!p) return;
+  const catches = rec && rec.catches ? rec.catches.slice().sort((a,b)=> b.time-a.time) : [];
+  const caughtOnly = catches.filter(c=>c.caught);
+  const totalWeight = caughtOnly.reduce((s,c)=>s+(c.weight||0),0);
+  const dams = people.map(x=>x.dam);
+  const comps = people.map(x=>x.competition);
+
+  let html = `<h3>${escapeHtml(p.name)}</h3>`;
+  html += `<div class="field">
+      <label>Dam</label>
+      <select id="profile-dam-select">${buildDistinctOptions(dams, p.dam||'')}</select>
+      <input type="text" id="profile-dam-other" placeholder="New dam name" style="display:none;margin-top:6px;">
+    </div>`;
+  html += `<div class="field">
+      <label>Competition / Weekend</label>
+      <select id="profile-comp-select">${buildDistinctOptions(comps, p.competition||'')}</select>
+      <input type="text" id="profile-comp-other" placeholder="New competition / weekend" style="display:none;margin-top:6px;">
+    </div>`;
+  html += `<button class="primary-btn" id="profile-save-btn">Save</button>`;
+  html += `<div class="status" id="profile-save-status"></div>`;
+  html += `<div class="profile-summary">
+      <div><b>${caughtOnly.length}</b>catches</div>
+      <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
+      <div><b>${(rec && rec.rods) || p.rods || 3}</b>rods</div>
+    </div>`;
+  html += catches.length ? catches.map(catchDetailHtml).join('') : '<div class="empty">No entries logged yet.</div>';
+  document.getElementById('profile-body').innerHTML = html;
+  document.getElementById('profile-modal').classList.add('open');
+
+  document.getElementById('profile-dam-select').addEventListener('change', (e)=>{
+    document.getElementById('profile-dam-other').style.display = e.target.value==='__other__' ? 'block' : 'none';
+  });
+  document.getElementById('profile-comp-select').addEventListener('change', (e)=>{
+    document.getElementById('profile-comp-other').style.display = e.target.value==='__other__' ? 'block' : 'none';
+  });
+  document.getElementById('profile-save-btn').addEventListener('click', async ()=>{
+    const damSel = document.getElementById('profile-dam-select').value;
+    const damOther = document.getElementById('profile-dam-other').value.trim();
+    const compSel = document.getElementById('profile-comp-select').value;
+    const compOther = document.getElementById('profile-comp-other').value.trim();
+    const dam = damSel === '__other__' ? damOther : damSel;
+    const competition = compSel === '__other__' ? compOther : compSel;
+    const st = document.getElementById('profile-save-status');
+    st.textContent = 'Saving...';
+    try{
+      await sbPatch('fishermen', 'id=eq.'+p.id, {dam, competition});
+      p.dam = dam; p.competition = competition;
+      if(currentPersonId===p.id && currentPerson){ currentPerson.dam = dam; currentPerson.competition = competition; }
+      populateAnglerSelect();
+      renderPeopleList();
+      st.textContent = 'Saved.';
+      setTimeout(()=> st.textContent='', 1500);
+    }catch(e){
+      console.error(e);
+      st.textContent = 'Could not save — check the Supabase connection.';
+    }
+  });
+}
+document.getElementById('profile-close').addEventListener('click', ()=>{
+  document.getElementById('profile-modal').classList.remove('open');
+});
+
+function openPhotoModal(src){
+  document.getElementById('photo-modal-img').src = src;
+  document.getElementById('photo-modal').classList.add('open');
+}
+document.getElementById('photo-modal-close').addEventListener('click', ()=>{
+  document.getElementById('photo-modal').classList.remove('open');
+});
+document.getElementById('photo-modal').addEventListener('click', (e)=>{
+  if(e.target.id === 'photo-modal'){
+    document.getElementById('photo-modal').classList.remove('open');
+  }
+});
+document.addEventListener('click', (e)=>{
+  if(e.target.classList && (e.target.classList.contains('pc-photo') || e.target.classList.contains('catch-log-photo'))){
+    openPhotoModal(e.target.src);
+  }
+});
+
+async function setActivePerson(id){
+  currentPersonId = id;
+  if(!id){ currentPerson = null; renderAll(); return; }
+  currentPerson = await loadPerson(id);
+  document.getElementById('angler-select').value = id;
+  renderAll();
+}
+
+function renderAll(){
+  buildRodCards();
+  renderRodVisibility();
+  renderTimers();
+  renderNotes();
+  RODS.forEach(renderCatchList);
+}
+function renderRodVisibility(){
+  RODS.forEach((r,i)=>{
+    const idx = i+1;
+    const card = document.getElementById('rodcard-'+r);
+    if(!card) return;
+    card.style.display = (currentPerson && currentPerson.rods >= idx) ? '' : 'none';
+  });
+}
+function renderTimers(){
+  RODS.forEach(r=>{
+    const el = document.getElementById('time-'+r);
+    if(!el) return;
+    const t = currentPerson ? currentPerson.timers[r] : null;
+    el.textContent = fmt(elapsedMs(t));
+    document.getElementById('bobber-'+r).classList.toggle('running', !!(t && t.running));
+    const label = document.getElementById('start-time-'+r);
+    if(label){
+      label.textContent = (t && t.running && t.startTs)
+        ? 'Started ' + new Date(t.startTs).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+        : '';
+    }
+  });
+}
+function renderNotes(){
+  RODS.forEach(r=>{
+    ['bom','hook1','hook2','identifier'].forEach(k=>{
+      const el = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="'+k+'"]');
+      if(el) el.value = currentPerson ? currentPerson.notes[r][k] : '';
+    });
+    const dotEl = document.querySelector('.rod-dot[data-rod="'+r+'"]');
+    if(dotEl) dotEl.value = (currentPerson && currentPerson.notes[r].dotColor) || '#C1440E';
+  });
+}
+function renderCatchList(rod){
+  const el = document.querySelector('.catch-list[data-rod="'+rod+'"]');
+  if(!el) return;
+  const entries = currentPerson ? currentPerson.catches.filter(c=>c.rod===rod) : [];
+  if(entries.length===0){ el.innerHTML = '<div class="empty">No entries yet.</div>'; return; }
+  el.innerHTML = entries.slice().reverse().map(c=>{
+    const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${c.weight}kg (${escapeHtml(c.hook||'')})` : `No catch`;
+    const time = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const photoCount = (c.photos && c.photos.length) || 0;
+    const thumb = photoCount
+      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" alt="">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
+      : '';
+    return `<div class="catch-log-item">${thumb}<span style="flex:1;">${label} · ${time}</span><button class="edit-catch" data-id="${c.id}">Edit</button><button class="del" data-id="${c.id}" data-rod="${rod}">Remove</button></div>`;
+  }).join('');
+  el.querySelectorAll('.edit-catch').forEach(btn=>{
+    btn.addEventListener('click', ()=> openEditCatch(btn.dataset.id));
+  });
+  el.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      currentPerson.catches = currentPerson.catches.filter(c=>c.id!==btn.dataset.id);
+      renderCatchList(rod);
+      await removeCatch(btn.dataset.id);
+    });
+  });
+}
+
+// Tabs
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='schedule') renderPeopleList();
+    if(btn.dataset.tab==='leaderboard') renderLeaderboard();
+  });
+});
+document.getElementById('angler-select').addEventListener('change', e=> setActivePerson(e.target.value));
+setInterval(renderTimers, 1000);
+
+// Fisherman (schedule)
+document.getElementById('add-person-btn').addEventListener('click', async ()=>{
+  const name = document.getElementById('new-person-name').value.trim();
+  const dam = document.getElementById('new-person-dam').value.trim();
+  const competition = document.getElementById('new-person-competition').value.trim();
+  const rods = parseInt(document.getElementById('new-person-rods').value) || 3;
+  const st = document.getElementById('schedule-status');
+  if(!name){ st.textContent = 'Enter a name.'; return; }
+  const id = uid();
+  st.textContent = 'Adding...';
+  try{
+    await insertFisherman(id, name, dam, rods, competition);
+    people.push({id, name, dam, rods, competition});
+    document.getElementById('new-person-name').value='';
+    document.getElementById('new-person-dam').value='';
+    document.getElementById('new-person-competition').value='';
+    st.textContent = 'Added.';
+    setTimeout(()=> st.textContent='', 1500);
+    populateAnglerSelect();
+    renderPeopleList();
+    if(!currentPersonId) setActivePerson(id);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not add — check Supabase connection.';
+  }
+});
+
+function renderPeopleList(){
+  const activeEl = document.getElementById('people-list');
+  const archivedEl = document.getElementById('archived-list');
+  const active = people.filter(p=>!p.archived);
+  const archived = people.filter(p=>p.archived);
+
+  if(active.length===0){
+    activeEl.innerHTML = '<div class="empty">No fishermen added yet.</div>';
+  }else{
+    activeEl.innerHTML = active.map(p=>`
+      <li>
+        <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>${p.competition ? '<span class="pill">'+escapeHtml(p.competition)+'</span>' : ''}</div>
+        <div class="actions">
+          <select class="mini-btn rods-select" data-id="${p.id}">
+            ${rodsOptionsHtml(p.rods || 3)}
+          </select>
+          <button class="mini-btn" data-select="${p.id}">${p.id===currentPersonId?'Active':'Select'}</button>
+          <button class="mini-btn" data-archive="${p.id}">Archive</button>
+        </div>
+      </li>`).join('');
+  }
+
+  if(archived.length===0){
+    archivedEl.innerHTML = '<div class="empty">No archived fishermen.</div>';
+  }else{
+    archivedEl.innerHTML = archived.map(p=>`
+      <li>
+        <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>${p.competition ? '<span class="pill">'+escapeHtml(p.competition)+'</span>' : ''}</div>
+        <div class="actions">
+          <button class="mini-btn" data-unarchive="${p.id}">Unarchive</button>
+          <button class="mini-btn danger" data-remove="${p.id}">Delete</button>
+        </div>
+      </li>`).join('');
+  }
+
+  [activeEl, archivedEl].forEach(el=>{
+    el.querySelectorAll('.lb-name-btn').forEach(b=>{
+      b.addEventListener('click', ()=> openProfile(b.dataset.id));
+    });
+  });
+
+  activeEl.querySelectorAll('[data-select]').forEach(b=>{
+    b.addEventListener('click', ()=>{ setActivePerson(b.dataset.select); renderPeopleList(); });
+  });
+  activeEl.querySelectorAll('.rods-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const id = sel.dataset.id;
+      const rods = parseInt(sel.value);
+      const p = people.find(x=>x.id===id);
+      if(p) p.rods = rods;
+      await updateFishermanRods(id, rods);
+      if(currentPersonId===id){
+        currentPerson.rods = rods;
+        renderRodVisibility();
+      }
+    });
+  });
+  activeEl.querySelectorAll('[data-archive]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.dataset.archive;
+      await archiveFisherman(id);
+      const p = people.find(x=>x.id===id);
+      if(p) p.archived = true;
+      if(currentPersonId===id){ currentPersonId=null; currentPerson=null; }
+      populateAnglerSelect();
+      renderPeopleList();
+      renderAll();
+    });
+  });
+
+  archivedEl.querySelectorAll('[data-unarchive]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.dataset.unarchive;
+      await unarchiveFisherman(id);
+      const p = people.find(x=>x.id===id);
+      if(p) p.archived = false;
+      populateAnglerSelect();
+      renderPeopleList();
+    });
+  });
+  archivedEl.querySelectorAll('[data-remove]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.dataset.remove;
+      await deleteFisherman(id);
+      people = people.filter(p=>p.id!==id);
+      if(currentPersonId===id){ currentPersonId=null; currentPerson=null; }
+      populateAnglerSelect();
+      renderPeopleList();
+      renderAll();
+    });
+  });
+}
+
+// Leaderboard
 function populateSelectPreserving(selectEl, values, allLabel){
   const current = selectEl.value;
   const distinct = [...new Set(values.filter(Boolean))].sort((a,b)=>a.localeCompare(b));
@@ -164,32 +1389,18 @@ function populateSelectPreserving(selectEl, values, allLabel){
   if(distinct.includes(current)) selectEl.value = current;
 }
 
-async function loadAndRender(){
-  try{
-    people = await sbGet('fishermen?select=id,name,dam,competition&order=name.asc');
-    clearDbError();
-  }catch(e){
-    console.error(e);
-    showDbError('Could not reach the database. Try refreshing.');
-    return;
-  }
-
+async function renderLeaderboard(){
   const el = document.getElementById('leaderboard-list');
-  if(people.length===0){
-    el.innerHTML = '<div class="empty">No anglers yet.</div>';
-    document.getElementById('updated-line').textContent = '';
-    return;
-  }
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  if(people.length===0){ el.innerHTML = '<div class="empty">No fishermen added yet.</div>'; return; }
 
   const perPersonCatches = {};
   const allTypes = [];
   for(const p of people){
-    let catches = [];
-    try{
-      catches = await sbGet('catches?fisherman_id=eq.'+p.id+'&caught=eq.true&select=*');
-    }catch(e){ console.error(e); }
+    const rec = await loadPerson(p.id);
+    const catches = (rec && rec.catches) ? rec.catches.filter(c=>c.caught) : [];
     perPersonCatches[p.id] = catches;
-    catches.forEach(c=>{ if(c.fish_type) allTypes.push(c.fish_type); });
+    catches.forEach(c=>{ if(c.type) allTypes.push(c.type); });
   }
 
   populateSelectPreserving(document.getElementById('lb-filter-dam'), people.map(p=>p.dam), 'All dams');
@@ -204,42 +1415,50 @@ async function loadAndRender(){
     .filter(p => (!damFilter || p.dam===damFilter) && (!compFilter || p.competition===compFilter))
     .map(p=>{
       let catches = perPersonCatches[p.id] || [];
-      if(typeFilter) catches = catches.filter(c=>c.fish_type===typeFilter);
+      if(typeFilter) catches = catches.filter(c=>c.type===typeFilter);
       const totalWeight = catches.reduce((s,c)=>s+(c.weight||0),0);
       const biggest = catches.reduce((b,c)=> (c.weight||0) > (b?b.weight:0) ? c : b, null);
-      return {name:p.name, dam:p.dam, count:catches.length, totalWeight, biggest};
-    })
-    // Spectator view: only show anglers who have actually caught a fish
-    .filter(s => s.count > 0);
+      return {id:p.id, name:p.name, dam:p.dam, count:catches.length, totalWeight, biggest};
+    });
 
   stats.sort((a,b)=> b.totalWeight - a.totalWeight || b.count - a.count);
+  if(stats.length===0 || stats.every(s=>s.count===0)){ el.innerHTML = '<div class="empty">No catches match these filters.</div>'; return; }
+  el.innerHTML = stats.map((s,i)=>`
+    <div class="lb-item">
+      <div class="lb-rank">${i+1}</div>
+      <div>
+        <button class="lb-name-btn" data-id="${s.id}">${escapeHtml(s.name)}</button>
+        <div class="lb-dam">${escapeHtml(s.dam||'')}</div>
+      </div>
+      <div class="lb-stats">
+        <div><b>${s.totalWeight.toFixed(2)}kg</b> total</div>
+        <div>${s.count} catch${s.count===1?'':'es'}${s.biggest? ' · biggest '+s.biggest.weight+'kg '+escapeHtml(s.biggest.type||''):''}</div>
+      </div>
+    </div>`).join('');
+  el.querySelectorAll('.lb-name-btn').forEach(b=>{
+    b.addEventListener('click', ()=> openProfile(b.dataset.id));
+  });
+}
+document.getElementById('refresh-lb-btn').addEventListener('click', renderLeaderboard);
+document.getElementById('lb-filter-dam').addEventListener('change', renderLeaderboard);
+document.getElementById('lb-filter-comp').addEventListener('change', renderLeaderboard);
+document.getElementById('lb-filter-type').addEventListener('change', renderLeaderboard);
 
-  if(stats.length===0){
-    el.innerHTML = '<div class="empty">No fish caught yet for these filters.</div>';
-  }else{
-    el.innerHTML = stats.map((s,i)=>`
-      <div class="lb-item">
-        <div class="lb-rank">${i+1}</div>
-        <div>
-          <div class="lb-name">${escapeHtml(s.name)}</div>
-          <div class="lb-dam">${escapeHtml(s.dam||'')}</div>
-        </div>
-        <div class="lb-stats">
-          <div><b>${s.totalWeight.toFixed(2)}kg</b> total</div>
-          <div>${s.count} catch${s.count===1?'':'es'}${s.biggest? ' · biggest '+s.biggest.weight+'kg '+escapeHtml(s.biggest.fish_type||''):''}</div>
-        </div>
-      </div>`).join('');
-  }
-  document.getElementById('updated-line').textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+// Init
+(async function init(){
+  await loadPeople();
+  populateAnglerSelect();
+  const activePeople = people.filter(p=>!p.archived);
+  if(activePeople.length>0) await setActivePerson(activePeople[0].id);
+  renderPeopleList();
+})();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
 }
 
-document.getElementById('refresh-btn').addEventListener('click', loadAndRender);
-document.getElementById('lb-filter-dam').addEventListener('change', loadAndRender);
-document.getElementById('lb-filter-comp').addEventListener('change', loadAndRender);
-document.getElementById('lb-filter-type').addEventListener('change', loadAndRender);
-
-loadAndRender();
-setInterval(loadAndRender, REFRESH_MS);
 </script>
 </body>
 </html>
