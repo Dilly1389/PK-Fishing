@@ -555,7 +555,20 @@ function rodCardHtml(r){
         <div class="row2">
           <div class="field">
             <label>Type of fish</label>
-            <input type="text" class="catch-type" data-rod="${r}" placeholder="e.g. Carp, Bass">
+            <select class="catch-type" data-rod="${r}">
+              <option value="">Select type</option>
+              <option value="Carp">Carp</option>
+              <option value="Grass Carp">Grass Carp</option>
+              <option value="Bass">Bass</option>
+              <option value="Barbel">Barbel (Catfish)</option>
+              <option value="Tilapia">Tilapia (Bream)</option>
+              <option value="Yellowfish">Yellowfish</option>
+              <option value="Mudfish">Mudfish (Moggel)</option>
+              <option value="Koi">Koi</option>
+              <option value="Eel">Eel</option>
+              <option value="Other">Other</option>
+            </select>
+            <input type="text" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;">
           </div>
           <div class="field">
             <label>Weight (kg)</label>
@@ -604,6 +617,12 @@ function attachRodCardHandlers(){
       document.querySelector('.catch-fields[data-rod="'+rod+'"]').style.display = yes ? 'block' : 'none';
     });
   });
+  document.querySelectorAll('.catch-type').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const otherEl = document.querySelector('.catch-type-other[data-rod="'+sel.dataset.rod+'"]');
+      if(otherEl) otherEl.style.display = sel.value === 'Other' ? 'block' : 'none';
+    });
+  });
   document.querySelectorAll('.log-catch-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const rod = btn.dataset.rod;
@@ -611,6 +630,8 @@ function attachRodCardHandlers(){
       const caught = catchToggle[rod];
       const hookEl = document.querySelector('.catch-hook[data-rod="'+rod+'"]');
       const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
+      const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
+      const typeValue = typeEl.value === 'Other' ? typeOtherEl.value : typeEl.value;
       const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
       const bomEl = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="bom"]');
       const hook1El = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="hook1"]');
@@ -621,7 +642,7 @@ function attachRodCardHandlers(){
         caught,
         rod,
         hook: caught ? hookEl.value : '',
-        type: caught ? typeEl.value : '',
+        type: caught ? typeValue : '',
         weight: caught ? (parseFloat(weightEl.value) || 0) : 0,
         time: Date.now(),
         timerElapsed: elapsedMs(currentPerson.timers[rod]),
@@ -664,8 +685,10 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   currentPerson.timers[rod] = {running:false, startTs:null, accumulatedMs:0};
 
   const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
+  const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
   const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
   if(typeEl) typeEl.value='';
+  if(typeOtherEl){ typeOtherEl.value=''; typeOtherEl.style.display='none'; }
   if(weightEl) weightEl.value='';
 
   renderCatchList(rod);
