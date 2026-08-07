@@ -295,6 +295,10 @@
         <h2>Fishermen fishing today</h2>
         <ul class="people-list" id="people-list"></ul>
       </section>
+      <section class="card">
+        <h2>Archived</h2>
+        <ul class="people-list" id="archived-list"></ul>
+      </section>
     </div>
 
     <!-- LEADERBOARD -->
@@ -438,7 +442,7 @@ async function sbDelete(table, filterQuery){
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -456,6 +460,12 @@ async function deleteFisherman(id){
 }
 async function updateFishermanRods(id, rods){
   await sbPatch('fishermen', 'id=eq.'+id, {rods});
+}
+async function archiveFisherman(id){
+  await sbPatch('fishermen', 'id=eq.'+id, {archived:true});
+}
+async function unarchiveFisherman(id){
+  await sbPatch('fishermen', 'id=eq.'+id, {archived:false});
 }
 
 async function loadPerson(id){
@@ -520,8 +530,9 @@ async function removeCatch(catchId){
 // ---------- UI ----------
 function populateAnglerSelect(){
   const sel = document.getElementById('angler-select');
-  sel.innerHTML = people.length
-    ? people.map(p => `<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.dam)}</option>`).join('')
+  const active = people.filter(p=>!p.archived);
+  sel.innerHTML = active.length
+    ? active.map(p => `<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.dam)}</option>`).join('')
     : '<option value="">Add a fisherman on the Fisherman tab</option>';
   if(currentPersonId) sel.value = currentPersonId;
 }
@@ -917,39 +928,52 @@ document.getElementById('add-person-btn').addEventListener('click', async ()=>{
 });
 
 function renderPeopleList(){
-  const el = document.getElementById('people-list');
-  if(people.length===0){ el.innerHTML = '<div class="empty">No fishermen added yet.</div>'; return; }
-  el.innerHTML = people.map(p=>`
-    <li>
-      <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>${p.competition ? '<span class="pill">'+escapeHtml(p.competition)+'</span>' : ''}</div>
-      <div class="actions">
-        <select class="mini-btn rods-select" data-id="${p.id}">
-          <option value="1" ${p.rods==1?'selected':''}>1 rod</option>
-          <option value="2" ${p.rods==2?'selected':''}>2 rods</option>
-          <option value="3" ${(!p.rods||p.rods==3)?'selected':''}>3 rods</option>
-        </select>
-        <button class="mini-btn" data-select="${p.id}">${p.id===currentPersonId?'Active':'Select'}</button>
-        <button class="mini-btn danger" data-remove="${p.id}">Remove</button>
-      </div>
-    </li>`).join('');
-  el.querySelectorAll('.lb-name-btn').forEach(b=>{
-    b.addEventListener('click', ()=> openProfile(b.dataset.id));
-  });
-  el.querySelectorAll('[data-select]').forEach(b=>{
-    b.addEventListener('click', ()=>{ setActivePerson(b.dataset.select); renderPeopleList(); });
-  });
-  el.querySelectorAll('[data-remove]').forEach(b=>{
-    b.addEventListener('click', async ()=>{
-      const id = b.dataset.remove;
-      await deleteFisherman(id);
-      people = people.filter(p=>p.id!==id);
-      if(currentPersonId===id){ currentPersonId=null; currentPerson=null; }
-      populateAnglerSelect();
-      renderPeopleList();
-      renderAll();
+  const activeEl = document.getElementById('people-list');
+  const archivedEl = document.getElementById('archived-list');
+  const active = people.filter(p=>!p.archived);
+  const archived = people.filter(p=>p.archived);
+
+  if(active.length===0){
+    activeEl.innerHTML = '<div class="empty">No fishermen added yet.</div>';
+  }else{
+    activeEl.innerHTML = active.map(p=>`
+      <li>
+        <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>${p.competition ? '<span class="pill">'+escapeHtml(p.competition)+'</span>' : ''}</div>
+        <div class="actions">
+          <select class="mini-btn rods-select" data-id="${p.id}">
+            <option value="1" ${p.rods==1?'selected':''}>1 rod</option>
+            <option value="2" ${p.rods==2?'selected':''}>2 rods</option>
+            <option value="3" ${(!p.rods||p.rods==3)?'selected':''}>3 rods</option>
+          </select>
+          <button class="mini-btn" data-select="${p.id}">${p.id===currentPersonId?'Active':'Select'}</button>
+          <button class="mini-btn" data-archive="${p.id}">Archive</button>
+        </div>
+      </li>`).join('');
+  }
+
+  if(archived.length===0){
+    archivedEl.innerHTML = '<div class="empty">No archived fishermen.</div>';
+  }else{
+    archivedEl.innerHTML = archived.map(p=>`
+      <li>
+        <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>${p.competition ? '<span class="pill">'+escapeHtml(p.competition)+'</span>' : ''}</div>
+        <div class="actions">
+          <button class="mini-btn" data-unarchive="${p.id}">Unarchive</button>
+          <button class="mini-btn danger" data-remove="${p.id}">Delete</button>
+        </div>
+      </li>`).join('');
+  }
+
+  [activeEl, archivedEl].forEach(el=>{
+    el.querySelectorAll('.lb-name-btn').forEach(b=>{
+      b.addEventListener('click', ()=> openProfile(b.dataset.id));
     });
   });
-  el.querySelectorAll('.rods-select').forEach(sel=>{
+
+  activeEl.querySelectorAll('[data-select]').forEach(b=>{
+    b.addEventListener('click', ()=>{ setActivePerson(b.dataset.select); renderPeopleList(); });
+  });
+  activeEl.querySelectorAll('.rods-select').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
       const id = sel.dataset.id;
       const rods = parseInt(sel.value);
@@ -960,6 +984,40 @@ function renderPeopleList(){
         currentPerson.rods = rods;
         renderRodVisibility();
       }
+    });
+  });
+  activeEl.querySelectorAll('[data-archive]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.dataset.archive;
+      await archiveFisherman(id);
+      const p = people.find(x=>x.id===id);
+      if(p) p.archived = true;
+      if(currentPersonId===id){ currentPersonId=null; currentPerson=null; }
+      populateAnglerSelect();
+      renderPeopleList();
+      renderAll();
+    });
+  });
+
+  archivedEl.querySelectorAll('[data-unarchive]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.dataset.unarchive;
+      await unarchiveFisherman(id);
+      const p = people.find(x=>x.id===id);
+      if(p) p.archived = false;
+      populateAnglerSelect();
+      renderPeopleList();
+    });
+  });
+  archivedEl.querySelectorAll('[data-remove]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.dataset.remove;
+      await deleteFisherman(id);
+      people = people.filter(p=>p.id!==id);
+      if(currentPersonId===id){ currentPersonId=null; currentPerson=null; }
+      populateAnglerSelect();
+      renderPeopleList();
+      renderAll();
     });
   });
 }
@@ -1032,7 +1090,8 @@ document.getElementById('lb-filter-type').addEventListener('change', renderLeade
 (async function init(){
   await loadPeople();
   populateAnglerSelect();
-  if(people.length>0) await setActivePerson(people[0].id);
+  const activePeople = people.filter(p=>!p.archived);
+  if(activePeople.length>0) await setActivePerson(activePeople[0].id);
   renderPeopleList();
 })();
 </script>
