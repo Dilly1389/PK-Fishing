@@ -235,7 +235,7 @@
   }
   .mini-btn.danger{color:#c04;}
 
-  .lb-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
+  .lb-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
   .lb-item:last-child{border-bottom:none;}
   .lb-rank{
     width:28px;height:28px;border-radius:50%;background:var(--dam);color:#fff;
@@ -1786,7 +1786,14 @@ async function renderLeaderboard(){
       if(typeFilter) catches = catches.filter(c=>c.type===typeFilter);
       const totalWeight = catches.reduce((s,c)=>s+(c.weight||0),0);
       const biggest = catches.reduce((b,c)=> (c.weight||0) > (b?b.weight:0) ? c : b, null);
-      return {id:p.id, name:p.name, dam:p.dam, count:catches.length, totalWeight, biggest, likes:p.likes||0};
+      const bagPhotos = [];
+      catches.forEach(c=>{
+        if(c.photos && c.photos.length){
+          photoGalleryCache[c.id] = c.photos;
+          c.photos.forEach((src,idx)=> bagPhotos.push({src, catchId:c.id, index:idx}));
+        }
+      });
+      return {id:p.id, name:p.name, dam:p.dam, count:catches.length, totalWeight, biggest, likes:p.likes||0, bagPhotos};
     });
 
   const sortMode = document.getElementById('lb-sort-mode').value;
@@ -1801,14 +1808,10 @@ async function renderLeaderboard(){
     return;
   }
   el.innerHTML = visibleStats.map((s,i)=>{
-    const bigPhoto = (s.biggest && s.biggest.photos && s.biggest.photos.length) ? s.biggest.photos[0] : null;
-    if(bigPhoto) photoGalleryCache[s.biggest.id] = s.biggest.photos;
-    const bigLikes = (s.biggest && s.biggest.likes) || 0;
-    const photoHtml = bigPhoto
-      ? `<span style="position:relative;display:inline-block;flex-shrink:0;">
-          <img class="catch-log-photo lb-photo" src="${bigPhoto}" data-catch-id="${s.biggest.id}" data-photo-index="0" alt="Biggest catch">
-          ${bigLikes>0 ? `<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">👌${bigLikes}</span>` : ''}
-        </span>`
+    const photoStrip = (s.bagPhotos && s.bagPhotos.length)
+      ? `<div style="display:flex;flex-wrap:wrap;gap:4px;max-width:110px;flex-shrink:0;">` +
+          s.bagPhotos.map(e=>`<img class="catch-log-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="">`).join('') +
+        `</div>`
       : '';
     const statLine = sortMode === 'fish'
       ? `${s.biggest? '<b>'+s.biggest.weight+'kg</b> '+escapeHtml(s.biggest.type||'') : 'No fish yet'}`
@@ -1816,7 +1819,7 @@ async function renderLeaderboard(){
     return `
     <div class="lb-item">
       <div class="lb-rank">${i+1}</div>
-      ${photoHtml}
+      ${photoStrip}
       <div>
         ${IS_SPECTATOR
           ? `<div class="lb-name">${escapeHtml(s.name)}</div>`
