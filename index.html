@@ -238,6 +238,19 @@
   .lb-dam{font-size:12px;color:var(--muted);}
   .lb-stats{margin-left:auto;text-align:right;font-size:12.5px;color:var(--muted);}
   .lb-stats b{color:var(--ink);font-size:14.5px;}
+  .lb-like-btn{
+    background:var(--paper);border:1px solid var(--line);border-radius:20px;
+    padding:6px 10px;font-size:14px;cursor:pointer;flex-shrink:0;
+    display:flex;align-items:center;gap:5px;font-family:inherit;color:var(--ink);
+  }
+  .lb-like-btn:active{transform:scale(0.94);}
+  .lb-like-count{font-size:12px;font-weight:700;color:var(--muted);}
+  .comment-item{border-bottom:1px solid var(--line);padding:10px 0;}
+  .comment-item:last-child{border-bottom:none;}
+  .comment-head{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:3px;}
+  .comment-head b{color:var(--ink);}
+  .comment-time{color:var(--muted);font-size:11.5px;flex-shrink:0;}
+  .comment-msg{font-size:13.5px;color:var(--ink);white-space:pre-wrap;word-break:break-word;}
 
   .empty{text-align:center;padding:20px 10px;color:var(--muted);font-size:13.5px;}
   .primary-btn{
@@ -361,13 +374,35 @@
             <select id="lb-filter-comp"><option value="">All competitions</option></select>
           </div>
         </div>
-        <div class="field">
-          <label>Fish type</label>
-          <select id="lb-filter-type"><option value="">All types</option></select>
+        <div class="row2">
+          <div class="field">
+            <label>Fish type</label>
+            <select id="lb-filter-type"><option value="">All types</option></select>
+          </div>
+          <div class="field">
+            <label>Rank by</label>
+            <select id="lb-sort-mode">
+              <option value="bag">Biggest bag (total kg)</option>
+              <option value="fish">Biggest fish (single catch)</option>
+            </select>
+          </div>
         </div>
         <div id="leaderboard-list"><div class="empty">No catches logged yet.</div></div>
       </section>
       <button class="primary-btn" id="refresh-lb-btn" style="background:var(--dam);">Refresh</button>
+
+      <section class="card">
+        <h2>Comments</h2>
+        <div class="field">
+          <input type="text" id="comment-author" placeholder="Your name (optional)">
+        </div>
+        <div class="field">
+          <textarea id="comment-message" placeholder="Say something..."></textarea>
+        </div>
+        <button class="primary-btn" id="comment-post-btn">Post comment</button>
+        <div class="status" id="comment-status"></div>
+        <div id="comments-list" style="margin-top:14px;"></div>
+      </section>
     </div>
 
   </main>
@@ -726,7 +761,7 @@ async function sbDelete(table, filterQuery){
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -1394,6 +1429,54 @@ function populateSelectPreserving(selectEl, values, allLabel){
   if(distinct.includes(current)) selectEl.value = current;
 }
 
+// ---------- Comments ----------
+async function loadComments(){
+  try{
+    const rows = await sbGet('comments?select=*&order=created_at.desc&limit=50');
+    clearDbError();
+    return rows;
+  }catch(e){ console.error(e); return []; }
+}
+async function postComment(author, message){
+  await sbPost('comments', {
+    id: uid(),
+    author: author || 'Anonymous',
+    message,
+    created_at: new Date().toISOString()
+  });
+}
+async function renderComments(){
+  const el = document.getElementById('comments-list');
+  if(!el) return;
+  const rows = await loadComments();
+  if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet.</div>'; return; }
+  el.innerHTML = rows.map(c=>{
+    const time = new Date(c.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    return `<div class="comment-item">
+      <div class="comment-head"><b>${escapeHtml(c.author || 'Anonymous')}</b><span class="comment-time">${time}</span></div>
+      <div class="comment-msg">${escapeHtml(c.message)}</div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('comment-post-btn').addEventListener('click', async ()=>{
+  const authorEl = document.getElementById('comment-author');
+  const messageEl = document.getElementById('comment-message');
+  const st = document.getElementById('comment-status');
+  const message = messageEl.value.trim();
+  if(!message){ st.textContent = 'Write something first.'; return; }
+  st.textContent = 'Posting...';
+  try{
+    await postComment(authorEl.value.trim(), message);
+    messageEl.value = '';
+    st.textContent = 'Posted.';
+    setTimeout(()=> st.textContent='', 1200);
+    renderComments();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not post — check the Supabase connection.';
+  }
+});
+
 async function renderLeaderboard(){
   const el = document.getElementById('leaderboard-list');
   el.innerHTML = '<div class="empty">Loading...</div>';
@@ -1423,10 +1506,15 @@ async function renderLeaderboard(){
       if(typeFilter) catches = catches.filter(c=>c.type===typeFilter);
       const totalWeight = catches.reduce((s,c)=>s+(c.weight||0),0);
       const biggest = catches.reduce((b,c)=> (c.weight||0) > (b?b.weight:0) ? c : b, null);
-      return {id:p.id, name:p.name, dam:p.dam, count:catches.length, totalWeight, biggest};
+      return {id:p.id, name:p.name, dam:p.dam, count:catches.length, totalWeight, biggest, likes:p.likes||0};
     });
 
-  stats.sort((a,b)=> b.totalWeight - a.totalWeight || b.count - a.count);
+  const sortMode = document.getElementById('lb-sort-mode').value;
+  if(sortMode === 'fish'){
+    stats.sort((a,b)=> (b.biggest?b.biggest.weight:0) - (a.biggest?a.biggest.weight:0));
+  }else{
+    stats.sort((a,b)=> b.totalWeight - a.totalWeight || b.count - a.count);
+  }
   const visibleStats = IS_SPECTATOR ? stats.filter(s=>s.count>0) : stats;
   if(visibleStats.length===0 || visibleStats.every(s=>s.count===0)){
     el.innerHTML = `<div class="empty">${IS_SPECTATOR ? 'No fish caught yet for these filters.' : 'No catches match these filters.'}</div>`;
@@ -1435,6 +1523,9 @@ async function renderLeaderboard(){
   el.innerHTML = visibleStats.map((s,i)=>{
     const bigPhoto = (s.biggest && s.biggest.photos && s.biggest.photos.length) ? s.biggest.photos[0] : null;
     const photoHtml = bigPhoto ? `<img class="catch-log-photo lb-photo" src="${bigPhoto}" alt="Biggest catch">` : '';
+    const statLine = sortMode === 'fish'
+      ? `${s.biggest? '<b>'+s.biggest.weight+'kg</b> '+escapeHtml(s.biggest.type||'') : 'No fish yet'}`
+      : `<b>${s.totalWeight.toFixed(2)}kg</b> total`;
     return `
     <div class="lb-item">
       <div class="lb-rank">${i+1}</div>
@@ -1446,9 +1537,10 @@ async function renderLeaderboard(){
         <div class="lb-dam">${escapeHtml(s.dam||'')}</div>
       </div>
       <div class="lb-stats">
-        <div><b>${s.totalWeight.toFixed(2)}kg</b> total</div>
+        <div>${statLine}</div>
         <div>${s.count} catch${s.count===1?'':'es'}${s.biggest? ' · biggest '+s.biggest.weight+'kg '+escapeHtml(s.biggest.type||''):''}</div>
       </div>
+      <button class="lb-like-btn" data-id="${s.id}">👌<span class="lb-like-count">${s.likes}</span></button>
     </div>`;
   }).join('');
   if(!IS_SPECTATOR){
@@ -1456,7 +1548,23 @@ async function renderLeaderboard(){
       b.addEventListener('click', ()=> openProfile(b.dataset.id));
     });
   }
+  el.querySelectorAll('.lb-like-btn').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.dataset.id;
+      const p = people.find(x=>x.id===id);
+      const newLikes = (p ? (p.likes||0) : 0) + 1;
+      const countEl = b.querySelector('.lb-like-count');
+      if(countEl) countEl.textContent = newLikes;
+      if(p) p.likes = newLikes;
+      try{
+        await sbPatch('fishermen', 'id=eq.'+id, {likes: newLikes});
+        clearDbError();
+      }catch(e){ console.error(e); showDbError('Could not save like.'); }
+    });
+  });
+  renderComments();
 }
+document.getElementById('lb-sort-mode').addEventListener('change', renderLeaderboard);
 document.getElementById('refresh-lb-btn').addEventListener('click', renderLeaderboard);
 document.getElementById('lb-filter-dam').addEventListener('change', renderLeaderboard);
 document.getElementById('lb-filter-comp').addEventListener('change', renderLeaderboard);
