@@ -244,6 +244,10 @@
     display:flex;align-items:center;gap:5px;font-family:inherit;color:var(--ink);
   }
   .lb-like-btn:active{transform:scale(0.94);}
+  .lb-like-btn.liked{background:var(--dam);border-color:var(--dam);color:#fff;}
+  .lb-like-btn.liked .lb-like-count{color:#fff;}
+  .lb-like-btn:disabled{cursor:default;opacity:0.55;}
+  .lb-like-btn.liked:disabled{opacity:1;}
   .lb-like-count{font-size:12px;font-weight:700;color:var(--muted);}
   .comment-item{border-bottom:1px solid var(--line);padding:10px 0;}
   .comment-item:last-child{border-bottom:none;}
@@ -426,9 +430,21 @@
 </div>
 
 <div class="modal-overlay" id="photo-modal">
-  <div class="modal-card" style="max-width:92vw;padding:12px;text-align:center;">
-    <img id="photo-modal-img" src="" alt="Catch photo" style="max-width:100%;max-height:78vh;border-radius:10px;display:block;margin:0 auto;">
-    <button class="primary-btn" id="photo-modal-close" style="margin-top:12px;">Close</button>
+  <div class="modal-card" style="max-width:92vw;max-height:88vh;overflow-y:auto;padding:12px;text-align:center;">
+    <img id="photo-modal-img" src="" alt="Catch photo" style="max-width:100%;max-height:60vh;border-radius:10px;display:block;margin:0 auto;">
+    <div id="photo-comment-section" style="text-align:left;margin-top:14px;display:none;">
+      <p class="sub-heading" style="margin-bottom:8px;">Comments on this catch</p>
+      <div class="field">
+        <input type="text" id="photo-comment-author" placeholder="Your name (optional)">
+      </div>
+      <div class="field">
+        <textarea id="photo-comment-message" placeholder="Comment on this catch..."></textarea>
+      </div>
+      <button class="primary-btn" id="photo-comment-post-btn">Post comment</button>
+      <div class="status" id="photo-comment-status"></div>
+      <div id="photo-comments-list" style="margin-top:10px;"></div>
+    </div>
+    <button class="primary-btn" id="photo-modal-close" style="margin-top:14px;background:var(--khaki);color:var(--ink);">Close</button>
   </div>
 </div>
 
@@ -690,6 +706,16 @@ function elapsedMs(t){
 }
 function escapeHtml(s){
   return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// One 👌 vote per browser/device — stored locally, not tied to any account
+function getMyVote(){
+  try{ return localStorage.getItem('pk_fishing_my_vote') || null; }
+  catch(e){ return null; }
+}
+function setMyVote(id){
+  try{ localStorage.setItem('pk_fishing_my_vote', id); }
+  catch(e){}
 }
 
 function showDbError(msg){
@@ -1108,7 +1134,7 @@ function catchDetailHtml(c){
   html += `<div class="pc-line muted">Hook 2: ${escapeHtml(c.hook2||'—')}</div>`;
   if(c.photos && c.photos.length){
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
-      c.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      c.photos.map(p=>`<img class="pc-photo" src="${p}" data-catch-id="${c.id}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
       `</div>`;
   }
   html += `</div>`;
@@ -1194,8 +1220,14 @@ document.getElementById('profile-close').addEventListener('click', ()=>{
   document.getElementById('profile-modal').classList.remove('open');
 });
 
-function openPhotoModal(src){
+let currentPhotoCatchId = null;
+
+function openPhotoModal(src, catchId){
   document.getElementById('photo-modal-img').src = src;
+  currentPhotoCatchId = catchId || null;
+  const section = document.getElementById('photo-comment-section');
+  if(section) section.style.display = currentPhotoCatchId ? 'block' : 'none';
+  if(currentPhotoCatchId) renderPhotoComments();
   document.getElementById('photo-modal').classList.add('open');
 }
 document.getElementById('photo-modal-close').addEventListener('click', ()=>{
@@ -1208,7 +1240,41 @@ document.getElementById('photo-modal').addEventListener('click', (e)=>{
 });
 document.addEventListener('click', (e)=>{
   if(e.target.classList && (e.target.classList.contains('pc-photo') || e.target.classList.contains('catch-log-photo'))){
-    openPhotoModal(e.target.src);
+    openPhotoModal(e.target.src, e.target.dataset.catchId || null);
+  }
+});
+
+async function renderPhotoComments(){
+  const el = document.getElementById('photo-comments-list');
+  if(!el || !currentPhotoCatchId) return;
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  const rows = await loadComments(currentPhotoCatchId);
+  if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet.</div>'; return; }
+  el.innerHTML = rows.map(c=>{
+    const time = new Date(c.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    return `<div class="comment-item">
+      <div class="comment-head"><b>${escapeHtml(c.author || 'Anonymous')}</b><span class="comment-time">${time}</span></div>
+      <div class="comment-msg">${escapeHtml(c.message)}</div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('photo-comment-post-btn').addEventListener('click', async ()=>{
+  if(!currentPhotoCatchId) return;
+  const authorEl = document.getElementById('photo-comment-author');
+  const messageEl = document.getElementById('photo-comment-message');
+  const st = document.getElementById('photo-comment-status');
+  const message = messageEl.value.trim();
+  if(!message){ st.textContent = 'Write something first.'; return; }
+  st.textContent = 'Posting...';
+  try{
+    await postComment(authorEl.value.trim(), message, currentPhotoCatchId);
+    messageEl.value = '';
+    st.textContent = 'Posted.';
+    setTimeout(()=> st.textContent='', 1200);
+    renderPhotoComments();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not post — check the Supabase connection.';
   }
 });
 
@@ -1270,7 +1336,7 @@ function renderCatchList(rod){
     const time = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     const photoCount = (c.photos && c.photos.length) || 0;
     const thumb = photoCount
-      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" alt="">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
+      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" alt="">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
       : '';
     return `<div class="catch-log-item">${thumb}<span style="flex:1;">${label} · ${time}</span><button class="edit-catch" data-id="${c.id}">Edit</button><button class="del" data-id="${c.id}" data-rod="${rod}">Remove</button></div>`;
   }).join('');
@@ -1430,19 +1496,21 @@ function populateSelectPreserving(selectEl, values, allLabel){
 }
 
 // ---------- Comments ----------
-async function loadComments(){
+async function loadComments(catchId){
   try{
-    const rows = await sbGet('comments?select=*&order=created_at.desc&limit=50');
+    const filter = catchId ? ('catch_id=eq.'+catchId) : 'catch_id=is.null';
+    const rows = await sbGet('comments?select=*&'+filter+'&order=created_at.desc&limit=50');
     clearDbError();
     return rows;
   }catch(e){ console.error(e); return []; }
 }
-async function postComment(author, message){
+async function postComment(author, message, catchId){
   await sbPost('comments', {
     id: uid(),
     author: author || 'Anonymous',
     message,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    catch_id: catchId || null
   });
 }
 async function renderComments(){
@@ -1520,9 +1588,10 @@ async function renderLeaderboard(){
     el.innerHTML = `<div class="empty">${IS_SPECTATOR ? 'No fish caught yet for these filters.' : 'No catches match these filters.'}</div>`;
     return;
   }
+  const myVote = getMyVote();
   el.innerHTML = visibleStats.map((s,i)=>{
     const bigPhoto = (s.biggest && s.biggest.photos && s.biggest.photos.length) ? s.biggest.photos[0] : null;
-    const photoHtml = bigPhoto ? `<img class="catch-log-photo lb-photo" src="${bigPhoto}" alt="Biggest catch">` : '';
+    const photoHtml = bigPhoto ? `<img class="catch-log-photo lb-photo" src="${bigPhoto}" data-catch-id="${s.biggest.id}" alt="Biggest catch">` : '';
     const statLine = sortMode === 'fish'
       ? `${s.biggest? '<b>'+s.biggest.weight+'kg</b> '+escapeHtml(s.biggest.type||'') : 'No fish yet'}`
       : `<b>${s.totalWeight.toFixed(2)}kg</b> total`;
@@ -1540,7 +1609,7 @@ async function renderLeaderboard(){
         <div>${statLine}</div>
         <div>${s.count} catch${s.count===1?'':'es'}${s.biggest? ' · biggest '+s.biggest.weight+'kg '+escapeHtml(s.biggest.type||''):''}</div>
       </div>
-      <button class="lb-like-btn" data-id="${s.id}">👌<span class="lb-like-count">${s.likes}</span></button>
+      <button class="lb-like-btn ${myVote===s.id?'liked':''}" data-id="${s.id}" ${myVote?'disabled':''}>👌<span class="lb-like-count">${s.likes}</span></button>
     </div>`;
   }).join('');
   if(!IS_SPECTATOR){
@@ -1550,16 +1619,17 @@ async function renderLeaderboard(){
   }
   el.querySelectorAll('.lb-like-btn').forEach(b=>{
     b.addEventListener('click', async ()=>{
+      if(b.disabled || getMyVote()) return;
       const id = b.dataset.id;
       const p = people.find(x=>x.id===id);
       const newLikes = (p ? (p.likes||0) : 0) + 1;
-      const countEl = b.querySelector('.lb-like-count');
-      if(countEl) countEl.textContent = newLikes;
       if(p) p.likes = newLikes;
+      setMyVote(id);
       try{
         await sbPatch('fishermen', 'id=eq.'+id, {likes: newLikes});
         clearDbError();
       }catch(e){ console.error(e); showDbError('Could not save like.'); }
+      renderLeaderboard();
     });
   });
   renderComments();
