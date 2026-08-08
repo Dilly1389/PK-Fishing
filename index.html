@@ -891,6 +891,7 @@ async function loadPerson(id){
       id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
       time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
       bom:c.bom||'', hook1:c.hook1_note||'', hook2:c.hook2_note||'',
+      rodIdentifier: c.rod_identifier || '',
       photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
       likes: c.likes || 0
     }));
@@ -923,7 +924,9 @@ async function insertCatch(personId, entry){
       id: entry.id, fisherman_id: personId, rod: entry.rod, hook: entry.hook,
       caught: entry.caught, fish_type: entry.type, weight: entry.weight,
       time: new Date(entry.time).toISOString(), timer_elapsed_ms: entry.timerElapsed,
-      bom: entry.bom, hook1_note: entry.hook1, hook2_note: entry.hook2, photos: JSON.stringify(entry.photos || [])
+      bom: entry.bom, hook1_note: entry.hook1, hook2_note: entry.hook2,
+      rod_identifier: entry.rodIdentifier || '',
+      photos: JSON.stringify(entry.photos || [])
     });
     clearDbError();
   }catch(e){ console.error(e); showDbError('Could not save catch to Supabase.'); }
@@ -1116,6 +1119,8 @@ function attachRodCardHandlers(){
       const bomVal = getRodFieldValue(rod, 'bom');
       const hook1Val = getRodFieldValue(rod, 'hook1');
       const hook2Val = getRodFieldValue(rod, 'hook2');
+      const idEl = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="identifier"]');
+      const rodIdentifier = idEl ? idEl.value : '';
 
       const entry = {
         id: uid(),
@@ -1129,6 +1134,7 @@ function attachRodCardHandlers(){
         bom: bomVal,
         hook1: hook1Val,
         hook2: hook2Val,
+        rodIdentifier: rodIdentifier,
         photos: caught ? (pendingPhotos[rod] || []).slice() : []
       };
       showConfirmation(entry);
@@ -1143,7 +1149,7 @@ function showConfirmation(entry){
   const timeStr = new Date(entry.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(entry.timerElapsed||0);
   let html = `<h3>${entry.caught ? 'Caught a fish?' : 'No catch?'}</h3>`;
-  html += `<p><b>${RID_LABEL[entry.rod]}</b>${entry.caught ? ' · '+escapeHtml(entry.hook) : ''}</p>`;
+  html += `<p><b>${RID_LABEL[entry.rod]}</b>${entry.caught ? ' · '+escapeHtml(entry.hook) : ''}${entry.rodIdentifier ? ' · '+escapeHtml(entry.rodIdentifier) : ''}</p>`;
   if(entry.caught){
     html += `<p>${escapeHtml(entry.type||'Fish')} — <b>${entry.weight}kg</b></p>`;
   }
@@ -1197,11 +1203,24 @@ document.getElementById('confirm-edit').addEventListener('click', ()=>{
   document.getElementById('confirm-modal').classList.remove('open');
 });
 
+function renderProfilePhotoGrid(entries, filterType){
+  const grid = document.getElementById('profile-photo-grid');
+  if(!grid) return;
+  const filtered = filterType ? entries.filter(e=>e.type===filterType) : entries;
+  if(filtered.length===0){
+    grid.innerHTML = '<div class="empty">No photos for this filter.</div>';
+    return;
+  }
+  grid.innerHTML = filtered.map(e=>
+    `<img class="pc-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="Catch photo" style="width:80px;height:80px;object-fit:cover;margin-top:0;">`
+  ).join('');
+}
+
 function catchDetailHtml(c){
   const timeStr = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(c.timerElapsed||0);
   let html = `<div class="profile-catch">
-    <div class="pc-head">${RID_LABEL[c.rod] || c.rod}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</div>`;
+    <div class="pc-head">${RID_LABEL[c.rod] || c.rod}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}${c.rodIdentifier ? ' · '+escapeHtml(c.rodIdentifier) : ''}</div>`;
   if(c.caught){
     html += `<div class="pc-line">${escapeHtml(c.type||'Fish')} — ${c.weight}kg</div>`;
   }
@@ -1243,6 +1262,15 @@ async function openProfile(personId){
   const dams = people.map(x=>x.dam);
   const comps = people.map(x=>x.competition);
 
+  const photoEntries = [];
+  caughtOnly.forEach(c=>{
+    if(c.photos && c.photos.length){
+      photoGalleryCache[c.id] = c.photos;
+      c.photos.forEach((src,i)=> photoEntries.push({src, catchId:c.id, index:i, type:c.type||''}));
+    }
+  });
+  const photoTypes = [...new Set(photoEntries.map(e=>e.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+
   let html = `<h3>${escapeHtml(p.name)}</h3>`;
   html += `<div class="field">
       <label>Dam</label>
@@ -1261,9 +1289,30 @@ async function openProfile(personId){
       <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
       <div><b>${(rec && rec.rods) || p.rods || 3}</b>rods</div>
     </div>`;
+  if(photoEntries.length){
+    html += `<p class="sub-heading">Photos (${photoEntries.length})</p>`;
+    if(photoTypes.length > 1){
+      html += `<div class="field">
+          <label>Filter by fish type</label>
+          <select id="profile-photo-filter">
+            <option value="">All types</option>
+            ${photoTypes.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}
+          </select>
+        </div>`;
+    }
+    html += `<div id="profile-photo-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>`;
+  }
   html += catches.length ? catches.map(catchDetailHtml).join('') : '<div class="empty">No entries logged yet.</div>';
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
+
+  if(photoEntries.length){
+    renderProfilePhotoGrid(photoEntries, '');
+    const photoFilterSel = document.getElementById('profile-photo-filter');
+    if(photoFilterSel){
+      photoFilterSel.addEventListener('change', ()=> renderProfilePhotoGrid(photoEntries, photoFilterSel.value));
+    }
+  }
 
   document.getElementById('profile-dam-select').addEventListener('change', (e)=>{
     document.getElementById('profile-dam-other').style.display = e.target.value==='__other__' ? 'block' : 'none';
