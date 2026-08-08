@@ -4,13 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>PK Fishing</title>
-<link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#B3121F">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="PK Fishing">
+<meta name="apple-mobile-web-app-title" content="PK Fishing" id="apple-title-meta">
+<script>
+  (function(){
+    var isSpectator = new URLSearchParams(window.location.search).get('view') === 'spectator';
+    var link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = isSpectator ? 'manifest-spectator.json' : 'manifest.json';
+    document.head.appendChild(link);
+    if(isSpectator){
+      document.title = 'PK Fishing — Leaderboard';
+      var titleMeta = document.getElementById('apple-title-meta');
+      if(titleMeta) titleMeta.setAttribute('content', 'PK Leaderboard');
+    }
+  })();
+</script>
 <style>
   :root{
     --dam:#B3121F;
@@ -394,19 +407,6 @@
         <div id="leaderboard-list"><div class="empty">No catches logged yet.</div></div>
       </section>
       <button class="primary-btn" id="refresh-lb-btn" style="background:var(--dam);">Refresh</button>
-
-      <section class="card">
-        <h2>Comments</h2>
-        <div class="field">
-          <input type="text" id="comment-author" placeholder="Your name (optional)">
-        </div>
-        <div class="field">
-          <textarea id="comment-message" placeholder="Say something..."></textarea>
-        </div>
-        <button class="primary-btn" id="comment-post-btn">Post comment</button>
-        <div class="status" id="comment-status"></div>
-        <div id="comments-list" style="margin-top:14px;"></div>
-      </section>
     </div>
 
   </main>
@@ -432,6 +432,7 @@
 <div class="modal-overlay" id="photo-modal">
   <div class="modal-card" style="max-width:92vw;max-height:88vh;overflow-y:auto;padding:12px;text-align:center;">
     <img id="photo-modal-img" src="" alt="Catch photo" style="max-width:100%;max-height:60vh;border-radius:10px;display:block;margin:0 auto;">
+    <div id="photo-like-wrap" style="margin-top:12px;"></div>
     <div id="photo-comment-section" style="text-align:left;margin-top:14px;display:none;">
       <p class="sub-heading" style="margin-bottom:8px;">Comments on this catch</p>
       <div class="field">
@@ -523,6 +524,42 @@ function rodsOptionsHtml(selected){
     html += `<option value="${i}" ${i===selected?'selected':''}>${i} rod${i>1?'s':''}</option>`;
   }
   return html;
+}
+
+// Bom / Hook dropdown options, built from what's already been typed across all fishermen
+let knownBomOptions = [];
+let knownHookOptions = [];
+
+async function loadKnownRodOptions(){
+  try{
+    const rows = await sbGet('rod_state?select=bom,hook1_note,hook2_note');
+    const boms = new Set();
+    const hooks = new Set();
+    rows.forEach(r=>{
+      if(r.bom) boms.add(r.bom);
+      if(r.hook1_note) hooks.add(r.hook1_note);
+      if(r.hook2_note) hooks.add(r.hook2_note);
+    });
+    knownBomOptions = [...boms].sort((a,b)=>a.localeCompare(b));
+    knownHookOptions = [...hooks].sort((a,b)=>a.localeCompare(b));
+  }catch(e){ console.error('loadKnownRodOptions failed', e); }
+}
+
+function buildRodOptionsHtml(options){
+  let html = '<option value="">None</option>';
+  options.forEach(v=>{ html += `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`; });
+  html += '<option value="__other__">+ Add new...</option>';
+  return html;
+}
+
+function getRodFieldValue(rod, key){
+  const sel = document.querySelector('.rod-select[data-rod="'+rod+'"][data-key="'+key+'"]');
+  if(!sel) return '';
+  if(sel.value === '__other__'){
+    const other = document.querySelector('.rod-select-other[data-rod="'+rod+'"][data-key="'+key+'"]');
+    return other ? other.value : '';
+  }
+  return sel.value;
 }
 
 
@@ -708,14 +745,17 @@ function escapeHtml(s){
   return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-// One 👌 vote per browser/device — stored locally, not tied to any account
-function getMyVote(){
-  try{ return localStorage.getItem('pk_fishing_my_vote') || null; }
-  catch(e){ return null; }
+// Photo likes — one 👌 per photo per browser/device, stored locally (not tied to any account)
+function getLikedCatches(){
+  try{ return JSON.parse(localStorage.getItem('pk_fishing_liked_catches') || '[]'); }
+  catch(e){ return []; }
 }
-function setMyVote(id){
-  try{ localStorage.setItem('pk_fishing_my_vote', id); }
-  catch(e){}
+function addLikedCatch(id){
+  try{
+    const arr = getLikedCatches();
+    if(!arr.includes(id)) arr.push(id);
+    localStorage.setItem('pk_fishing_liked_catches', JSON.stringify(arr));
+  }catch(e){}
 }
 
 function showDbError(msg){
@@ -832,7 +872,8 @@ async function loadPerson(id){
       id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
       time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
       bom:c.bom||'', hook1:c.hook1_note||'', hook2:c.hook2_note||'',
-      photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : [])
+      photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
+      likes: c.likes || 0
     }));
     clearDbError();
     return {name:f.name, dam:f.dam, competition:f.competition||'', rods:f.rods||3, timers, notes, catches};
@@ -900,16 +941,19 @@ function rodCardHtml(r){
       </div>
       <div class="field">
         <label>Bom</label>
-        <textarea class="rod-field" data-rod="${r}" data-key="bom" placeholder="What's on the mieliebom..."></textarea>
+        <select class="rod-select" data-rod="${r}" data-key="bom">${buildRodOptionsHtml(knownBomOptions)}</select>
+        <input type="text" class="rod-field rod-select-other" data-rod="${r}" data-key="bom" placeholder="Describe the bom..." style="display:none;margin-top:6px;">
       </div>
       <div class="row2">
         <div class="field">
           <label>Hook 1</label>
-          <textarea class="rod-field" data-rod="${r}" data-key="hook1" placeholder="Rig, bait, depth..."></textarea>
+          <select class="rod-select" data-rod="${r}" data-key="hook1">${buildRodOptionsHtml(knownHookOptions)}</select>
+          <input type="text" class="rod-field rod-select-other" data-rod="${r}" data-key="hook1" placeholder="Rig, bait, depth..." style="display:none;margin-top:6px;">
         </div>
         <div class="field">
           <label>Hook 2</label>
-          <textarea class="rod-field" data-rod="${r}" data-key="hook2" placeholder="Rig, bait, depth..."></textarea>
+          <select class="rod-select" data-rod="${r}" data-key="hook2">${buildRodOptionsHtml(knownHookOptions)}</select>
+          <input type="text" class="rod-field rod-select-other" data-rod="${r}" data-key="hook2" placeholder="Rig, bait, depth..." style="display:none;margin-top:6px;">
         </div>
       </div>
       <hr class="divider">
@@ -987,6 +1031,20 @@ function attachRodCardHandlers(){
       await saveRodState(currentPersonId, ta.dataset.rod);
     });
   });
+  document.querySelectorAll('.rod-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const rod = sel.dataset.rod, key = sel.dataset.key;
+      const otherInput = document.querySelector('.rod-select-other[data-rod="'+rod+'"][data-key="'+key+'"]');
+      if(sel.value === '__other__'){
+        if(otherInput){ otherInput.style.display = 'block'; otherInput.focus(); }
+        return;
+      }
+      if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+      if(!currentPerson) return;
+      currentPerson.notes[rod][key] = sel.value;
+      await saveRodState(currentPersonId, rod);
+    });
+  });
   document.querySelectorAll('.rod-dot').forEach(inp=>{
     inp.addEventListener('change', async ()=>{
       if(!currentPerson) return;
@@ -1036,9 +1094,9 @@ function attachRodCardHandlers(){
       const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
       const typeValue = typeEl.value === 'Other' ? typeOtherEl.value : typeEl.value;
       const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
-      const bomEl = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="bom"]');
-      const hook1El = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="hook1"]');
-      const hook2El = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="hook2"]');
+      const bomVal = getRodFieldValue(rod, 'bom');
+      const hook1Val = getRodFieldValue(rod, 'hook1');
+      const hook2Val = getRodFieldValue(rod, 'hook2');
 
       const entry = {
         id: uid(),
@@ -1049,9 +1107,9 @@ function attachRodCardHandlers(){
         weight: caught ? (parseFloat(weightEl.value) || 0) : 0,
         time: Date.now(),
         timerElapsed: elapsedMs(currentPerson.timers[rod]),
-        bom: bomEl.value,
-        hook1: hook1El.value,
-        hook2: hook2El.value,
+        bom: bomVal,
+        hook1: hook1Val,
+        hook2: hook2Val,
         photos: caught ? (pendingPhotos[rod] || []).slice() : []
       };
       showConfirmation(entry);
@@ -1227,7 +1285,13 @@ function openPhotoModal(src, catchId){
   currentPhotoCatchId = catchId || null;
   const section = document.getElementById('photo-comment-section');
   if(section) section.style.display = currentPhotoCatchId ? 'block' : 'none';
-  if(currentPhotoCatchId) renderPhotoComments();
+  const likeWrap = document.getElementById('photo-like-wrap');
+  if(currentPhotoCatchId){
+    renderPhotoComments();
+    renderPhotoLike();
+  }else if(likeWrap){
+    likeWrap.innerHTML = '';
+  }
   document.getElementById('photo-modal').classList.add('open');
 }
 document.getElementById('photo-modal-close').addEventListener('click', ()=>{
@@ -1243,6 +1307,43 @@ document.addEventListener('click', (e)=>{
     openPhotoModal(e.target.src, e.target.dataset.catchId || null);
   }
 });
+
+async function fetchCatchLikes(catchId){
+  try{
+    const rows = await sbGet('catches?id=eq.'+catchId+'&select=likes');
+    return (rows[0] && rows[0].likes) || 0;
+  }catch(e){ console.error(e); return 0; }
+}
+
+async function renderPhotoLike(){
+  const wrap = document.getElementById('photo-like-wrap');
+  if(!wrap || !currentPhotoCatchId) return;
+  const catchId = currentPhotoCatchId;
+  const likes = await fetchCatchLikes(catchId);
+  const alreadyLiked = getLikedCatches().includes(catchId);
+  wrap.innerHTML = `<button class="lb-like-btn ${alreadyLiked?'liked':''}" id="photo-like-btn" ${alreadyLiked?'disabled':''}>👌 <span class="lb-like-count">${likes}</span></button>`;
+  const btn = document.getElementById('photo-like-btn');
+  if(btn){
+    btn.addEventListener('click', async ()=>{
+      if(btn.disabled) return;
+      await likeCurrentPhoto(catchId);
+    });
+  }
+}
+
+async function likeCurrentPhoto(catchId){
+  try{
+    const current = await fetchCatchLikes(catchId);
+    const newLikes = current + 1;
+    await sbPatch('catches', 'id=eq.'+catchId, {likes: newLikes});
+    addLikedCatch(catchId);
+    clearDbError();
+  }catch(e){
+    console.error(e);
+    showDbError('Could not save like.');
+  }
+  renderPhotoLike();
+}
 
 async function renderPhotoComments(){
   const el = document.getElementById('photo-comments-list');
@@ -1318,10 +1419,25 @@ function renderTimers(){
 }
 function renderNotes(){
   RODS.forEach(r=>{
-    ['bom','hook1','hook2','identifier'].forEach(k=>{
-      const el = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="'+k+'"]');
-      if(el) el.value = currentPerson ? currentPerson.notes[r][k] : '';
+    ['bom','hook1','hook2'].forEach(k=>{
+      const sel = document.querySelector('.rod-select[data-rod="'+r+'"][data-key="'+k+'"]');
+      const otherInput = document.querySelector('.rod-select-other[data-rod="'+r+'"][data-key="'+k+'"]');
+      if(!sel) return;
+      const val = currentPerson ? (currentPerson.notes[r][k] || '') : '';
+      const knownValues = Array.from(sel.options).map(o=>o.value);
+      if(val && knownValues.includes(val)){
+        sel.value = val;
+        if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+      }else if(val){
+        sel.value = '__other__';
+        if(otherInput){ otherInput.style.display = 'block'; otherInput.value = val; }
+      }else{
+        sel.value = '';
+        if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+      }
     });
+    const idEl = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="identifier"]');
+    if(idEl) idEl.value = currentPerson ? currentPerson.notes[r].identifier : '';
     const dotEl = document.querySelector('.rod-dot[data-rod="'+r+'"]');
     if(dotEl) dotEl.value = (currentPerson && currentPerson.notes[r].dotColor) || '#C1440E';
   });
@@ -1513,38 +1629,6 @@ async function postComment(author, message, catchId){
     catch_id: catchId || null
   });
 }
-async function renderComments(){
-  const el = document.getElementById('comments-list');
-  if(!el) return;
-  const rows = await loadComments();
-  if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet.</div>'; return; }
-  el.innerHTML = rows.map(c=>{
-    const time = new Date(c.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-    return `<div class="comment-item">
-      <div class="comment-head"><b>${escapeHtml(c.author || 'Anonymous')}</b><span class="comment-time">${time}</span></div>
-      <div class="comment-msg">${escapeHtml(c.message)}</div>
-    </div>`;
-  }).join('');
-}
-document.getElementById('comment-post-btn').addEventListener('click', async ()=>{
-  const authorEl = document.getElementById('comment-author');
-  const messageEl = document.getElementById('comment-message');
-  const st = document.getElementById('comment-status');
-  const message = messageEl.value.trim();
-  if(!message){ st.textContent = 'Write something first.'; return; }
-  st.textContent = 'Posting...';
-  try{
-    await postComment(authorEl.value.trim(), message);
-    messageEl.value = '';
-    st.textContent = 'Posted.';
-    setTimeout(()=> st.textContent='', 1200);
-    renderComments();
-  }catch(e){
-    console.error(e);
-    st.textContent = 'Could not post — check the Supabase connection.';
-  }
-});
-
 async function renderLeaderboard(){
   const el = document.getElementById('leaderboard-list');
   el.innerHTML = '<div class="empty">Loading...</div>';
@@ -1588,10 +1672,15 @@ async function renderLeaderboard(){
     el.innerHTML = `<div class="empty">${IS_SPECTATOR ? 'No fish caught yet for these filters.' : 'No catches match these filters.'}</div>`;
     return;
   }
-  const myVote = getMyVote();
   el.innerHTML = visibleStats.map((s,i)=>{
     const bigPhoto = (s.biggest && s.biggest.photos && s.biggest.photos.length) ? s.biggest.photos[0] : null;
-    const photoHtml = bigPhoto ? `<img class="catch-log-photo lb-photo" src="${bigPhoto}" data-catch-id="${s.biggest.id}" alt="Biggest catch">` : '';
+    const bigLikes = (s.biggest && s.biggest.likes) || 0;
+    const photoHtml = bigPhoto
+      ? `<span style="position:relative;display:inline-block;flex-shrink:0;">
+          <img class="catch-log-photo lb-photo" src="${bigPhoto}" data-catch-id="${s.biggest.id}" alt="Biggest catch">
+          ${bigLikes>0 ? `<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">👌${bigLikes}</span>` : ''}
+        </span>`
+      : '';
     const statLine = sortMode === 'fish'
       ? `${s.biggest? '<b>'+s.biggest.weight+'kg</b> '+escapeHtml(s.biggest.type||'') : 'No fish yet'}`
       : `<b>${s.totalWeight.toFixed(2)}kg</b> total`;
@@ -1609,7 +1698,6 @@ async function renderLeaderboard(){
         <div>${statLine}</div>
         <div>${s.count} catch${s.count===1?'':'es'}${s.biggest? ' · biggest '+s.biggest.weight+'kg '+escapeHtml(s.biggest.type||''):''}</div>
       </div>
-      <button class="lb-like-btn ${myVote===s.id?'liked':''}" data-id="${s.id}" ${myVote?'disabled':''}>👌<span class="lb-like-count">${s.likes}</span></button>
     </div>`;
   }).join('');
   if(!IS_SPECTATOR){
@@ -1617,22 +1705,6 @@ async function renderLeaderboard(){
       b.addEventListener('click', ()=> openProfile(b.dataset.id));
     });
   }
-  el.querySelectorAll('.lb-like-btn').forEach(b=>{
-    b.addEventListener('click', async ()=>{
-      if(b.disabled || getMyVote()) return;
-      const id = b.dataset.id;
-      const p = people.find(x=>x.id===id);
-      const newLikes = (p ? (p.likes||0) : 0) + 1;
-      if(p) p.likes = newLikes;
-      setMyVote(id);
-      try{
-        await sbPatch('fishermen', 'id=eq.'+id, {likes: newLikes});
-        clearDbError();
-      }catch(e){ console.error(e); showDbError('Could not save like.'); }
-      renderLeaderboard();
-    });
-  });
-  renderComments();
 }
 document.getElementById('lb-sort-mode').addEventListener('change', renderLeaderboard);
 document.getElementById('refresh-lb-btn').addEventListener('click', renderLeaderboard);
@@ -1657,6 +1729,7 @@ const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') ===
     return;
   }
   await loadPeople();
+  await loadKnownRodOptions();
   populateAnglerSelect();
   const activePeople = people.filter(p=>!p.archived);
   if(activePeople.length>0) await setActivePerson(activePeople[0].id);
