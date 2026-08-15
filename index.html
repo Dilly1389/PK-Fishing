@@ -364,10 +364,10 @@
   <div id="db-status"></div>
 
   <nav class="tabs">
-    <button data-tab="timers" class="active">Timers</button>
-    <button data-tab="schedule">Profile</button>
+    <button data-tab="timers">Timers</button>
+    <button data-tab="schedule" class="active">Profile</button>
     <button data-tab="leaderboard">Leaderboard</button>
-    <button data-tab="feed">Feed</button>
+    <button data-tab="feed">Friends</button>
     <button data-tab="challenges">Challenges</button>
     <button data-tab="competitions">Competitions</button>
     <button data-tab="tackle">Tackle Box</button>
@@ -376,16 +376,16 @@
   <main>
 
     <!-- TIMERS -->
-    <div class="panel active" id="panel-timers">
+    <div class="panel" id="panel-timers">
       <div class="angler-bar">
         <label>Fisherman</label>
-        <select id="angler-select"></select>
+        <select id="angler-select" autocomplete="off"></select>
       </div>
       <div id="rod-cards"></div>
     </div>
 
     <!-- FISHERMAN -->
-    <div class="panel" id="panel-schedule">
+    <div class="panel active" id="panel-schedule">
       <section class="card" id="account-card">
         <h2>Account</h2>
 
@@ -397,15 +397,15 @@
 
           <div id="signup-form">
             <div class="field">
-              <label>Name</label>
-              <input type="text" id="signup-name" placeholder="Name">
+              <label>Display Name / Nickname</label>
+              <input type="text" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
             </div>
             <div class="field">
               <label>Number of rods</label>
               <select id="signup-rods">
-                <option value="1">1 rod</option>
+                <option value="1" selected>1 rod</option>
                 <option value="2">2 rods</option>
-                <option value="3" selected>3 rods</option>
+                <option value="3">3 rods</option>
                 <option value="4">4 rods</option>
                 <option value="5">5 rods</option>
                 <option value="6">6 rods</option>
@@ -439,11 +439,11 @@
             </div>
             <div class="row2">
               <div class="field">
-                <label>Barbel — weight (kg)</label>
+                <label>Catfish (Barbel) — weight (kg)</label>
                 <input type="number" step="0.01" min="0" id="signup-pb-barbel-weight" placeholder="e.g. 8.1">
               </div>
               <div class="field">
-                <label>Barbel — photo</label>
+                <label>Catfish (Barbel) — photo</label>
                 <input type="file" accept="image/*" id="signup-pb-barbel-photo">
               </div>
             </div>
@@ -470,6 +470,63 @@
           <button class="mini-btn" id="view-my-profile-btn">View my profile</button>
           <button class="mini-btn danger" id="sign-out-btn">Sign out</button>
         </div>
+      </section>
+
+      <section class="card" id="my-details-card" style="display:none;">
+        <h2>My details</h2>
+        <div class="field">
+          <label>Display Name / Nickname</label>
+          <input type="text" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Name</label>
+            <input type="text" id="details-first-name" placeholder="First name">
+          </div>
+          <div class="field">
+            <label>Surname</label>
+            <input type="text" id="details-last-name" placeholder="Surname">
+          </div>
+        </div>
+        <div class="field">
+          <label>Country</label>
+          <select id="details-country"></select>
+        </div>
+        <p class="pc-line muted" style="margin-top:-6px;margin-bottom:12px;">Name, surname, and country are private — only you can see them here, never shown publicly.</p>
+        <div class="row2">
+          <div class="field">
+            <label>Number of rods</label>
+            <select id="details-rods"></select>
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="details-email" placeholder="you@example.com">
+          </div>
+        </div>
+        <hr class="divider">
+        <p class="sub-heading">Personal best</p>
+        <div class="row2">
+          <div class="field">
+            <label>Carp — weight (kg)</label>
+            <input type="number" step="0.01" min="0" id="details-pb-carp-weight" placeholder="e.g. 12.4">
+          </div>
+          <div class="field">
+            <label>Carp — photo</label>
+            <input type="file" accept="image/*" id="details-pb-carp-photo">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Catfish (Barbel) — weight (kg)</label>
+            <input type="number" step="0.01" min="0" id="details-pb-barbel-weight" placeholder="e.g. 8.1">
+          </div>
+          <div class="field">
+            <label>Catfish (Barbel) — photo</label>
+            <input type="file" accept="image/*" id="details-pb-barbel-photo">
+          </div>
+        </div>
+        <button class="primary-btn" id="details-save-btn">Save details</button>
+        <div class="status" id="details-save-status"></div>
       </section>
     </div>
 
@@ -506,7 +563,7 @@
     <!-- FEED -->
     <div class="panel" id="panel-feed">
       <section class="card">
-        <h2>Feed</h2>
+        <h2>Friends</h2>
         <label id="feed-following-wrap" style="display:none;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:10px;">
           <input type="checkbox" id="feed-following-only"> Following only
         </label>
@@ -688,6 +745,30 @@
           </div>
           <div id="tackle-list"><div class="empty">No tackle added yet.</div></div>
         </section>
+
+        <section class="card">
+          <h2>Build a rig</h2>
+          <div class="field">
+            <label>Type of rig</label>
+            <input type="text" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo...">
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label>Bom</label>
+              <select id="rig-uses-bom">
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Number of hooks</label>
+              <select id="rig-hook-count"></select>
+            </div>
+          </div>
+          <button class="primary-btn" id="rig-create-btn">Create rig</button>
+          <div class="status" id="rig-create-status"></div>
+          <div id="rigs-list" style="margin-top:14px;"><div class="empty">No rigs built yet.</div></div>
+        </section>
       </div>
     </div>
 
@@ -799,7 +880,38 @@ const MAX_HOOKS = 3;
 const RODS = Array.from({length: MAX_RODS}, (_, i) => 'rod' + (i+1));
 const RID_LABEL = {};
 RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
-const RIG_TYPES = ['Hair Rig','Running Rig','Method Feeder','Chod Rig','Helicopter Rig'];
+
+const COUNTRY_LIST = [
+  "South Africa","Afghanistan","Albania","Algeria","Andorra","Angola","Argentina","Armenia","Australia",
+  "Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin",
+  "Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi",
+  "Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia",
+  "Comoros","Congo","Costa Rica","Croatia","Cuba","Cyprus","Czechia","Denmark","Djibouti","Dominica",
+  "Dominican Republic","DR Congo","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia",
+  "Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece",
+  "Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India",
+  "Indonesia","Iran","Iraq","Ireland","Israel","Italy","Ivory Coast","Jamaica","Japan","Jordan","Kazakhstan",
+  "Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya",
+  "Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta",
+  "Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro",
+  "Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger",
+  "Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama",
+  "Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda",
+  "Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino",
+  "Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia",
+  "Slovenia","Solomon Islands","Somalia","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname",
+  "Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga",
+  "Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates",
+  "United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam",
+  "Yemen","Zambia","Zimbabwe"
+];
+function countryOptionsHtml(selected){
+  let html = '<option value="">Select country</option>';
+  COUNTRY_LIST.forEach(c=>{
+    html += `<option value="${escapeHtml(c)}" ${c===selected?'selected':''}>${escapeHtml(c)}</option>`;
+  });
+  return html;
+}
 
 let people = [];
 let currentPersonId = null;
@@ -831,6 +943,8 @@ function catchHookOptionsHtml(hookCount){
 // Bom / Hook dropdown options, built from what's already been typed across all fishermen
 let knownBomOptions = [];
 let knownHookOptions = [];
+// Rigs built by users on the Tackle Box tab — full definitions, so selecting one drives the fields
+let knownRigsFull = [];
 
 async function loadKnownRodOptions(){
   try{
@@ -848,6 +962,16 @@ async function loadKnownRodOptions(){
   }catch(e){ console.error('loadKnownRodOptions failed', e); }
 }
 
+async function loadKnownRigs(){
+  try{
+    const rows = await sbGet('rigs?select=id,name,uses_bom,hook_count&order=name.asc');
+    knownRigsFull = rows.map(r=>({id:r.id, name:r.name, usesBom:!!r.uses_bom, hookCount:r.hook_count||0}));
+  }catch(e){ console.error('loadKnownRigs failed', e); knownRigsFull = []; }
+}
+function findRigDef(name){
+  return knownRigsFull.find(r=>r.name === name) || null;
+}
+
 function buildRodOptionsHtml(options){
   let html = '<option value="">None</option>';
   options.forEach(v=>{ html += `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`; });
@@ -856,9 +980,95 @@ function buildRodOptionsHtml(options){
 }
 function buildRigOptionsHtml(){
   let html = '<option value="">None</option>';
-  RIG_TYPES.forEach(v=>{ html += `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`; });
+  knownRigsFull.forEach(r=>{ html += `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`; });
   html += '<option value="__other__">+ Add new...</option>';
   return html;
+}
+
+function setSelectOrOther(sel, otherInput, val){
+  if(!sel) return;
+  const knownValues = Array.from(sel.options).map(o=>o.value);
+  if(val && knownValues.includes(val)){
+    sel.value = val;
+    if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+  }else if(val){
+    sel.value = '__other__';
+    if(otherInput){ otherInput.style.display = 'block'; otherInput.value = val; }
+  }else{
+    sel.value = '';
+    if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+  }
+}
+
+function renderRigFields(rod){
+  const container = document.getElementById('rig-fields-'+rod);
+  if(!container || !currentPerson) return;
+  const rigName = getRodFieldValue(rod, 'rig');
+  const rigDef = rigName ? findRigDef(rigName) : null;
+
+  if(!rigDef){
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  if(rigDef.usesBom){
+    html += `<div class="field">
+      <label>Bom</label>
+      <select class="rod-select" data-rod="${rod}" data-key="bom">${buildRodOptionsHtml(knownBomOptions)}</select>
+      <input type="text" class="rod-field rod-select-other" data-rod="${rod}" data-key="bom" placeholder="Describe the bom..." style="display:none;margin-top:6px;">
+    </div>`;
+  }
+  if(rigDef.hookCount > 0){
+    html += '<div class="hooks-row">';
+    for(let n=1; n<=rigDef.hookCount; n++){ html += hookFieldHtml(rod, n); }
+    html += '</div>';
+  }
+  container.innerHTML = html;
+
+  if(rigDef.usesBom){
+    setSelectOrOther(
+      container.querySelector('.rod-select[data-key="bom"]'),
+      container.querySelector('.rod-select-other[data-key="bom"]'),
+      currentPerson.notes[rod].bom || ''
+    );
+  }
+  for(let n=1; n<=rigDef.hookCount; n++){
+    const key = 'hook'+n;
+    setSelectOrOther(
+      container.querySelector('.rod-select[data-key="'+key+'"]'),
+      container.querySelector('.rod-select-other[data-key="'+key+'"]'),
+      currentPerson.notes[rod][key] || ''
+    );
+  }
+
+  attachRigFieldHandlers(rod);
+}
+
+function attachRigFieldHandlers(rod){
+  const container = document.getElementById('rig-fields-'+rod);
+  if(!container) return;
+  container.querySelectorAll('.rod-field').forEach(ta=>{
+    ta.addEventListener('blur', async ()=>{
+      if(!currentPerson) return;
+      currentPerson.notes[rod][ta.dataset.key] = ta.value;
+      await saveRodState(currentPersonId, rod);
+    });
+  });
+  container.querySelectorAll('.rod-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const key = sel.dataset.key;
+      const otherInput = container.querySelector('.rod-select-other[data-key="'+key+'"]');
+      if(sel.value === '__other__'){
+        if(otherInput){ otherInput.style.display = 'block'; otherInput.focus(); }
+        return;
+      }
+      if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+      if(!currentPerson) return;
+      currentPerson.notes[rod][key] = sel.value;
+      await saveRodState(currentPersonId, rod);
+    });
+  });
 }
 
 function getRodFieldValue(rod, key){
@@ -1185,17 +1395,85 @@ async function authSignIn(email, password){
 function renderAccountArea(){
   const authForms = document.getElementById('auth-forms');
   const signedInArea = document.getElementById('account-signed-in');
+  const detailsCard = document.getElementById('my-details-card');
   if(session && session.user){
     if(authForms) authForms.style.display = 'none';
     if(signedInArea) signedInArea.style.display = 'block';
     const label = document.getElementById('signed-in-as');
     if(label) label.textContent = 'Signed in as ' + session.user.email;
+    if(detailsCard) detailsCard.style.display = 'block';
+    populateMyDetails();
   }else{
     if(authForms) authForms.style.display = 'block';
     if(signedInArea) signedInArea.style.display = 'none';
+    if(detailsCard) detailsCard.style.display = 'none';
   }
   updateTackleVisibility();
 }
+
+function populateMyDetails(){
+  const p = people.find(x=>x.user_id === session.user.id);
+  if(!p) return;
+  document.getElementById('details-name').value = p.name || '';
+  document.getElementById('details-first-name').value = p.first_name || '';
+  document.getElementById('details-last-name').value = p.last_name || '';
+  document.getElementById('details-country').innerHTML = countryOptionsHtml(p.country || '');
+  const rodsSel = document.getElementById('details-rods');
+  const myRods = normalizeRodsCount(p.rods);
+  rodsSel.innerHTML = rodsOptionsHtml(myRods);
+  rodsSel.value = String(myRods);
+  document.getElementById('details-email').value = p.email || '';
+  document.getElementById('details-pb-carp-weight').value = p.pb_carp_weight || '';
+  document.getElementById('details-pb-barbel-weight').value = p.pb_barbel_weight || '';
+}
+
+document.getElementById('details-save-btn').addEventListener('click', async ()=>{
+  const p = people.find(x=>x.user_id === session.user.id);
+  const st = document.getElementById('details-save-status');
+  if(!p){ st.textContent = 'Could not find your profile.'; return; }
+
+  const name = document.getElementById('details-name').value.trim();
+  const firstName = document.getElementById('details-first-name').value.trim();
+  const lastName = document.getElementById('details-last-name').value.trim();
+  const country = document.getElementById('details-country').value;
+  const rods = normalizeRodsCount(document.getElementById('details-rods').value);
+  const email = document.getElementById('details-email').value.trim();
+  const carpWeightRaw = document.getElementById('details-pb-carp-weight').value;
+  const barbelWeightRaw = document.getElementById('details-pb-barbel-weight').value;
+  const carpWeight = carpWeightRaw ? parseFloat(carpWeightRaw) : null;
+  const barbelWeight = barbelWeightRaw ? parseFloat(barbelWeightRaw) : null;
+  const carpPhotoFile = document.getElementById('details-pb-carp-photo').files[0];
+  const barbelPhotoFile = document.getElementById('details-pb-barbel-photo').files[0];
+
+  if(!name){ st.textContent = 'Enter a display name.'; return; }
+  st.textContent = 'Saving...';
+  try{
+    const patch = {
+      name, rods, email: email || null,
+      first_name: firstName || null, last_name: lastName || null, country: country || null
+    };
+    if(carpWeightRaw !== ''){ patch.pb_carp_weight = carpWeight; }
+    if(barbelWeightRaw !== ''){ patch.pb_barbel_weight = barbelWeight; }
+    if(carpPhotoFile){ patch.pb_carp_photo = await resizeImageFile(carpPhotoFile); }
+    if(barbelPhotoFile){ patch.pb_barbel_photo = await resizeImageFile(barbelPhotoFile); }
+
+    await sbPatch('fishermen', 'id=eq.'+p.id, patch);
+    Object.assign(p, patch);
+    if(currentPersonId === p.id && currentPerson){
+      currentPerson.rods = rods;
+      renderRodVisibility();
+      renderTimersRodsSelect();
+    }
+    document.getElementById('details-pb-carp-photo').value = '';
+    document.getElementById('details-pb-barbel-photo').value = '';
+    populateAnglerSelect();
+    st.textContent = 'Saved.';
+    setTimeout(()=> st.textContent='', 1500);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save — check the Supabase connection.';
+  }
+});
 
 document.querySelectorAll('#auth-mode-toggle button').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -1209,7 +1487,7 @@ document.querySelectorAll('#auth-mode-toggle button').forEach(btn=>{
 
 document.getElementById('signup-btn').addEventListener('click', async ()=>{
   const name = document.getElementById('signup-name').value.trim();
-  const rods = parseInt(document.getElementById('signup-rods').value) || 3;
+  const rods = parseInt(document.getElementById('signup-rods').value) || 1;
   const email = document.getElementById('signup-email').value.trim();
   const password = document.getElementById('signup-password').value;
   const st = document.getElementById('signup-status');
@@ -1309,23 +1587,23 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
       if(matches.length){
         await sbPatch('fishermen', 'id=eq.'+matches[0].id, {user_id: authData.user.id});
         await loadPeople();
-        rows = matches;
       }
     }
-    if(rows.length) await setActivePerson(rows[0].id);
+    populateAnglerSelect();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not sign in.';
   }
 });
 
-document.getElementById('sign-out-btn').addEventListener('click', ()=>{
+document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
   clearSession();
   knownRodGear = [];
   knownReelGear = [];
   followedIds = new Set();
   renderAccountArea();
-  if(currentPerson) renderAll();
+  await setActivePerson(null);
+  populateAnglerSelect();
 });
 
 document.getElementById('view-my-profile-btn').addEventListener('click', async ()=>{
@@ -1339,7 +1617,7 @@ document.getElementById('view-my-profile-btn').addEventListener('click', async (
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -1434,6 +1712,74 @@ async function viewTacklePhoto(id){
     if(rows[0] && rows[0].photo){ openPhotoModal(rows[0].photo, null); }
   }catch(e){ console.error(e); showDbError('Could not load photo.'); }
 }
+
+// ---------- Rigs (built by users, feeds the Rig dropdown on Timers) ----------
+async function insertRig(item){ await sbPost('rigs', item); }
+async function deleteRig(id){ await sbDelete('rigs', 'id=eq.'+id); }
+async function loadRigsFull(){
+  try{
+    const rows = await sbGet('rigs?select=*&order=name.asc');
+    clearDbError();
+    return rows;
+  }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
+}
+async function renderRigsList(){
+  const el = document.getElementById('rigs-list');
+  if(!el) return;
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  const rigs = await loadRigsFull();
+  if(rigs.length===0){ el.innerHTML = '<div class="empty">No rigs built yet.</div>'; return; }
+  const rows = rigs.map(r=>{
+    const canDelete = isSignedIn() && session.user.id === r.creator_user_id;
+    return `<li>
+      <div class="who">
+        <b>${escapeHtml(r.name)}</b>
+        <span class="pill">Bom: ${r.uses_bom ? 'Yes' : 'No'}</span>
+        <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
+      </div>
+      <div class="actions">
+        ${canDelete ? `<button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>` : ''}
+      </div>
+    </li>`;
+  }).join('');
+  el.innerHTML = '<ul class="people-list">' + rows + '</ul>';
+  el.querySelectorAll('[data-rig-remove]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      await deleteRig(btn.dataset.rigRemove);
+      await loadKnownRigs();
+      renderRigsList();
+      if(currentPerson) renderAll();
+    });
+  });
+}
+document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
+  const nameEl = document.getElementById('rig-name');
+  const bomEl = document.getElementById('rig-uses-bom');
+  const hookEl = document.getElementById('rig-hook-count');
+  const st = document.getElementById('rig-create-status');
+  const name = nameEl.value.trim();
+  if(!name){ st.textContent = 'Enter a type of rig.'; return; }
+  st.textContent = 'Creating...';
+  try{
+    await insertRig({
+      id: uid(),
+      name,
+      uses_bom: bomEl.value === 'yes',
+      hook_count: parseInt(hookEl.value, 10) || 2,
+      creator_user_id: isSignedIn() ? session.user.id : null
+    });
+    nameEl.value = '';
+    bomEl.value = 'no';
+    st.textContent = 'Created.';
+    setTimeout(()=> st.textContent='', 1200);
+    await loadKnownRigs();
+    renderRigsList();
+    if(currentPerson) renderAll();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not create — check the Supabase connection.';
+  }
+});
 
 document.getElementById('tackle-category').addEventListener('change', (e)=>{
   document.getElementById('tackle-baittype-wrap').style.display = e.target.value === 'Bait' ? 'block' : 'none';
@@ -1544,6 +1890,16 @@ async function insertFisherman(id,name,dam,rods,competition,email){
   const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:'', hook3_note:'', identifier:'', dot_color:'#C1440E', rig:'', hook_count:2}));
   await sbPost('rod_state', rows);
 }
+async function updateFishermanRods(id, rods){
+  await sbPatch('fishermen', 'id=eq.'+id, {rods});
+}
+
+function normalizeRodsCount(val){
+  const n = parseInt(val, 10);
+  if(!Number.isFinite(n) || n < 1) return 1;
+  if(n > MAX_RODS) return MAX_RODS;
+  return n;
+}
 
 async function loadPerson(id){
   try{
@@ -1573,7 +1929,7 @@ async function loadPerson(id){
     }));
     clearDbError();
     return {
-      name:f.name, dam:f.dam, competition:f.competition||'', rods:f.rods||3, timers, notes, catches,
+      name:f.name, dam:f.dam, competition:f.competition||'', rods:normalizeRodsCount(f.rods), timers, notes, catches,
       pbCarpWeight:f.pb_carp_weight||null, pbCarpPhoto:f.pb_carp_photo||null,
       pbBarbelWeight:f.pb_barbel_weight||null, pbBarbelPhoto:f.pb_barbel_photo||null
     };
@@ -1623,17 +1979,21 @@ async function removeCatch(catchId){
 function populateAnglerSelect(){
   const sel = document.getElementById('angler-select');
   const active = people.filter(p=>!p.archived);
-  sel.innerHTML = active.length
-    ? active.map(p => `<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.dam)}</option>`).join('')
-    : '<option value="">Add a fisherman on the Fisherman tab</option>';
-  if(currentPersonId) sel.value = currentPersonId;
+  if(active.length === 0){
+    sel.innerHTML = '<option value="">Add a fisherman on the Fisherman tab</option>';
+    sel.value = '';
+    return;
+  }
+  const placeholder = `<option value="" ${currentPersonId ? '' : 'selected'}>Select a fisherman</option>`;
+  sel.innerHTML = placeholder + active.map(p =>
+    `<option value="${p.id}" ${p.id===currentPersonId ? 'selected' : ''}>${escapeHtml(p.name)} — ${escapeHtml(p.dam)}</option>`
+  ).join('');
+  // Belt and braces: some browsers try to restore a select's previous value on
+  // reload even after we've rebuilt its options — force it explicitly.
+  sel.value = currentPersonId || '';
 }
 
 function rodCardHtml(r){
-  const hookCount = (currentPerson && currentPerson.notes[r] && currentPerson.notes[r].hookCount) || 2;
-  let hooksHtml = '<div class="hooks-row">';
-  for(let n=1; n<=hookCount; n++){ hooksHtml += hookFieldHtml(r, n); }
-  hooksHtml += '</div>';
   return `
     <section class="card rod-card" id="rodcard-${r}">
       <div class="rod-title-row">
@@ -1670,16 +2030,7 @@ function rodCardHtml(r){
         <select class="rod-select" data-rod="${r}" data-key="rig">${buildRigOptionsHtml()}</select>
         <input type="text" class="rod-field rod-select-other" data-rod="${r}" data-key="rig" placeholder="Describe the rig..." style="display:none;margin-top:6px;">
       </div>
-      <div class="field">
-        <label>Bom</label>
-        <select class="rod-select" data-rod="${r}" data-key="bom">${buildRodOptionsHtml(knownBomOptions)}</select>
-        <input type="text" class="rod-field rod-select-other" data-rod="${r}" data-key="bom" placeholder="Describe the bom..." style="display:none;margin-top:6px;">
-      </div>
-      <div class="field">
-        <label>Number of hooks</label>
-        <select class="hook-count-select" data-rod="${r}">${hookCountOptionsHtml(hookCount)}</select>
-      </div>
-      ${hooksHtml}
+      <div id="rig-fields-${r}"></div>
       <hr class="divider">
       <p class="sub-heading">Record a catch</p>
       <div class="catch-toggle" data-rod="${r}">
@@ -1721,13 +2072,14 @@ function rodCardHtml(r){
           <div class="catch-photo-preview" data-rod="${r}" style="display:none;"></div>
         </div>
       </div>
-      <button class="primary-btn log-catch-btn" data-rod="${r}">Log entry</button>
+      <button class="primary-btn log-catch-btn" data-rod="${r}" style="display:none;">Log entry</button>
       <div class="catch-list" data-rod="${r}" style="margin-top:10px;"></div>
     </section>`;
 }
 
 function buildRodCards(){
-  document.getElementById('rod-cards').innerHTML = RODS.map(rodCardHtml).join('');
+  const el = document.getElementById('rod-cards');
+  el.innerHTML = '<div class="empty" id="no-fisherman-empty">Select a fisherman above to see their rods.</div>' + RODS.map(rodCardHtml).join('');
   attachRodCardHandlers();
 }
 
@@ -1758,12 +2110,19 @@ function attachRodCardHandlers(){
       const otherInput = document.querySelector('.rod-select-other[data-rod="'+rod+'"][data-key="'+key+'"]');
       if(sel.value === '__other__'){
         if(otherInput){ otherInput.style.display = 'block'; otherInput.focus(); }
+        if(key === 'rig') renderRigFields(rod);
         return;
       }
       if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
       if(!currentPerson) return;
       currentPerson.notes[rod][key] = sel.value;
       await saveRodState(currentPersonId, rod);
+      if(key === 'rig') renderRigFields(rod);
+    });
+  });
+  document.querySelectorAll('.rod-select-other[data-key="rig"]').forEach(inp=>{
+    inp.addEventListener('blur', ()=>{
+      renderRigFields(inp.dataset.rod);
     });
   });
   document.querySelectorAll('.rod-dot').forEach(inp=>{
@@ -1771,20 +2130,6 @@ function attachRodCardHandlers(){
       if(!currentPerson) return;
       currentPerson.notes[inp.dataset.rod].dotColor = inp.value;
       await saveRodState(currentPersonId, inp.dataset.rod);
-    });
-  });
-  document.querySelectorAll('.hook-count-select').forEach(sel=>{
-    sel.addEventListener('change', async ()=>{
-      if(!currentPerson) return;
-      const rod = sel.dataset.rod;
-      const newCount = parseInt(sel.value, 10);
-      currentPerson.notes[rod].hookCount = newCount;
-      // Dropping hooks beyond the new count clears their saved values
-      for(let n = newCount+1; n <= MAX_HOOKS; n++){
-        currentPerson.notes[rod]['hook'+n] = '';
-      }
-      await saveRodState(currentPersonId, rod);
-      renderAll();
     });
   });
   document.querySelectorAll('.gear-select').forEach(sel=>{
@@ -1818,6 +2163,12 @@ function attachRodCardHandlers(){
       document.querySelectorAll('.catch-toggle[data-rod="'+rod+'"] button').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       document.querySelector('.catch-fields[data-rod="'+rod+'"]').style.display = yes ? 'block' : 'none';
+      const logBtn = document.querySelector('.log-catch-btn[data-rod="'+rod+'"]');
+      if(logBtn) logBtn.style.display = yes ? 'block' : 'none';
+      if(!yes){
+        // No catch needs no extra detail — go straight to confirmation
+        showConfirmation(buildCatchEntry(rod));
+      }
     });
   });
   document.querySelectorAll('.catch-type').forEach(sel=>{
@@ -1830,40 +2181,43 @@ function attachRodCardHandlers(){
     btn.addEventListener('click', ()=>{
       const rod = btn.dataset.rod;
       if(!currentPerson) return;
-      const caught = catchToggle[rod];
-      const hookEl = document.querySelector('.catch-hook[data-rod="'+rod+'"]');
-      const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
-      const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
-      const typeValue = typeEl.value === 'Other' ? typeOtherEl.value : typeEl.value;
-      const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
-      const bomVal = getRodFieldValue(rod, 'bom');
-      const hook1Val = getRodFieldValue(rod, 'hook1');
-      const hook2Val = getRodFieldValue(rod, 'hook2');
-      const hook3Val = getRodFieldValue(rod, 'hook3');
-      const rigVal = getRodFieldValue(rod, 'rig');
-      const idEl = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="identifier"]');
-      const rodIdentifier = idEl ? idEl.value : '';
-
-      const entry = {
-        id: uid(),
-        caught,
-        rod,
-        hook: caught ? hookEl.value : '',
-        type: caught ? typeValue : '',
-        weight: caught ? (parseFloat(weightEl.value) || 0) : 0,
-        time: Date.now(),
-        timerElapsed: elapsedMs(currentPerson.timers[rod]),
-        bom: bomVal,
-        hook1: hook1Val,
-        hook2: hook2Val,
-        hook3: hook3Val,
-        rig: rigVal,
-        rodIdentifier: rodIdentifier,
-        photos: caught ? (pendingPhotos[rod] || []).slice() : []
-      };
-      showConfirmation(entry);
+      showConfirmation(buildCatchEntry(rod));
     });
   });
+}
+
+function buildCatchEntry(rod){
+  const caught = catchToggle[rod];
+  const hookEl = document.querySelector('.catch-hook[data-rod="'+rod+'"]');
+  const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
+  const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
+  const typeValue = typeEl.value === 'Other' ? typeOtherEl.value : typeEl.value;
+  const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
+  const bomVal = getRodFieldValue(rod, 'bom');
+  const hook1Val = getRodFieldValue(rod, 'hook1');
+  const hook2Val = getRodFieldValue(rod, 'hook2');
+  const hook3Val = getRodFieldValue(rod, 'hook3');
+  const rigVal = getRodFieldValue(rod, 'rig');
+  const idEl = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="identifier"]');
+  const rodIdentifier = idEl ? idEl.value : '';
+
+  return {
+    id: uid(),
+    caught,
+    rod,
+    hook: caught ? hookEl.value : '',
+    type: caught ? typeValue : '',
+    weight: caught ? (parseFloat(weightEl.value) || 0) : 0,
+    time: Date.now(),
+    timerElapsed: elapsedMs(currentPerson.timers[rod]),
+    bom: bomVal,
+    hook1: hook1Val,
+    hook2: hook2Val,
+    hook3: hook3Val,
+    rig: rigVal,
+    rodIdentifier: rodIdentifier,
+    photos: caught ? (pendingPhotos[rod] || []).slice() : []
+  };
 }
 
 let pendingEntry = null;
@@ -1921,6 +2275,16 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   if(photoEl) photoEl.value='';
   pendingPhotos[rod] = [];
   renderPhotoPreview(rod);
+
+  // Reset back to the default No-catch state for the next entry on this rod
+  catchToggle[rod] = false;
+  document.querySelectorAll('.catch-toggle[data-rod="'+rod+'"] button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.yn === 'no');
+  });
+  const catchFieldsEl = document.querySelector('.catch-fields[data-rod="'+rod+'"]');
+  if(catchFieldsEl) catchFieldsEl.style.display = 'none';
+  const logBtnEl = document.querySelector('.log-catch-btn[data-rod="'+rod+'"]');
+  if(logBtnEl) logBtnEl.style.display = 'none';
 
   renderCatchList(rod);
   renderNotes();
@@ -2018,7 +2382,7 @@ async function openProfile(personId){
   html += `<div class="profile-summary">
       <div><b>${caughtOnly.length}</b>catches</div>
       <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
-      <div><b>${(rec && rec.rods) || p.rods || 3}</b>rods</div>
+      <div><b>${normalizeRodsCount((rec && rec.rods) || p.rods)}</b>rods</div>
     </div>`;
   const pbCarpWeight = rec ? rec.pbCarpWeight : p.pb_carp_weight;
   const pbCarpPhoto = rec ? rec.pbCarpPhoto : p.pb_carp_photo;
@@ -2035,7 +2399,7 @@ async function openProfile(personId){
     }
     if(pbBarbelWeight){
       html += `<div class="profile-catch" style="flex:1;text-align:center;">
-          <div class="pc-head">Barbel</div>
+          <div class="pc-head">Catfish (Barbel)</div>
           <div class="pc-line"><b>${pbBarbelWeight}kg</b></div>
           ${pbBarbelPhoto ? `<img class="pc-photo" src="${pbBarbelPhoto}" alt="Personal best barbel" style="width:100%;height:90px;object-fit:cover;">` : ''}
         </div>`;
@@ -2293,6 +2657,8 @@ function renderAll(){
   RODS.forEach(renderCatchList);
 }
 function renderRodVisibility(){
+  const emptyEl = document.getElementById('no-fisherman-empty');
+  if(emptyEl) emptyEl.style.display = currentPerson ? 'none' : 'block';
   RODS.forEach((r,i)=>{
     const idx = i+1;
     const card = document.getElementById('rodcard-'+r);
@@ -2317,25 +2683,13 @@ function renderTimers(){
 }
 function renderNotes(){
   RODS.forEach(r=>{
-    const hookKeys = [];
-    for(let n=1; n<=MAX_HOOKS; n++){ hookKeys.push('hook'+n); }
-    ['rig','bom', ...hookKeys].forEach(k=>{
-      const sel = document.querySelector('.rod-select[data-rod="'+r+'"][data-key="'+k+'"]');
-      const otherInput = document.querySelector('.rod-select-other[data-rod="'+r+'"][data-key="'+k+'"]');
-      if(!sel) return;
-      const val = currentPerson ? (currentPerson.notes[r][k] || '') : '';
-      const knownValues = Array.from(sel.options).map(o=>o.value);
-      if(val && knownValues.includes(val)){
-        sel.value = val;
-        if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
-      }else if(val){
-        sel.value = '__other__';
-        if(otherInput){ otherInput.style.display = 'block'; otherInput.value = val; }
-      }else{
-        sel.value = '';
-        if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
-      }
-    });
+    const rigSel = document.querySelector('.rod-select[data-rod="'+r+'"][data-key="rig"]');
+    const rigOther = document.querySelector('.rod-select-other[data-rod="'+r+'"][data-key="rig"]');
+    if(rigSel){
+      setSelectOrOther(rigSel, rigOther, currentPerson ? (currentPerson.notes[r].rig || '') : '');
+    }
+    renderRigFields(r);
+
     const idEl = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="identifier"]');
     if(idEl) idEl.value = currentPerson ? currentPerson.notes[r].identifier : '';
     const dotEl = document.querySelector('.rod-dot[data-rod="'+r+'"]');
@@ -2386,7 +2740,12 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.tab==='competitions') renderCompetitions();
     if(btn.dataset.tab==='tackle'){
       updateTackleVisibility();
-      if(isSignedIn()){ renderTackleList(); }
+      if(isSignedIn()){
+        renderTackleList();
+        const hookSel = document.getElementById('rig-hook-count');
+        if(hookSel && !hookSel.options.length) hookSel.innerHTML = hookCountOptionsHtml(2);
+        renderRigsList();
+      }
     }
   });
 });
@@ -2824,17 +3183,10 @@ const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') ===
   renderAccountArea();
   await loadPeople();
   await loadKnownRodOptions();
+  await loadKnownRigs();
   await loadGearOptions();
   await loadFollowedIds();
   populateAnglerSelect();
-  if(session && session.user){
-    const mine = people.find(p=>p.user_id===session.user.id);
-    if(mine) await setActivePerson(mine.id);
-  }
-  if(!currentPersonId){
-    const activePeople = people.filter(p=>!p.archived);
-    if(activePeople.length>0) await setActivePerson(activePeople[0].id);
-  }
 })();
 
 if('serviceWorker' in navigator){
