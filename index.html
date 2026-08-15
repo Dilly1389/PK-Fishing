@@ -402,7 +402,7 @@
           <div id="signup-form">
             <div class="field">
               <label>Display Name / Nickname</label>
-              <input type="text" id="signup-name" placeholder="e.g. Big Carp Ruan — this is what others see, not your real name">
+              <input type="text" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
             </div>
             <div class="field">
               <label>Number of rods</label>
@@ -480,7 +480,7 @@
         <h2>My details</h2>
         <div class="field">
           <label>Display Name / Nickname</label>
-          <input type="text" id="details-name" placeholder="e.g. Big Carp Ruan">
+          <input type="text" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
         </div>
         <div class="row2">
           <div class="field">
@@ -1589,10 +1589,9 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
       if(matches.length){
         await sbPatch('fishermen', 'id=eq.'+matches[0].id, {user_id: authData.user.id});
         await loadPeople();
-        rows = matches;
       }
     }
-    if(rows.length) await setActivePerson(rows[0].id);
+    populateAnglerSelect();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not sign in.';
@@ -2069,7 +2068,8 @@ function rodCardHtml(r){
 }
 
 function buildRodCards(){
-  document.getElementById('rod-cards').innerHTML = RODS.map(rodCardHtml).join('');
+  const el = document.getElementById('rod-cards');
+  el.innerHTML = '<div class="empty" id="no-fisherman-empty">Select a fisherman above to see their rods.</div>' + RODS.map(rodCardHtml).join('');
   attachRodCardHandlers();
 }
 
@@ -2654,6 +2654,8 @@ function renderTimersRodsSelect(){
   sel.disabled = !currentPerson;
 }
 function renderRodVisibility(){
+  const emptyEl = document.getElementById('no-fisherman-empty');
+  if(emptyEl) emptyEl.style.display = currentPerson ? 'none' : 'block';
   RODS.forEach((r,i)=>{
     const idx = i+1;
     const card = document.getElementById('rodcard-'+r);
@@ -3191,14 +3193,6 @@ const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') ===
   await loadGearOptions();
   await loadFollowedIds();
   populateAnglerSelect();
-  if(session && session.user){
-    const mine = people.find(p=>p.user_id===session.user.id);
-    if(mine) await setActivePerson(mine.id);
-  }
-  if(!currentPersonId){
-    const activePeople = people.filter(p=>!p.archived);
-    if(activePeople.length>0) await setActivePerson(activePeople[0].id);
-  }
 })();
 
 if('serviceWorker' in navigator){
