@@ -471,15 +471,6 @@
           <button class="mini-btn danger" id="sign-out-btn">Sign out</button>
         </div>
       </section>
-
-      <section class="card">
-        <h2>Fishermen fishing today</h2>
-        <ul class="people-list" id="people-list"></ul>
-      </section>
-      <section class="card">
-        <h2>Archived</h2>
-        <ul class="people-list" id="archived-list"></ul>
-      </section>
     </div>
 
     <!-- LEADERBOARD -->
@@ -1290,7 +1281,6 @@ document.getElementById('signup-btn').addEventListener('click', async ()=>{
     await loadGearOptions();
     await loadFollowedIds();
     populateAnglerSelect();
-    renderPeopleList();
     await setActivePerson(id);
   }catch(e){
     console.error(e);
@@ -1323,7 +1313,6 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
       }
     }
     if(rows.length) await setActivePerson(rows[0].id);
-    renderPeopleList();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not sign in.';
@@ -1554,18 +1543,6 @@ async function insertFisherman(id,name,dam,rods,competition,email){
   await sbPost('fishermen', {id,name,dam,rods,competition,email: email || null});
   const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:'', hook3_note:'', identifier:'', dot_color:'#C1440E', rig:'', hook_count:2}));
   await sbPost('rod_state', rows);
-}
-async function deleteFisherman(id){
-  await sbDelete('fishermen', 'id=eq.'+id);
-}
-async function updateFishermanRods(id, rods){
-  await sbPatch('fishermen', 'id=eq.'+id, {rods});
-}
-async function archiveFisherman(id){
-  await sbPatch('fishermen', 'id=eq.'+id, {archived:true});
-}
-async function unarchiveFisherman(id){
-  await sbPatch('fishermen', 'id=eq.'+id, {archived:false});
 }
 
 async function loadPerson(id){
@@ -2403,7 +2380,6 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
-    if(btn.dataset.tab==='schedule') renderPeopleList();
     if(btn.dataset.tab==='leaderboard') renderLeaderboard();
     if(btn.dataset.tab==='feed') renderFeed();
     if(btn.dataset.tab==='challenges') renderChallenges();
@@ -2418,114 +2394,6 @@ document.getElementById('angler-select').addEventListener('change', e=> setActiv
 setInterval(renderTimers, 1000);
 
 // Fisherman (schedule)
-function renderPeopleList(){
-  const activeEl = document.getElementById('people-list');
-  const archivedEl = document.getElementById('archived-list');
-  const active = people.filter(p=>!p.archived);
-  const archived = people.filter(p=>p.archived);
-
-  if(active.length===0){
-    activeEl.innerHTML = '<div class="empty">No fishermen added yet.</div>';
-  }else{
-    activeEl.innerHTML = active.map(p=>`
-      <li style="flex-direction:column;align-items:stretch;gap:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button></div>
-          <div class="actions">
-            <select class="mini-btn rods-select" data-id="${p.id}">
-              ${rodsOptionsHtml(p.rods || 3)}
-            </select>
-            <button class="mini-btn" data-select="${p.id}">${p.id===currentPersonId?'Active':'Select'}</button>
-            <button class="mini-btn" data-archive="${p.id}">Archive</button>
-          </div>
-        </div>
-        <input type="email" class="email-input" data-id="${p.id}" value="${escapeHtml(p.email||'')}" placeholder="Email — auto-links their account on sign-up" style="font-size:12.5px;padding:6px 8px;">
-      </li>`).join('');
-  }
-
-  if(archived.length===0){
-    archivedEl.innerHTML = '<div class="empty">No archived fishermen.</div>';
-  }else{
-    archivedEl.innerHTML = archived.map(p=>`
-      <li>
-        <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button></div>
-        <div class="actions">
-          <button class="mini-btn" data-unarchive="${p.id}">Unarchive</button>
-          <button class="mini-btn danger" data-remove="${p.id}">Delete</button>
-        </div>
-      </li>`).join('');
-  }
-
-  [activeEl, archivedEl].forEach(el=>{
-    el.querySelectorAll('.lb-name-btn').forEach(b=>{
-      b.addEventListener('click', ()=> openProfile(b.dataset.id));
-    });
-  });
-
-  activeEl.querySelectorAll('[data-select]').forEach(b=>{
-    b.addEventListener('click', ()=>{ setActivePerson(b.dataset.select); renderPeopleList(); });
-  });
-  activeEl.querySelectorAll('.rods-select').forEach(sel=>{
-    sel.addEventListener('change', async ()=>{
-      const id = sel.dataset.id;
-      const rods = parseInt(sel.value);
-      const p = people.find(x=>x.id===id);
-      if(p) p.rods = rods;
-      await updateFishermanRods(id, rods);
-      if(currentPersonId===id){
-        currentPerson.rods = rods;
-        renderRodVisibility();
-      }
-    });
-  });
-  activeEl.querySelectorAll('.email-input').forEach(inp=>{
-    inp.addEventListener('blur', async ()=>{
-      const id = inp.dataset.id;
-      const email = inp.value.trim();
-      const p = people.find(x=>x.id===id);
-      if(p) p.email = email;
-      try{
-        await sbPatch('fishermen', 'id=eq.'+id, {email: email || null});
-        clearDbError();
-      }catch(e){ console.error(e); showDbError('Could not save email.'); }
-    });
-  });
-  activeEl.querySelectorAll('[data-archive]').forEach(b=>{
-    b.addEventListener('click', async ()=>{
-      const id = b.dataset.archive;
-      await archiveFisherman(id);
-      const p = people.find(x=>x.id===id);
-      if(p) p.archived = true;
-      if(currentPersonId===id){ currentPersonId=null; currentPerson=null; }
-      populateAnglerSelect();
-      renderPeopleList();
-      renderAll();
-    });
-  });
-
-  archivedEl.querySelectorAll('[data-unarchive]').forEach(b=>{
-    b.addEventListener('click', async ()=>{
-      const id = b.dataset.unarchive;
-      await unarchiveFisherman(id);
-      const p = people.find(x=>x.id===id);
-      if(p) p.archived = false;
-      populateAnglerSelect();
-      renderPeopleList();
-    });
-  });
-  archivedEl.querySelectorAll('[data-remove]').forEach(b=>{
-    b.addEventListener('click', async ()=>{
-      const id = b.dataset.remove;
-      await deleteFisherman(id);
-      people = people.filter(p=>p.id!==id);
-      if(currentPersonId===id){ currentPersonId=null; currentPerson=null; }
-      populateAnglerSelect();
-      renderPeopleList();
-      renderAll();
-    });
-  });
-}
-
 // Leaderboard
 function populateSelectPreserving(selectEl, values, allLabel){
   const current = selectEl.value;
@@ -2967,7 +2835,6 @@ const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') ===
     const activePeople = people.filter(p=>!p.archived);
     if(activePeople.length>0) await setActivePerson(activePeople[0].id);
   }
-  renderPeopleList();
 })();
 
 if('serviceWorker' in navigator){
