@@ -381,6 +381,10 @@
         <label>Fisherman</label>
         <select id="angler-select"></select>
       </div>
+      <div class="angler-bar">
+        <label>Rods</label>
+        <select id="timers-rods-select"></select>
+      </div>
       <div id="rod-cards"></div>
     </div>
 
@@ -397,8 +401,8 @@
 
           <div id="signup-form">
             <div class="field">
-              <label>Name</label>
-              <input type="text" id="signup-name" placeholder="Name">
+              <label>Display Name / Nickname</label>
+              <input type="text" id="signup-name" placeholder="e.g. Big Carp Ruan — this is what others see, not your real name">
             </div>
             <div class="field">
               <label>Number of rods</label>
@@ -1544,6 +1548,9 @@ async function insertFisherman(id,name,dam,rods,competition,email){
   const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:'', hook3_note:'', identifier:'', dot_color:'#C1440E', rig:'', hook_count:2}));
   await sbPost('rod_state', rows);
 }
+async function updateFishermanRods(id, rods){
+  await sbPatch('fishermen', 'id=eq.'+id, {rods});
+}
 
 async function loadPerson(id){
   try{
@@ -2291,6 +2298,13 @@ function renderAll(){
   renderTimers();
   renderNotes();
   RODS.forEach(renderCatchList);
+  renderTimersRodsSelect();
+}
+function renderTimersRodsSelect(){
+  const sel = document.getElementById('timers-rods-select');
+  if(!sel) return;
+  sel.innerHTML = rodsOptionsHtml(currentPerson ? (currentPerson.rods || 3) : 3);
+  sel.disabled = !currentPerson;
 }
 function renderRodVisibility(){
   RODS.forEach((r,i)=>{
@@ -2391,6 +2405,15 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
   });
 });
 document.getElementById('angler-select').addEventListener('change', e=> setActivePerson(e.target.value));
+document.getElementById('timers-rods-select').addEventListener('change', async (e)=>{
+  if(!currentPerson || !currentPersonId) return;
+  const rods = parseInt(e.target.value, 10);
+  currentPerson.rods = rods;
+  const p = people.find(x=>x.id===currentPersonId);
+  if(p) p.rods = rods;
+  await updateFishermanRods(currentPersonId, rods);
+  renderRodVisibility();
+});
 setInterval(renderTimers, 1000);
 
 // Fisherman (schedule)
