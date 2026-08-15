@@ -1423,7 +1423,9 @@ function populateMyDetails(){
   document.getElementById('details-last-name').value = p.last_name || '';
   document.getElementById('details-country').innerHTML = countryOptionsHtml(p.country || '');
   const rodsSel = document.getElementById('details-rods');
-  rodsSel.innerHTML = rodsOptionsHtml(p.rods || 3);
+  const myRods = normalizeRodsCount(p.rods);
+  rodsSel.innerHTML = rodsOptionsHtml(myRods);
+  rodsSel.value = String(myRods);
   document.getElementById('details-email').value = p.email || '';
   document.getElementById('details-pb-carp-weight').value = p.pb_carp_weight || '';
   document.getElementById('details-pb-barbel-weight').value = p.pb_barbel_weight || '';
@@ -1438,7 +1440,7 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
   const firstName = document.getElementById('details-first-name').value.trim();
   const lastName = document.getElementById('details-last-name').value.trim();
   const country = document.getElementById('details-country').value;
-  const rods = parseInt(document.getElementById('details-rods').value, 10) || 3;
+  const rods = normalizeRodsCount(document.getElementById('details-rods').value);
   const email = document.getElementById('details-email').value.trim();
   const carpWeightRaw = document.getElementById('details-pb-carp-weight').value;
   const barbelWeightRaw = document.getElementById('details-pb-barbel-weight').value;
@@ -1896,6 +1898,13 @@ async function updateFishermanRods(id, rods){
   await sbPatch('fishermen', 'id=eq.'+id, {rods});
 }
 
+function normalizeRodsCount(val){
+  const n = parseInt(val, 10);
+  if(!Number.isFinite(n) || n < 1) return 3;
+  if(n > MAX_RODS) return MAX_RODS;
+  return n;
+}
+
 async function loadPerson(id){
   try{
     const [fRows, rodRows, catchRows] = await Promise.all([
@@ -1924,7 +1933,7 @@ async function loadPerson(id){
     }));
     clearDbError();
     return {
-      name:f.name, dam:f.dam, competition:f.competition||'', rods:f.rods||3, timers, notes, catches,
+      name:f.name, dam:f.dam, competition:f.competition||'', rods:normalizeRodsCount(f.rods), timers, notes, catches,
       pbCarpWeight:f.pb_carp_weight||null, pbCarpPhoto:f.pb_carp_photo||null,
       pbBarbelWeight:f.pb_barbel_weight||null, pbBarbelPhoto:f.pb_barbel_photo||null
     };
@@ -2377,7 +2386,7 @@ async function openProfile(personId){
   html += `<div class="profile-summary">
       <div><b>${caughtOnly.length}</b>catches</div>
       <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
-      <div><b>${(rec && rec.rods) || p.rods || 3}</b>rods</div>
+      <div><b>${normalizeRodsCount((rec && rec.rods) || p.rods)}</b>rods</div>
     </div>`;
   const pbCarpWeight = rec ? rec.pbCarpWeight : p.pb_carp_weight;
   const pbCarpPhoto = rec ? rec.pbCarpPhoto : p.pb_carp_photo;
@@ -2655,7 +2664,9 @@ function renderAll(){
 function renderTimersRodsSelect(){
   const sel = document.getElementById('timers-rods-select');
   if(!sel) return;
-  sel.innerHTML = rodsOptionsHtml(currentPerson ? (currentPerson.rods || 3) : 3);
+  const rods = currentPerson ? normalizeRodsCount(currentPerson.rods) : 3;
+  sel.innerHTML = rodsOptionsHtml(rods);
+  sel.value = String(rods);
   sel.disabled = !currentPerson;
 }
 function renderRodVisibility(){
