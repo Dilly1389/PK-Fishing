@@ -1343,8 +1343,19 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
     renderAccountArea();
     await loadGearOptions();
     await loadFollowedIds();
-    const rows = await sbGet('fishermen?user_id=eq.'+authData.user.id+'&select=id');
+
+    let rows = await sbGet('fishermen?user_id=eq.'+authData.user.id+'&select=id');
+    if(!rows.length){
+      // Not linked to any profile yet — check for an unclaimed profile with this same email
+      const matches = await sbGet('fishermen?select=id&email=eq.'+encodeURIComponent(email)+'&user_id=is.null');
+      if(matches.length){
+        await sbPatch('fishermen', 'id=eq.'+matches[0].id, {user_id: authData.user.id});
+        await loadPeople();
+        rows = matches;
+      }
+    }
     if(rows.length) await setActivePerson(rows[0].id);
+    renderPeopleList();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not sign in.';
