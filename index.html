@@ -443,11 +443,11 @@
             </div>
             <div class="row2">
               <div class="field">
-                <label>Barbel — weight (kg)</label>
+                <label>Catfish (Barbel) — weight (kg)</label>
                 <input type="number" step="0.01" min="0" id="signup-pb-barbel-weight" placeholder="e.g. 8.1">
               </div>
               <div class="field">
-                <label>Barbel — photo</label>
+                <label>Catfish (Barbel) — photo</label>
                 <input type="file" accept="image/*" id="signup-pb-barbel-photo">
               </div>
             </div>
@@ -521,11 +521,11 @@
         </div>
         <div class="row2">
           <div class="field">
-            <label>Barbel — weight (kg)</label>
+            <label>Catfish (Barbel) — weight (kg)</label>
             <input type="number" step="0.01" min="0" id="details-pb-barbel-weight" placeholder="e.g. 8.1">
           </div>
           <div class="field">
-            <label>Barbel — photo</label>
+            <label>Catfish (Barbel) — photo</label>
             <input type="file" accept="image/*" id="details-pb-barbel-photo">
           </div>
         </div>
@@ -2389,7 +2389,7 @@ async function openProfile(personId){
     }
     if(pbBarbelWeight){
       html += `<div class="profile-catch" style="flex:1;text-align:center;">
-          <div class="pc-head">Barbel</div>
+          <div class="pc-head">Catfish (Barbel)</div>
           <div class="pc-line"><b>${pbBarbelWeight}kg</b></div>
           ${pbBarbelPhoto ? `<img class="pc-photo" src="${pbBarbelPhoto}" alt="Personal best barbel" style="width:100%;height:90px;object-fit:cover;">` : ''}
         </div>`;
