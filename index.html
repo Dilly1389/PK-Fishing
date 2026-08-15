@@ -1599,13 +1599,14 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
   }
 });
 
-document.getElementById('sign-out-btn').addEventListener('click', ()=>{
+document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
   clearSession();
   knownRodGear = [];
   knownReelGear = [];
   followedIds = new Set();
   renderAccountArea();
-  if(currentPerson) renderAll();
+  await setActivePerson(null);
+  populateAnglerSelect();
 });
 
 document.getElementById('view-my-profile-btn').addEventListener('click', async ()=>{
@@ -1974,9 +1975,12 @@ async function removeCatch(catchId){
 function populateAnglerSelect(){
   const sel = document.getElementById('angler-select');
   const active = people.filter(p=>!p.archived);
-  sel.innerHTML = active.length
-    ? active.map(p => `<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.dam)}</option>`).join('')
-    : '<option value="">Add a fisherman on the Fisherman tab</option>';
+  if(active.length === 0){
+    sel.innerHTML = '<option value="">Add a fisherman on the Fisherman tab</option>';
+    return;
+  }
+  const placeholder = currentPersonId ? '' : '<option value="">Select a fisherman</option>';
+  sel.innerHTML = placeholder + active.map(p => `<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.dam)}</option>`).join('');
   if(currentPersonId) sel.value = currentPersonId;
 }
 
