@@ -367,7 +367,7 @@
     <button data-tab="timers" class="active">Timers</button>
     <button data-tab="schedule">Profile</button>
     <button data-tab="leaderboard">Leaderboard</button>
-    <button data-tab="feed">Feed</button>
+    <button data-tab="feed">Friends</button>
     <button data-tab="challenges">Challenges</button>
     <button data-tab="competitions">Competitions</button>
     <button data-tab="tackle">Tackle Box</button>
@@ -484,6 +484,21 @@
         </div>
         <div class="row2">
           <div class="field">
+            <label>Name</label>
+            <input type="text" id="details-first-name" placeholder="First name">
+          </div>
+          <div class="field">
+            <label>Surname</label>
+            <input type="text" id="details-last-name" placeholder="Surname">
+          </div>
+        </div>
+        <div class="field">
+          <label>Country</label>
+          <select id="details-country"></select>
+        </div>
+        <p class="pc-line muted" style="margin-top:-6px;margin-bottom:12px;">Name, surname, and country are private — only you can see them here, never shown publicly.</p>
+        <div class="row2">
+          <div class="field">
             <label>Number of rods</label>
             <select id="details-rods"></select>
           </div>
@@ -552,7 +567,7 @@
     <!-- FEED -->
     <div class="panel" id="panel-feed">
       <section class="card">
-        <h2>Feed</h2>
+        <h2>Friends</h2>
         <label id="feed-following-wrap" style="display:none;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:10px;">
           <input type="checkbox" id="feed-following-only"> Following only
         </label>
@@ -870,6 +885,38 @@ const RODS = Array.from({length: MAX_RODS}, (_, i) => 'rod' + (i+1));
 const RID_LABEL = {};
 RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
 
+const COUNTRY_LIST = [
+  "South Africa","Afghanistan","Albania","Algeria","Andorra","Angola","Argentina","Armenia","Australia",
+  "Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin",
+  "Bhutan","Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi",
+  "Cabo Verde","Cambodia","Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia",
+  "Comoros","Congo","Costa Rica","Croatia","Cuba","Cyprus","Czechia","Denmark","Djibouti","Dominica",
+  "Dominican Republic","DR Congo","Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia",
+  "Eswatini","Ethiopia","Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece",
+  "Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India",
+  "Indonesia","Iran","Iraq","Ireland","Israel","Italy","Ivory Coast","Jamaica","Japan","Jordan","Kazakhstan",
+  "Kenya","Kiribati","Kosovo","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya",
+  "Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali","Malta",
+  "Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro",
+  "Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand","Nicaragua","Niger",
+  "Nigeria","North Korea","North Macedonia","Norway","Oman","Pakistan","Palau","Palestine","Panama",
+  "Papua New Guinea","Paraguay","Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda",
+  "Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino",
+  "Sao Tome and Principe","Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia",
+  "Slovenia","Solomon Islands","Somalia","South Korea","South Sudan","Spain","Sri Lanka","Sudan","Suriname",
+  "Sweden","Switzerland","Syria","Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga",
+  "Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda","Ukraine","United Arab Emirates",
+  "United Kingdom","United States","Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam",
+  "Yemen","Zambia","Zimbabwe"
+];
+function countryOptionsHtml(selected){
+  let html = '<option value="">Select country</option>';
+  COUNTRY_LIST.forEach(c=>{
+    html += `<option value="${escapeHtml(c)}" ${c===selected?'selected':''}>${escapeHtml(c)}</option>`;
+  });
+  return html;
+}
+
 let people = [];
 let currentPersonId = null;
 let currentPerson = null;
@@ -900,8 +947,8 @@ function catchHookOptionsHtml(hookCount){
 // Bom / Hook dropdown options, built from what's already been typed across all fishermen
 let knownBomOptions = [];
 let knownHookOptions = [];
-// Rigs built by users on the Tackle Box tab
-let knownRigs = [];
+// Rigs built by users on the Tackle Box tab — full definitions, so selecting one drives the fields
+let knownRigsFull = [];
 
 async function loadKnownRodOptions(){
   try{
@@ -921,9 +968,12 @@ async function loadKnownRodOptions(){
 
 async function loadKnownRigs(){
   try{
-    const rows = await sbGet('rigs?select=id,name&order=name.asc');
-    knownRigs = rows.map(r=>r.name);
-  }catch(e){ console.error('loadKnownRigs failed', e); knownRigs = []; }
+    const rows = await sbGet('rigs?select=id,name,uses_bom,hook_count&order=name.asc');
+    knownRigsFull = rows.map(r=>({id:r.id, name:r.name, usesBom:!!r.uses_bom, hookCount:r.hook_count||0}));
+  }catch(e){ console.error('loadKnownRigs failed', e); knownRigsFull = []; }
+}
+function findRigDef(name){
+  return knownRigsFull.find(r=>r.name === name) || null;
 }
 
 function buildRodOptionsHtml(options){
@@ -934,9 +984,95 @@ function buildRodOptionsHtml(options){
 }
 function buildRigOptionsHtml(){
   let html = '<option value="">None</option>';
-  knownRigs.forEach(v=>{ html += `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`; });
+  knownRigsFull.forEach(r=>{ html += `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`; });
   html += '<option value="__other__">+ Add new...</option>';
   return html;
+}
+
+function setSelectOrOther(sel, otherInput, val){
+  if(!sel) return;
+  const knownValues = Array.from(sel.options).map(o=>o.value);
+  if(val && knownValues.includes(val)){
+    sel.value = val;
+    if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+  }else if(val){
+    sel.value = '__other__';
+    if(otherInput){ otherInput.style.display = 'block'; otherInput.value = val; }
+  }else{
+    sel.value = '';
+    if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+  }
+}
+
+function renderRigFields(rod){
+  const container = document.getElementById('rig-fields-'+rod);
+  if(!container || !currentPerson) return;
+  const rigName = getRodFieldValue(rod, 'rig');
+  const rigDef = rigName ? findRigDef(rigName) : null;
+
+  if(!rigDef){
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  if(rigDef.usesBom){
+    html += `<div class="field">
+      <label>Bom</label>
+      <select class="rod-select" data-rod="${rod}" data-key="bom">${buildRodOptionsHtml(knownBomOptions)}</select>
+      <input type="text" class="rod-field rod-select-other" data-rod="${rod}" data-key="bom" placeholder="Describe the bom..." style="display:none;margin-top:6px;">
+    </div>`;
+  }
+  if(rigDef.hookCount > 0){
+    html += '<div class="hooks-row">';
+    for(let n=1; n<=rigDef.hookCount; n++){ html += hookFieldHtml(rod, n); }
+    html += '</div>';
+  }
+  container.innerHTML = html;
+
+  if(rigDef.usesBom){
+    setSelectOrOther(
+      container.querySelector('.rod-select[data-key="bom"]'),
+      container.querySelector('.rod-select-other[data-key="bom"]'),
+      currentPerson.notes[rod].bom || ''
+    );
+  }
+  for(let n=1; n<=rigDef.hookCount; n++){
+    const key = 'hook'+n;
+    setSelectOrOther(
+      container.querySelector('.rod-select[data-key="'+key+'"]'),
+      container.querySelector('.rod-select-other[data-key="'+key+'"]'),
+      currentPerson.notes[rod][key] || ''
+    );
+  }
+
+  attachRigFieldHandlers(rod);
+}
+
+function attachRigFieldHandlers(rod){
+  const container = document.getElementById('rig-fields-'+rod);
+  if(!container) return;
+  container.querySelectorAll('.rod-field').forEach(ta=>{
+    ta.addEventListener('blur', async ()=>{
+      if(!currentPerson) return;
+      currentPerson.notes[rod][ta.dataset.key] = ta.value;
+      await saveRodState(currentPersonId, rod);
+    });
+  });
+  container.querySelectorAll('.rod-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const key = sel.dataset.key;
+      const otherInput = container.querySelector('.rod-select-other[data-key="'+key+'"]');
+      if(sel.value === '__other__'){
+        if(otherInput){ otherInput.style.display = 'block'; otherInput.focus(); }
+        return;
+      }
+      if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+      if(!currentPerson) return;
+      currentPerson.notes[rod][key] = sel.value;
+      await saveRodState(currentPersonId, rod);
+    });
+  });
 }
 
 function getRodFieldValue(rod, key){
@@ -1283,6 +1419,9 @@ function populateMyDetails(){
   const p = people.find(x=>x.user_id === session.user.id);
   if(!p) return;
   document.getElementById('details-name').value = p.name || '';
+  document.getElementById('details-first-name').value = p.first_name || '';
+  document.getElementById('details-last-name').value = p.last_name || '';
+  document.getElementById('details-country').innerHTML = countryOptionsHtml(p.country || '');
   const rodsSel = document.getElementById('details-rods');
   rodsSel.innerHTML = rodsOptionsHtml(p.rods || 3);
   document.getElementById('details-email').value = p.email || '';
@@ -1296,6 +1435,9 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
   if(!p){ st.textContent = 'Could not find your profile.'; return; }
 
   const name = document.getElementById('details-name').value.trim();
+  const firstName = document.getElementById('details-first-name').value.trim();
+  const lastName = document.getElementById('details-last-name').value.trim();
+  const country = document.getElementById('details-country').value;
   const rods = parseInt(document.getElementById('details-rods').value, 10) || 3;
   const email = document.getElementById('details-email').value.trim();
   const carpWeightRaw = document.getElementById('details-pb-carp-weight').value;
@@ -1308,7 +1450,10 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
   if(!name){ st.textContent = 'Enter a display name.'; return; }
   st.textContent = 'Saving...';
   try{
-    const patch = {name, rods, email: email || null};
+    const patch = {
+      name, rods, email: email || null,
+      first_name: firstName || null, last_name: lastName || null, country: country || null
+    };
     if(carpWeightRaw !== ''){ patch.pb_carp_weight = carpWeight; }
     if(barbelWeightRaw !== ''){ patch.pb_barbel_weight = barbelWeight; }
     if(carpPhotoFile){ patch.pb_carp_photo = await resizeImageFile(carpPhotoFile); }
@@ -1474,7 +1619,7 @@ document.getElementById('view-my-profile-btn').addEventListener('click', async (
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -1836,10 +1981,6 @@ function populateAnglerSelect(){
 }
 
 function rodCardHtml(r){
-  const hookCount = (currentPerson && currentPerson.notes[r] && currentPerson.notes[r].hookCount) || 2;
-  let hooksHtml = '<div class="hooks-row">';
-  for(let n=1; n<=hookCount; n++){ hooksHtml += hookFieldHtml(r, n); }
-  hooksHtml += '</div>';
   return `
     <section class="card rod-card" id="rodcard-${r}">
       <div class="rod-title-row">
@@ -1876,16 +2017,7 @@ function rodCardHtml(r){
         <select class="rod-select" data-rod="${r}" data-key="rig">${buildRigOptionsHtml()}</select>
         <input type="text" class="rod-field rod-select-other" data-rod="${r}" data-key="rig" placeholder="Describe the rig..." style="display:none;margin-top:6px;">
       </div>
-      <div class="field">
-        <label>Bom</label>
-        <select class="rod-select" data-rod="${r}" data-key="bom">${buildRodOptionsHtml(knownBomOptions)}</select>
-        <input type="text" class="rod-field rod-select-other" data-rod="${r}" data-key="bom" placeholder="Describe the bom..." style="display:none;margin-top:6px;">
-      </div>
-      <div class="field">
-        <label>Number of hooks</label>
-        <select class="hook-count-select" data-rod="${r}">${hookCountOptionsHtml(hookCount)}</select>
-      </div>
-      ${hooksHtml}
+      <div id="rig-fields-${r}"></div>
       <hr class="divider">
       <p class="sub-heading">Record a catch</p>
       <div class="catch-toggle" data-rod="${r}">
@@ -1964,12 +2096,19 @@ function attachRodCardHandlers(){
       const otherInput = document.querySelector('.rod-select-other[data-rod="'+rod+'"][data-key="'+key+'"]');
       if(sel.value === '__other__'){
         if(otherInput){ otherInput.style.display = 'block'; otherInput.focus(); }
+        if(key === 'rig') renderRigFields(rod);
         return;
       }
       if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
       if(!currentPerson) return;
       currentPerson.notes[rod][key] = sel.value;
       await saveRodState(currentPersonId, rod);
+      if(key === 'rig') renderRigFields(rod);
+    });
+  });
+  document.querySelectorAll('.rod-select-other[data-key="rig"]').forEach(inp=>{
+    inp.addEventListener('blur', ()=>{
+      renderRigFields(inp.dataset.rod);
     });
   });
   document.querySelectorAll('.rod-dot').forEach(inp=>{
@@ -1977,20 +2116,6 @@ function attachRodCardHandlers(){
       if(!currentPerson) return;
       currentPerson.notes[inp.dataset.rod].dotColor = inp.value;
       await saveRodState(currentPersonId, inp.dataset.rod);
-    });
-  });
-  document.querySelectorAll('.hook-count-select').forEach(sel=>{
-    sel.addEventListener('change', async ()=>{
-      if(!currentPerson) return;
-      const rod = sel.dataset.rod;
-      const newCount = parseInt(sel.value, 10);
-      currentPerson.notes[rod].hookCount = newCount;
-      // Dropping hooks beyond the new count clears their saved values
-      for(let n = newCount+1; n <= MAX_HOOKS; n++){
-        currentPerson.notes[rod]['hook'+n] = '';
-      }
-      await saveRodState(currentPersonId, rod);
-      renderAll();
     });
   });
   document.querySelectorAll('.gear-select').forEach(sel=>{
@@ -2549,25 +2674,13 @@ function renderTimers(){
 }
 function renderNotes(){
   RODS.forEach(r=>{
-    const hookKeys = [];
-    for(let n=1; n<=MAX_HOOKS; n++){ hookKeys.push('hook'+n); }
-    ['rig','bom', ...hookKeys].forEach(k=>{
-      const sel = document.querySelector('.rod-select[data-rod="'+r+'"][data-key="'+k+'"]');
-      const otherInput = document.querySelector('.rod-select-other[data-rod="'+r+'"][data-key="'+k+'"]');
-      if(!sel) return;
-      const val = currentPerson ? (currentPerson.notes[r][k] || '') : '';
-      const knownValues = Array.from(sel.options).map(o=>o.value);
-      if(val && knownValues.includes(val)){
-        sel.value = val;
-        if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
-      }else if(val){
-        sel.value = '__other__';
-        if(otherInput){ otherInput.style.display = 'block'; otherInput.value = val; }
-      }else{
-        sel.value = '';
-        if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
-      }
-    });
+    const rigSel = document.querySelector('.rod-select[data-rod="'+r+'"][data-key="rig"]');
+    const rigOther = document.querySelector('.rod-select-other[data-rod="'+r+'"][data-key="rig"]');
+    if(rigSel){
+      setSelectOrOther(rigSel, rigOther, currentPerson ? (currentPerson.notes[r].rig || '') : '');
+    }
+    renderRigFields(r);
+
     const idEl = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="identifier"]');
     if(idEl) idEl.value = currentPerson ? currentPerson.notes[r].identifier : '';
     const dotEl = document.querySelector('.rod-dot[data-rod="'+r+'"]');
