@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -407,9 +408,9 @@
             <div class="field">
               <label>Number of rods</label>
               <select id="signup-rods">
-                <option value="1">1 rod</option>
+                <option value="1" selected>1 rod</option>
                 <option value="2">2 rods</option>
-                <option value="3" selected>3 rods</option>
+                <option value="3">3 rods</option>
                 <option value="4">4 rods</option>
                 <option value="5">5 rods</option>
                 <option value="6">6 rods</option>
@@ -1491,7 +1492,7 @@ document.querySelectorAll('#auth-mode-toggle button').forEach(btn=>{
 
 document.getElementById('signup-btn').addEventListener('click', async ()=>{
   const name = document.getElementById('signup-name').value.trim();
-  const rods = parseInt(document.getElementById('signup-rods').value) || 3;
+  const rods = parseInt(document.getElementById('signup-rods').value) || 1;
   const email = document.getElementById('signup-email').value.trim();
   const password = document.getElementById('signup-password').value;
   const st = document.getElementById('signup-status');
@@ -1900,7 +1901,7 @@ async function updateFishermanRods(id, rods){
 
 function normalizeRodsCount(val){
   const n = parseInt(val, 10);
-  if(!Number.isFinite(n) || n < 1) return 3;
+  if(!Number.isFinite(n) || n < 1) return 1;
   if(n > MAX_RODS) return MAX_RODS;
   return n;
 }
@@ -2664,7 +2665,7 @@ function renderAll(){
 function renderTimersRodsSelect(){
   const sel = document.getElementById('timers-rods-select');
   if(!sel) return;
-  const rods = currentPerson ? normalizeRodsCount(currentPerson.rods) : 3;
+  const rods = currentPerson ? normalizeRodsCount(currentPerson.rods) : 1;
   sel.innerHTML = rodsOptionsHtml(rods);
   sel.value = String(rods);
   sel.disabled = !currentPerson;
