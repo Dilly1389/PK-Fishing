@@ -379,7 +379,7 @@
     <div class="panel active" id="panel-timers">
       <div class="angler-bar">
         <label>Fisherman</label>
-        <select id="angler-select"></select>
+        <select id="angler-select" autocomplete="off"></select>
       </div>
       <div class="angler-bar">
         <label>Rods</label>
@@ -1976,11 +1976,16 @@ function populateAnglerSelect(){
   const active = people.filter(p=>!p.archived);
   if(active.length === 0){
     sel.innerHTML = '<option value="">Add a fisherman on the Fisherman tab</option>';
+    sel.value = '';
     return;
   }
-  const placeholder = currentPersonId ? '' : '<option value="">Select a fisherman</option>';
-  sel.innerHTML = placeholder + active.map(p => `<option value="${p.id}">${escapeHtml(p.name)} — ${escapeHtml(p.dam)}</option>`).join('');
-  if(currentPersonId) sel.value = currentPersonId;
+  const placeholder = `<option value="" ${currentPersonId ? '' : 'selected'}>Select a fisherman</option>`;
+  sel.innerHTML = placeholder + active.map(p =>
+    `<option value="${p.id}" ${p.id===currentPersonId ? 'selected' : ''}>${escapeHtml(p.name)} — ${escapeHtml(p.dam)}</option>`
+  ).join('');
+  // Belt and braces: some browsers try to restore a select's previous value on
+  // reload even after we've rebuilt its options — force it explicitly.
+  sel.value = currentPersonId || '';
 }
 
 function rodCardHtml(r){
