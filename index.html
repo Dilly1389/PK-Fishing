@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -398,11 +397,11 @@
 
         <div id="auth-forms">
           <div class="catch-toggle" id="auth-mode-toggle">
-            <button type="button" class="sel-yes active" data-mode="signup">Sign up</button>
+            <button type="button" class="sel-yes" data-mode="signup">Sign up</button>
             <button type="button" class="sel-no" data-mode="signin">Sign in</button>
           </div>
 
-          <div id="signup-form">
+          <div id="signup-form" style="display:none;">
             <div class="field">
               <label>Display Name / Nickname</label>
               <input type="text" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
@@ -474,7 +473,6 @@
 
         <div id="account-signed-in" style="display:none;">
           <p class="pc-line" id="signed-in-as" style="margin-bottom:12px;"></p>
-          <button class="mini-btn" id="view-my-profile-btn">View my profile</button>
           <button class="mini-btn danger" id="sign-out-btn">Sign out</button>
         </div>
       </section>
@@ -561,6 +559,7 @@
         <label id="lb-following-wrap" style="display:none;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:10px;">
           <input type="checkbox" id="lb-following-only"> Following only
         </label>
+        <p id="lb-following-hint" class="pc-line muted" style="display:none;margin-bottom:10px;">Sign in from the Profile tab to filter by who you follow.</p>
         <div id="lb-competition-dam" class="pc-line muted" style="display:none;margin-bottom:8px;"></div>
         <div id="leaderboard-list"><div class="empty">No catches logged yet.</div></div>
       </section>
@@ -574,6 +573,7 @@
         <label id="feed-following-wrap" style="display:none;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:10px;">
           <input type="checkbox" id="feed-following-only"> Following only
         </label>
+        <p id="feed-following-hint" class="pc-line muted" style="display:none;margin-bottom:10px;">Sign in from the Profile tab to follow fishermen and filter by who you follow.</p>
         <div id="feed-list"><div class="empty">No catches yet.</div></div>
       </section>
       <button class="primary-btn" id="refresh-feed-btn" style="background:var(--dam);">Refresh</button>
@@ -636,7 +636,7 @@
     <div class="panel" id="panel-competitions">
       <section class="card" id="competition-signin-required">
         <h2>Competitions</h2>
-        <p class="pc-line muted">Sign in from the Fisherman tab to create a competition.</p>
+        <p class="pc-line muted">Sign in from the Profile tab to create a competition.</p>
       </section>
       <section class="card" id="competition-create-card" style="display:none;">
         <h2>Create a competition</h2>
@@ -665,7 +665,7 @@
     <div class="panel" id="panel-tackle">
       <section class="card" id="tackle-signin-required">
         <h2>Tackle Box</h2>
-        <p class="pc-line muted">Sign in from the Fisherman tab to view and manage the shared tackle box.</p>
+        <p class="pc-line muted">Sign in from the Profile tab to view and manage the shared tackle box.</p>
       </section>
 
       <div id="tackle-content" style="display:none;">
@@ -1631,14 +1631,6 @@ document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
   renderAccountArea();
   await setActivePerson(null);
   populateAnglerSelect();
-});
-
-document.getElementById('view-my-profile-btn').addEventListener('click', async ()=>{
-  if(!session || !session.user) return;
-  try{
-    const rows = await sbGet('fishermen?user_id=eq.'+session.user.id+'&select=id');
-    if(rows.length) openProfile(rows[0].id);
-  }catch(e){ console.error(e); }
 });
 
 // ---------- Data layer (backed by Supabase) ----------
@@ -2761,6 +2753,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='timers') updateTimersVisibility();
     if(btn.dataset.tab==='leaderboard') renderLeaderboard();
     if(btn.dataset.tab==='feed') renderFeed();
     if(btn.dataset.tab==='challenges') renderChallenges();
@@ -2813,8 +2806,12 @@ async function renderLeaderboard(){
   if(people.length===0){ el.innerHTML = '<div class="empty">No fishermen added yet.</div>'; return; }
 
   const followWrap = document.getElementById('lb-following-wrap');
+  const followHint = document.getElementById('lb-following-hint');
   if(followWrap && !IS_SPECTATOR){
     followWrap.style.display = isSignedIn() ? 'flex' : 'none';
+    if(followHint) followHint.style.display = isSignedIn() ? 'none' : 'block';
+  }else if(followHint){
+    followHint.style.display = 'none';
   }
   const followingOnly = !IS_SPECTATOR && isSignedIn() && document.getElementById('lb-following-only').checked;
 
@@ -2959,7 +2956,9 @@ async function renderFeed(){
   const el = document.getElementById('feed-list');
   el.innerHTML = '<div class="empty">Loading...</div>';
   const followWrap = document.getElementById('feed-following-wrap');
+  const followHint = document.getElementById('feed-following-hint');
   if(followWrap) followWrap.style.display = isSignedIn() ? 'flex' : 'none';
+  if(followHint) followHint.style.display = isSignedIn() ? 'none' : 'block';
   const followingOnly = isSignedIn() && document.getElementById('feed-following-only').checked;
 
   let items = await loadFeedItems();
