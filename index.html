@@ -1277,23 +1277,47 @@ document.getElementById('signup-btn').addEventListener('click', async ()=>{
     const carpPhoto = carpPhotoFile ? await resizeImageFile(carpPhotoFile) : null;
     const barbelPhoto = barbelPhotoFile ? await resizeImageFile(barbelPhotoFile) : null;
 
-    const id = uid();
-    await insertFisherman(id, name, '', rods, '');
-    await sbPatch('fishermen', 'id=eq.'+id, {
-      user_id: authData.user.id,
-      pb_carp_weight: carpWeight,
-      pb_carp_photo: carpPhoto,
-      pb_barbel_weight: barbelWeight,
-      pb_barbel_photo: barbelPhoto
-    });
-    people.push({
-      id, name, dam:'', rods, competition:'',
-      user_id: authData.user.id,
-      pb_carp_weight: carpWeight, pb_carp_photo: carpPhoto,
-      pb_barbel_weight: barbelWeight, pb_barbel_photo: barbelPhoto
-    });
+    // If someone already entered this email on an existing (unclaimed) profile,
+    // link that profile instead of creating a duplicate.
+    let matchId = null;
+    try{
+      const matches = await sbGet('fishermen?select=id,user_id&email=eq.'+encodeURIComponent(email)+'&user_id=is.null');
+      if(matches.length){ matchId = matches[0].id; }
+    }catch(e){ console.error('email match lookup failed', e); }
 
-    st.textContent = 'Account created!';
+    let id;
+    if(matchId){
+      id = matchId;
+      const patch = {user_id: authData.user.id};
+      if(carpWeight !== null){ patch.pb_carp_weight = carpWeight; patch.pb_carp_photo = carpPhoto; }
+      if(barbelWeight !== null){ patch.pb_barbel_weight = barbelWeight; patch.pb_barbel_photo = barbelPhoto; }
+      await sbPatch('fishermen', 'id=eq.'+id, patch);
+      const p = people.find(x=>x.id===id);
+      if(p){
+        p.user_id = authData.user.id;
+        if(carpWeight !== null){ p.pb_carp_weight = carpWeight; p.pb_carp_photo = carpPhoto; }
+        if(barbelWeight !== null){ p.pb_barbel_weight = barbelWeight; p.pb_barbel_photo = barbelPhoto; }
+      }
+      st.textContent = 'Account created — linked to your existing profile!';
+    }else{
+      id = uid();
+      await insertFisherman(id, name, '', rods, '', email);
+      await sbPatch('fishermen', 'id=eq.'+id, {
+        user_id: authData.user.id,
+        pb_carp_weight: carpWeight,
+        pb_carp_photo: carpPhoto,
+        pb_barbel_weight: barbelWeight,
+        pb_barbel_photo: barbelPhoto
+      });
+      people.push({
+        id, name, dam:'', rods, competition:'', email,
+        user_id: authData.user.id,
+        pb_carp_weight: carpWeight, pb_carp_photo: carpPhoto,
+        pb_barbel_weight: barbelWeight, pb_barbel_photo: barbelPhoto
+      });
+      st.textContent = 'Account created!';
+    }
+
     renderAccountArea();
     await loadGearOptions();
     await loadFollowedIds();
@@ -1347,7 +1371,7 @@ document.getElementById('view-my-profile-btn').addEventListener('click', async (
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -1561,8 +1585,8 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   }
 });
 
-async function insertFisherman(id,name,dam,rods,competition){
-  await sbPost('fishermen', {id,name,dam,rods,competition});
+async function insertFisherman(id,name,dam,rods,competition,email){
+  await sbPost('fishermen', {id,name,dam,rods,competition,email: email || null});
   const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:'', hook3_note:'', identifier:'', dot_color:'#C1440E', rig:'', hook_count:2}));
   await sbPost('rod_state', rows);
 }
@@ -2461,15 +2485,18 @@ function renderPeopleList(){
     activeEl.innerHTML = '<div class="empty">No fishermen added yet.</div>';
   }else{
     activeEl.innerHTML = active.map(p=>`
-      <li>
-        <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button></div>
-        <div class="actions">
-          <select class="mini-btn rods-select" data-id="${p.id}">
-            ${rodsOptionsHtml(p.rods || 3)}
-          </select>
-          <button class="mini-btn" data-select="${p.id}">${p.id===currentPersonId?'Active':'Select'}</button>
-          <button class="mini-btn" data-archive="${p.id}">Archive</button>
+      <li style="flex-direction:column;align-items:stretch;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="who"><button class="lb-name-btn" data-id="${p.id}">${escapeHtml(p.name)}</button></div>
+          <div class="actions">
+            <select class="mini-btn rods-select" data-id="${p.id}">
+              ${rodsOptionsHtml(p.rods || 3)}
+            </select>
+            <button class="mini-btn" data-select="${p.id}">${p.id===currentPersonId?'Active':'Select'}</button>
+            <button class="mini-btn" data-archive="${p.id}">Archive</button>
+          </div>
         </div>
+        <input type="email" class="email-input" data-id="${p.id}" value="${escapeHtml(p.email||'')}" placeholder="Email — auto-links their account on sign-up" style="font-size:12.5px;padding:6px 8px;">
       </li>`).join('');
   }
 
@@ -2506,6 +2533,18 @@ function renderPeopleList(){
         currentPerson.rods = rods;
         renderRodVisibility();
       }
+    });
+  });
+  activeEl.querySelectorAll('.email-input').forEach(inp=>{
+    inp.addEventListener('blur', async ()=>{
+      const id = inp.dataset.id;
+      const email = inp.value.trim();
+      const p = people.find(x=>x.id===id);
+      if(p) p.email = email;
+      try{
+        await sbPatch('fishermen', 'id=eq.'+id, {email: email || null});
+        clearDbError();
+      }catch(e){ console.error(e); showDbError('Could not save email.'); }
     });
   });
   activeEl.querySelectorAll('[data-archive]').forEach(b=>{
