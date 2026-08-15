@@ -365,7 +365,7 @@
 
   <nav class="tabs">
     <button data-tab="timers" class="active">Timers</button>
-    <button data-tab="schedule">Fisherman</button>
+    <button data-tab="schedule">Profile</button>
     <button data-tab="leaderboard">Leaderboard</button>
     <button data-tab="feed">Feed</button>
     <button data-tab="challenges">Challenges</button>
@@ -472,30 +472,6 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2>Add fisherman</h2>
-        <div class="field">
-          <label>Name</label>
-          <input type="text" id="new-person-name" placeholder="Name">
-        </div>
-        <div class="field">
-          <label>Number of rods</label>
-          <select id="new-person-rods">
-            <option value="1">1 rod</option>
-            <option value="2">2 rods</option>
-            <option value="3" selected>3 rods</option>
-            <option value="4">4 rods</option>
-            <option value="5">5 rods</option>
-            <option value="6">6 rods</option>
-            <option value="7">7 rods</option>
-            <option value="8">8 rods</option>
-            <option value="9">9 rods</option>
-            <option value="10">10 rods</option>
-          </select>
-        </div>
-        <button class="primary-btn" id="add-person-btn">Add fisherman</button>
-        <div class="status" id="schedule-status"></div>
-      </section>
       <section class="card">
         <h2>Fishermen fishing today</h2>
         <ul class="people-list" id="people-list"></ul>
@@ -674,17 +650,9 @@
               <option value="Other">Other</option>
             </select>
           </div>
-          <div class="row2">
-            <div class="field">
-              <label>Owner</label>
-              <select id="tackle-owner">
-                <option value="">Shared (everyone)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Notes (optional)</label>
-              <input type="text" id="tackle-notes" placeholder="e.g. brand, size, qty">
-            </div>
+          <div class="field">
+            <label>Notes (optional)</label>
+            <input type="text" id="tackle-notes" placeholder="e.g. brand, size, qty">
           </div>
           <div class="field">
             <label>Photo (optional)</label>
@@ -1460,7 +1428,7 @@ function updateTackleVisibility(){
 async function loadTackleItems(){
   try{
     // Keep the list fetch light: never pull the photo blob here, only whether one exists
-    const rows = await sbGet('tackle_items?select=id,name,category,bait_type,owner_fisherman_id,notes,has_photo&order=category.asc,name.asc');
+    const rows = await sbGet('tackle_items?select=id,name,category,bait_type,notes,has_photo&order=category.asc,name.asc');
     clearDbError();
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
@@ -1476,15 +1444,6 @@ async function viewTacklePhoto(id){
     const rows = await sbGet('tackle_items?id=eq.'+id+'&select=photo');
     if(rows[0] && rows[0].photo){ openPhotoModal(rows[0].photo, null); }
   }catch(e){ console.error(e); showDbError('Could not load photo.'); }
-}
-
-function populateTackleOwnerSelect(){
-  const sel = document.getElementById('tackle-owner');
-  if(!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="">Shared (everyone)</option>' +
-    people.filter(p=>!p.archived).map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-  if([...sel.options].some(o=>o.value===current)) sel.value = current;
 }
 
 document.getElementById('tackle-category').addEventListener('change', (e)=>{
@@ -1520,13 +1479,10 @@ async function renderTackleList(){
   const catNames = Object.keys(byCategory).sort((a,b)=>a.localeCompare(b));
   el.innerHTML = catNames.map(cat=>{
     const rows = byCategory[cat].map(it=>{
-      const owner = it.owner_fisherman_id ? people.find(p=>p.id===it.owner_fisherman_id) : null;
-      const ownerLabel = owner ? escapeHtml(owner.name) : 'Shared';
       const baitTag = it.bait_type ? `<span class="pill" style="background:var(--khaki);color:var(--ink);">${escapeHtml(it.bait_type)}</span>` : '';
       return `<li>
         <div class="who">
           <b>${escapeHtml(it.name)}</b>
-          <span class="pill">${ownerLabel}</span>
           ${baitTag}
         </div>
         <div class="actions">
@@ -1555,7 +1511,6 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   const nameEl = document.getElementById('tackle-name');
   const catEl = document.getElementById('tackle-category');
   const baitTypeEl = document.getElementById('tackle-baittype');
-  const ownerEl = document.getElementById('tackle-owner');
   const notesEl = document.getElementById('tackle-notes');
   const photoEl = document.getElementById('tackle-photo');
   const st = document.getElementById('tackle-status');
@@ -1573,7 +1528,6 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
       name,
       category: catEl.value,
       bait_type: catEl.value === 'Bait' ? (baitTypeEl.value || null) : null,
-      owner_fisherman_id: ownerEl.value || null,
       notes: notesEl.value.trim(),
       photo,
       has_photo: !!photo
@@ -2456,7 +2410,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.tab==='competitions') renderCompetitions();
     if(btn.dataset.tab==='tackle'){
       updateTackleVisibility();
-      if(isSignedIn()){ populateTackleOwnerSelect(); renderTackleList(); }
+      if(isSignedIn()){ renderTackleList(); }
     }
   });
 });
@@ -2464,28 +2418,6 @@ document.getElementById('angler-select').addEventListener('change', e=> setActiv
 setInterval(renderTimers, 1000);
 
 // Fisherman (schedule)
-document.getElementById('add-person-btn').addEventListener('click', async ()=>{
-  const name = document.getElementById('new-person-name').value.trim();
-  const rods = parseInt(document.getElementById('new-person-rods').value) || 3;
-  const st = document.getElementById('schedule-status');
-  if(!name){ st.textContent = 'Enter a name.'; return; }
-  const id = uid();
-  st.textContent = 'Adding...';
-  try{
-    await insertFisherman(id, name, '', rods, '');
-    people.push({id, name, dam:'', rods, competition:''});
-    document.getElementById('new-person-name').value='';
-    st.textContent = 'Added.';
-    setTimeout(()=> st.textContent='', 1500);
-    populateAnglerSelect();
-    renderPeopleList();
-    if(!currentPersonId) setActivePerson(id);
-  }catch(e){
-    console.error(e);
-    st.textContent = 'Could not add — check Supabase connection.';
-  }
-});
-
 function renderPeopleList(){
   const activeEl = document.getElementById('people-list');
   const archivedEl = document.getElementById('archived-list');
@@ -3035,7 +2967,6 @@ const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') ===
     const activePeople = people.filter(p=>!p.archived);
     if(activePeople.length>0) await setActivePerson(activePeople[0].id);
   }
-  populateTackleOwnerSelect();
   renderPeopleList();
 })();
 
