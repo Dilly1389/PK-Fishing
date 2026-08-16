@@ -569,6 +569,10 @@
 
     <!-- FEED -->
     <div class="panel" id="panel-feed">
+      <section class="card" id="my-friends-card" style="display:none;">
+        <h2>Your friends</h2>
+        <div id="my-friends-list"><div class="empty">You're not following anyone yet.</div></div>
+      </section>
       <section class="card">
         <h2>Friends</h2>
         <div class="field">
@@ -624,6 +628,13 @@
             </select>
           </div>
         </div>
+        <p class="sub-heading">Add anglers (optional — leave empty for open to everyone)</p>
+        <div class="field">
+          <label>Search by name or email</label>
+          <input type="text" id="challenge-angler-search" placeholder="Type a name or email...">
+        </div>
+        <div id="challenge-angler-search-results"></div>
+        <div id="challenge-selected-anglers" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
         <button class="primary-btn" id="challenge-create-btn">Create challenge</button>
         <div class="status" id="challenge-create-status"></div>
       </section>
@@ -3219,7 +3230,27 @@ async function loadFeedItems(fishermanIds){
 let lastFeedItems = [];
 let lastFeedFetchKey = null;
 
+function renderMyFriendsList(){
+  const card = document.getElementById('my-friends-card');
+  const listEl = document.getElementById('my-friends-list');
+  if(!card || !listEl) return;
+  if(!isSignedIn()){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const friends = people.filter(p => followedIds.has(p.id) && !p.archived);
+  if(friends.length === 0){
+    listEl.innerHTML = '<div class="empty">You are not following anyone yet — follow anglers from their profile.</div>';
+    return;
+  }
+  listEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;">` +
+    friends.map(p => `<button type="button" class="mini-btn feed-angler-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>`).join('') +
+    `</div>`;
+  listEl.querySelectorAll('.feed-angler-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> openProfile(btn.dataset.id));
+  });
+}
+
 async function renderFeed(refetch){
+  renderMyFriendsList();
   const el = document.getElementById('feed-list');
   const searchTerm = document.getElementById('feed-search-input').value.trim().toLowerCase();
 
@@ -3289,6 +3320,15 @@ async function loadChallenges(){
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
 }
 async function deleteChallenge(id){ await sbDelete('challenges', 'id=eq.'+id); }
+async function addChallengeParticipant(challengeId, fishermanId){
+  await sbPost('challenge_participants', {id: uid(), challenge_id: challengeId, fisherman_id: fishermanId});
+}
+async function loadChallengeParticipants(challengeId){
+  try{
+    const rows = await sbGet('challenge_participants?select=fisherman_id&challenge_id=eq.'+challengeId);
+    return rows.map(r=>r.fisherman_id);
+  }catch(e){ console.error(e); return []; }
+}
 
 async function computeChallengeLeaderboard(challenge){
   const startIso = new Date(challenge.start_date+'T00:00:00').toISOString();
@@ -3298,6 +3338,8 @@ async function computeChallengeLeaderboard(challenge){
     rows = await sbGet('catches?select=*&caught=eq.true&time=gte.'+startIso+'&time=lte.'+endIso);
   }catch(e){ console.error(e); return []; }
   if(challenge.fish_type_filter) rows = rows.filter(c=>c.fish_type===challenge.fish_type_filter);
+  const participantIds = await loadChallengeParticipants(challenge.id);
+  if(participantIds.length){ rows = rows.filter(c=>participantIds.includes(c.fisherman_id)); }
   const byFisherman = {};
   rows.forEach(c=>{
     if(!byFisherman[c.fisherman_id]) byFisherman[c.fisherman_id] = {totalWeight:0, count:0, biggest:0};
@@ -3314,11 +3356,60 @@ async function computeChallengeLeaderboard(challenge){
   return stats;
 }
 
+let challengeSelectedIds = new Set();
+
+function renderChallengeAnglerSearch(){
+  const input = document.getElementById('challenge-angler-search');
+  const resultsEl = document.getElementById('challenge-angler-search-results');
+  if(!input || !resultsEl) return;
+  const term = input.value.trim().toLowerCase();
+  if(!term){ resultsEl.innerHTML = ''; return; }
+  const matches = people.filter(p =>
+    !p.archived && !challengeSelectedIds.has(p.id) &&
+    (p.name.toLowerCase().includes(term) || (p.email||'').toLowerCase().includes(term))
+  ).slice(0, 8);
+  resultsEl.innerHTML = matches.length
+    ? matches.map(p => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
+          <span style="font-size:14px;">${escapeHtml(p.name)}${p.email ? ' <span class="pc-line muted">('+escapeHtml(p.email)+')</span>' : ''}</span>
+          <button type="button" class="mini-btn" data-add-challenge-angler="${p.id}">Add</button>
+        </div>`).join('')
+    : '<div class="empty">No matches.</div>';
+  resultsEl.querySelectorAll('[data-add-challenge-angler]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      challengeSelectedIds.add(btn.dataset.addChallengeAngler);
+      input.value = '';
+      renderChallengeAnglerSearch();
+      renderChallengeSelectedPills();
+    });
+  });
+}
+function renderChallengeSelectedPills(){
+  const el = document.getElementById('challenge-selected-anglers');
+  if(!el) return;
+  const ids = [...challengeSelectedIds];
+  if(ids.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = ids.map(id=>{
+    const p = people.find(x=>x.id===id);
+    return p ? `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(p.name)}<button type="button" data-remove-challenge-angler="${id}" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;">×</button></span>` : '';
+  }).join('');
+  el.querySelectorAll('[data-remove-challenge-angler]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      challengeSelectedIds.delete(btn.dataset.removeChallengeAngler);
+      renderChallengeSelectedPills();
+    });
+  });
+}
+
 async function renderChallenges(){
   const el = document.getElementById('challenges-list');
   el.innerHTML = '<div class="empty">Loading...</div>';
   const createCard = document.getElementById('challenge-create-card');
   if(createCard) createCard.style.display = isSignedIn() ? 'block' : 'none';
+  if(isSignedIn()){
+    renderChallengeSelectedPills();
+    renderChallengeAnglerSearch();
+  }
 
   const challenges = await loadChallenges();
   if(challenges.length===0){ el.innerHTML = '<div class="empty">No challenges yet.</div>'; return; }
@@ -3326,6 +3417,8 @@ async function renderChallenges(){
   const parts = [];
   for(const ch of challenges){
     const stats = await computeChallengeLeaderboard(ch);
+    const participantIds = await loadChallengeParticipants(ch.id);
+    const participantNames = participantIds.map(pid=>{ const p=people.find(x=>x.id===pid); return p?p.name:null; }).filter(Boolean);
     const metricKey = ch.metric==='catch_count' ? 'count' : (ch.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
     const metricLabel = ch.metric==='catch_count' ? 'most catches' : (ch.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
     const rowsHtml = stats.slice(0,5).map((s,i)=>`
@@ -3337,7 +3430,16 @@ async function renderChallenges(){
     parts.push(`<section class="card">
         <h2>${escapeHtml(ch.name)}</h2>
         <p class="pc-line muted">${escapeHtml(ch.start_date)} → ${escapeHtml(ch.end_date)}${ch.fish_type_filter ? ' · '+escapeHtml(ch.fish_type_filter) : ''} · ranked by ${metricLabel}</p>
+        <div class="who" style="flex-wrap:wrap;margin-bottom:8px;">
+          ${participantNames.length ? participantNames.map(n=>`<span class="pill">${escapeHtml(n)}</span>`).join('') : '<span class="pc-line muted">Open to everyone</span>'}
+        </div>
         ${rowsHtml || '<div class="empty">No catches yet in this challenge.</div>'}
+        ${isSignedIn() ? `
+          <div class="field" style="margin-top:10px;">
+            <label>Add angler — search name or email</label>
+            <input type="text" class="challenge-add-search" data-challenge="${ch.id}" placeholder="Type a name or email...">
+            <div class="challenge-add-results" data-challenge="${ch.id}" style="margin-top:6px;"></div>
+          </div>` : ''}
         ${isSuperUser() ? `<button class="mini-btn danger" data-challenge-remove="${ch.id}" style="margin-top:10px;">Delete challenge</button>` : ''}
       </section>`);
   }
@@ -3348,7 +3450,35 @@ async function renderChallenges(){
       renderChallenges();
     });
   });
+  el.querySelectorAll('.challenge-add-search').forEach(inp=>{
+    inp.addEventListener('input', async ()=>{
+      const chId = inp.dataset.challenge;
+      const term = inp.value.trim().toLowerCase();
+      const resultsEl = el.querySelector('.challenge-add-results[data-challenge="'+chId+'"]');
+      if(!term){ resultsEl.innerHTML = ''; return; }
+      const currentParticipantIds = await loadChallengeParticipants(chId);
+      const matches = people.filter(p =>
+        !p.archived && !currentParticipantIds.includes(p.id) &&
+        (p.name.toLowerCase().includes(term) || (p.email||'').toLowerCase().includes(term))
+      ).slice(0, 8);
+      resultsEl.innerHTML = matches.length
+        ? matches.map(p => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
+              <span style="font-size:14px;">${escapeHtml(p.name)}${p.email ? ' <span class="pc-line muted">('+escapeHtml(p.email)+')</span>' : ''}</span>
+              <button type="button" class="mini-btn" data-add-to-challenge="${p.id}" data-challenge="${chId}">Add</button>
+            </div>`).join('')
+        : '<div class="empty">No matches.</div>';
+      resultsEl.querySelectorAll('[data-add-to-challenge]').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          await addChallengeParticipant(btn.dataset.challenge, btn.dataset.addToChallenge);
+          renderChallenges();
+        });
+      });
+    });
+  });
 }
+
+document.getElementById('challenge-angler-search').addEventListener('input', renderChallengeAnglerSearch);
 
 document.getElementById('challenge-create-btn').addEventListener('click', async ()=>{
   const nameEl = document.getElementById('challenge-name');
@@ -3362,12 +3492,20 @@ document.getElementById('challenge-create-btn').addEventListener('click', async 
   if(!startEl.value || !endEl.value){ st.textContent = 'Pick a start and end date.'; return; }
   st.textContent = 'Creating...';
   try{
+    const id = uid();
     await insertChallenge({
-      id: uid(), name,
+      id, name,
       start_date: startEl.value, end_date: endEl.value,
       metric: metricEl.value, fish_type_filter: fishtypeEl.value || null
     });
+    for(const fid of challengeSelectedIds){
+      await addChallengeParticipant(id, fid);
+    }
     nameEl.value = ''; startEl.value = ''; endEl.value = '';
+    challengeSelectedIds = new Set();
+    renderChallengeSelectedPills();
+    document.getElementById('challenge-angler-search').value = '';
+    renderChallengeAnglerSearch();
     st.textContent = 'Created.';
     setTimeout(()=> st.textContent='', 1200);
     renderChallenges();
