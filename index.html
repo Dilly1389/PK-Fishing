@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1439,12 +1440,8 @@ function updateTimersVisibility(){
   // You're always yourself on Timers now — no need to pick from a list
   if(signedIn){
     const myId = getMyFishermanId();
-    if(myId){
-      if(currentPersonId !== myId) setActivePerson(myId);
-    }else if(!currentPersonId){
-      // Couldn't find a linked profile — still render so the screen shows
-      // a clear message instead of staying completely blank
-      setActivePerson(null);
+    if(myId && currentPersonId !== myId){
+      setActivePerson(myId);
     }
   }
 }
@@ -1625,10 +1622,12 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
       if(matches.length){
         await sbPatch('fishermen', 'id=eq.'+matches[0].id, {user_id: authData.user.id});
         await loadPeople();
-        updateTimersVisibility();
       }
     }
     populateAnglerSelect();
+    // Re-check now that `people` reflects any freshly-linked profile, so the
+    // Timers tab actually loads the signed-in angler's rod cards.
+    updateTimersVisibility();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not sign in.';
