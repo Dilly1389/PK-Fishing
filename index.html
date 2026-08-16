@@ -3223,9 +3223,11 @@ async function renderFeed(refetch){
   const el = document.getElementById('feed-list');
   const searchTerm = document.getElementById('feed-search-input').value.trim().toLowerCase();
 
+  let matchingPeople = null;
   let matchingIds = null;
   if(searchTerm){
-    matchingIds = people.filter(p => p.name.toLowerCase().includes(searchTerm)).map(p => p.id);
+    matchingPeople = people.filter(p => !p.archived && p.name.toLowerCase().includes(searchTerm));
+    matchingIds = matchingPeople.map(p => p.id);
     if(matchingIds.length === 0){
       el.innerHTML = '<div class="empty">No anglers match that name.</div>';
       return;
@@ -3240,11 +3242,22 @@ async function renderFeed(refetch){
   }
   let items = lastFeedItems;
 
+  let html = '';
+  if(matchingPeople){
+    html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">` +
+      matchingPeople.map(p => `<button type="button" class="mini-btn feed-angler-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>`).join('') +
+      `</div>`;
+  }
+
   if(items.length===0){
-    el.innerHTML = `<div class="empty">${searchTerm ? 'No catches for that angler yet.' : 'No catches yet.'}</div>`;
+    html += `<div class="empty">${searchTerm ? 'No catches for that angler yet.' : 'No catches yet.'}</div>`;
+    el.innerHTML = html;
+    el.querySelectorAll('.feed-angler-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=> openProfile(btn.dataset.id));
+    });
     return;
   }
-  el.innerHTML = items.map(it=>{
+  html += items.map(it=>{
     if(it.photos.length) photoGalleryCache[it.id] = it.photos;
     const photoHtml = it.photos.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">` +
@@ -3258,6 +3271,10 @@ async function renderFeed(refetch){
       ${photoHtml}
     </div>`;
   }).join('');
+  el.innerHTML = html;
+  el.querySelectorAll('.feed-angler-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> openProfile(btn.dataset.id));
+  });
 }
 document.getElementById('refresh-feed-btn').addEventListener('click', ()=> renderFeed(true));
 document.getElementById('feed-search-input').addEventListener('input', ()=> renderFeed(false));
