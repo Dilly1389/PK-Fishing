@@ -1439,8 +1439,12 @@ function updateTimersVisibility(){
   // You're always yourself on Timers now — no need to pick from a list
   if(signedIn){
     const myId = getMyFishermanId();
-    if(myId && currentPersonId !== myId){
-      setActivePerson(myId);
+    if(myId){
+      if(currentPersonId !== myId) setActivePerson(myId);
+    }else if(!currentPersonId){
+      // Couldn't find a linked profile — still render so the screen shows
+      // a clear message instead of staying completely blank
+      setActivePerson(null);
     }
   }
 }
@@ -1621,6 +1625,7 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
       if(matches.length){
         await sbPatch('fishermen', 'id=eq.'+matches[0].id, {user_id: authData.user.id});
         await loadPeople();
+        updateTimersVisibility();
       }
     }
     populateAnglerSelect();
