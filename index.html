@@ -2607,28 +2607,23 @@ async function openProfile(personId){
       <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
       <div><b>${normalizeRodsCount((rec && rec.rods) || p.rods)}</b>rods</div>
     </div>`;
-  const pbCarpWeight = rec ? rec.pbCarpWeight : p.pb_carp_weight;
-  const pbCarpPhoto = rec ? rec.pbCarpPhoto : p.pb_carp_photo;
-  const pbBarbelWeight = rec ? rec.pbBarbelWeight : p.pb_barbel_weight;
-  const pbBarbelPhoto = rec ? rec.pbBarbelPhoto : p.pb_barbel_photo;
-  if(pbCarpWeight || pbBarbelWeight){
-    html += `<p class="sub-heading">Personal best</p><div class="row2" style="margin-bottom:14px;">`;
-    if(pbCarpWeight){
-      html += `<div class="profile-catch" style="flex:1;text-align:center;">
-          <div class="pc-head">Carp</div>
-          <div class="pc-line"><b>${pbCarpWeight}kg</b></div>
-          ${pbCarpPhoto ? `<img class="pc-photo" src="${pbCarpPhoto}" alt="Personal best carp" style="width:100%;height:90px;object-fit:cover;">` : ''}
-        </div>`;
-    }
-    if(pbBarbelWeight){
-      html += `<div class="profile-catch" style="flex:1;text-align:center;">
-          <div class="pc-head">Catfish (Barbel)</div>
-          <div class="pc-line"><b>${pbBarbelWeight}kg</b></div>
-          ${pbBarbelPhoto ? `<img class="pc-photo" src="${pbBarbelPhoto}" alt="Personal best barbel" style="width:100%;height:90px;object-fit:cover;">` : ''}
-        </div>`;
-    }
-    html += `</div>`;
-  }
+  const TROPHY_SPECIES = ['Carp','Mirror Carp','Grass Carp','Barbel','Yellowfish'];
+  const speciesStats = TROPHY_SPECIES.map(species=>{
+    const matches = caughtOnly.filter(c=>c.type===species);
+    const pb = matches.reduce((best,c)=> (!best || (c.weight||0) > (best.weight||0)) ? c : best, null);
+    return {species, count: matches.length, pb};
+  });
+  html += `<p class="sub-heading">My Logbook</p>`;
+  html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">` +
+    speciesStats.map(s=>`
+      <div class="profile-catch" style="flex:1;min-width:105px;text-align:center;">
+        <div class="pc-head">${escapeHtml(s.species)}</div>
+        <div class="pc-line"><b>${s.count}</b> caught</div>
+        ${s.pb ? `<button type="button" class="mini-btn pb-toggle-btn" data-pb-catch="${s.pb.id}" style="margin-top:6px;">PB: ${s.pb.weight}kg</button>` : ''}
+      </div>
+    `).join('') +
+    `</div>`;
+  html += `<div id="pb-detail-area" style="margin-bottom:14px;"></div>`;
   if(photoEntries.length){
     html += `<p class="sub-heading">Photos (${photoEntries.length})</p>`;
     if(photoTypes.length > 1){
@@ -2645,6 +2640,22 @@ async function openProfile(personId){
   html += catches.length ? catches.map(catchDetailHtml).join('') : '<div class="empty">No entries logged yet.</div>';
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
+
+  document.querySelectorAll('.pb-toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const catchId = btn.dataset.pbCatch;
+      const detailArea = document.getElementById('pb-detail-area');
+      if(detailArea.dataset.currentId === catchId){
+        detailArea.innerHTML = '';
+        detailArea.dataset.currentId = '';
+        return;
+      }
+      const c = caughtOnly.find(x=>x.id===catchId);
+      if(!c) return;
+      detailArea.innerHTML = catchDetailHtml(c);
+      detailArea.dataset.currentId = catchId;
+    });
+  });
 
   const followBtn = document.getElementById('profile-follow-btn');
   if(followBtn){
