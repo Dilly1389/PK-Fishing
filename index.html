@@ -575,10 +575,6 @@
           <label>Search by name</label>
           <input type="text" id="feed-search-input" placeholder="Type an angler's name...">
         </div>
-        <label id="feed-following-wrap" style="display:none;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:10px;">
-          <input type="checkbox" id="feed-following-only"> Following only
-        </label>
-        <p id="feed-following-hint" class="pc-line muted" style="display:none;margin-bottom:10px;">Sign in from the Profile tab to follow anglers and filter by who you follow.</p>
         <div id="feed-list"><div class="empty">No catches yet.</div></div>
       </section>
       <button class="primary-btn" id="refresh-feed-btn" style="background:var(--dam);">Refresh</button>
@@ -655,8 +651,13 @@
             <input type="text" id="competition-dam" placeholder="Dam">
           </div>
         </div>
-        <p class="sub-heading">Add anglers from your followers</p>
-        <div id="competition-follow-picker"><div class="empty">Loading...</div></div>
+        <p class="sub-heading">Add anglers</p>
+        <div class="field">
+          <label>Search by name or email</label>
+          <input type="text" id="competition-angler-search" placeholder="Type a name or email...">
+        </div>
+        <div id="competition-angler-search-results"></div>
+        <div id="competition-selected-anglers" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
         <button class="primary-btn" id="competition-create-btn" style="margin-top:10px;">Create competition</button>
         <div class="status" id="competition-create-status"></div>
       </section>
@@ -3220,11 +3221,6 @@ let lastFeedFetchKey = null;
 
 async function renderFeed(refetch){
   const el = document.getElementById('feed-list');
-  const followWrap = document.getElementById('feed-following-wrap');
-  const followHint = document.getElementById('feed-following-hint');
-  if(followWrap) followWrap.style.display = isSignedIn() ? 'flex' : 'none';
-  if(followHint) followHint.style.display = isSignedIn() ? 'none' : 'block';
-  const followingOnly = isSignedIn() && document.getElementById('feed-following-only').checked;
   const searchTerm = document.getElementById('feed-search-input').value.trim().toLowerCase();
 
   let matchingIds = null;
@@ -3243,7 +3239,6 @@ async function renderFeed(refetch){
     lastFeedFetchKey = fetchKey;
   }
   let items = lastFeedItems;
-  if(followingOnly) items = items.filter(it => followedIds.has(it.fishermanId));
 
   if(items.length===0){
     el.innerHTML = `<div class="empty">${searchTerm ? 'No catches for that angler yet.' : 'No catches yet.'}</div>`;
@@ -3265,7 +3260,6 @@ async function renderFeed(refetch){
   }).join('');
 }
 document.getElementById('refresh-feed-btn').addEventListener('click', ()=> renderFeed(true));
-document.getElementById('feed-following-only').addEventListener('change', ()=> renderFeed(false));
 document.getElementById('feed-search-input').addEventListener('input', ()=> renderFeed(false));
 
 // ---------- Challenges ----------
@@ -3386,18 +3380,49 @@ async function loadCompetitionParticipants(competitionId){
 }
 async function deleteCompetition(id){ await sbDelete('competitions', 'id=eq.'+id); }
 
-function renderCompetitionFollowPicker(){
-  const el = document.getElementById('competition-follow-picker');
+let competitionSelectedIds = new Set();
+
+function renderCompetitionAnglerSearch(){
+  const input = document.getElementById('competition-angler-search');
+  const resultsEl = document.getElementById('competition-angler-search-results');
+  if(!input || !resultsEl) return;
+  const term = input.value.trim().toLowerCase();
+  if(!term){ resultsEl.innerHTML = ''; return; }
+  const matches = people.filter(p =>
+    !p.archived && !competitionSelectedIds.has(p.id) &&
+    (p.name.toLowerCase().includes(term) || (p.email||'').toLowerCase().includes(term))
+  ).slice(0, 8);
+  if(matches.length === 0){ resultsEl.innerHTML = '<div class="empty">No matches.</div>'; return; }
+  resultsEl.innerHTML = matches.map(p => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
+      <span style="font-size:14px;">${escapeHtml(p.name)}${p.email ? ' <span class="pc-line muted">('+escapeHtml(p.email)+')</span>' : ''}</span>
+      <button type="button" class="mini-btn" data-add-angler="${p.id}">Add</button>
+    </div>`).join('');
+  resultsEl.querySelectorAll('[data-add-angler]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      competitionSelectedIds.add(btn.dataset.addAngler);
+      input.value = '';
+      renderCompetitionAnglerSearch();
+      renderCompetitionSelectedPills();
+    });
+  });
+}
+
+function renderCompetitionSelectedPills(){
+  const el = document.getElementById('competition-selected-anglers');
   if(!el) return;
-  const pool = isSuperUser() ? people.filter(p=>!p.archived) : people.filter(p => followedIds.has(p.id));
-  if(pool.length===0){
-    el.innerHTML = '<div class="empty">You are not following anyone yet — follow anglers from their profile first.</div>';
-    return;
-  }
-  el.innerHTML = pool.map(p=>`
-    <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;">
-      <input type="checkbox" class="competition-participant-check" value="${p.id}"> ${escapeHtml(p.name)}
-    </label>`).join('');
+  const ids = [...competitionSelectedIds];
+  if(ids.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = ids.map(id=>{
+    const p = people.find(x=>x.id===id);
+    return p ? `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(p.name)}<button type="button" data-remove-angler="${id}" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;">×</button></span>` : '';
+  }).join('');
+  el.querySelectorAll('[data-remove-angler]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      competitionSelectedIds.delete(btn.dataset.removeAngler);
+      renderCompetitionSelectedPills();
+    });
+  });
 }
 
 async function renderCompetitions(){
@@ -3406,7 +3431,8 @@ async function renderCompetitions(){
   if(isSignedIn()){
     gate.style.display = 'none';
     createCard.style.display = 'block';
-    renderCompetitionFollowPicker();
+    renderCompetitionSelectedPills();
+    renderCompetitionAnglerSearch();
   }else{
     gate.style.display = 'block';
     createCard.style.display = 'none';
@@ -3426,22 +3452,17 @@ async function renderCompetitions(){
     }).filter(Boolean);
     const canDelete = isSuperUser() || (isSignedIn() && session.user.id === c.creator_user_id);
     const canManage = isSuperUser();
-    const addablePool = canManage
-      ? people.filter(p=>!p.archived && !participantIds.includes(p.id))
-      : [];
     parts.push(`<section class="card">
         <h2>${escapeHtml(c.name)}</h2>
         <p class="pc-line muted">${escapeHtml(c.dam||'No dam set')}</p>
         <div class="who" style="flex-wrap:wrap;">
           ${names.length ? names.map(n=>`<span class="pill">${escapeHtml(n)}</span>`).join('') : '<span class="pc-line muted">No anglers added yet.</span>'}
         </div>
-        ${canManage && addablePool.length ? `
+        ${canManage ? `
           <div class="field" style="margin-top:10px;">
-            <label>Add angler (admin)</label>
-            <select class="competition-add-select" data-competition="${c.id}">
-              <option value="">Select angler...</option>
-              ${addablePool.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
-            </select>
+            <label>Add angler (admin) — search name or email</label>
+            <input type="text" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email...">
+            <div class="competition-add-results" data-competition="${c.id}" style="margin-top:6px;"></div>
           </div>` : ''}
         ${canDelete ? `<button class="mini-btn danger" data-competition-remove="${c.id}" style="margin-top:10px;">Delete competition</button>` : ''}
       </section>`);
@@ -3453,11 +3474,30 @@ async function renderCompetitions(){
       renderCompetitions();
     });
   });
-  el.querySelectorAll('.competition-add-select').forEach(sel=>{
-    sel.addEventListener('change', async ()=>{
-      if(!sel.value) return;
-      await addCompetitionParticipant(sel.dataset.competition, sel.value);
-      renderCompetitions();
+  el.querySelectorAll('.competition-add-search').forEach(inp=>{
+    inp.addEventListener('input', async ()=>{
+      const compId = inp.dataset.competition;
+      const term = inp.value.trim().toLowerCase();
+      const resultsEl = el.querySelector('.competition-add-results[data-competition="'+compId+'"]');
+      if(!term){ resultsEl.innerHTML = ''; return; }
+      const currentParticipantIds = await loadCompetitionParticipants(compId);
+      const matches = people.filter(p =>
+        !p.archived && !currentParticipantIds.includes(p.id) &&
+        (p.name.toLowerCase().includes(term) || (p.email||'').toLowerCase().includes(term))
+      ).slice(0, 8);
+      resultsEl.innerHTML = matches.length
+        ? matches.map(p => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
+              <span style="font-size:14px;">${escapeHtml(p.name)}${p.email ? ' <span class="pc-line muted">('+escapeHtml(p.email)+')</span>' : ''}</span>
+              <button type="button" class="mini-btn" data-add-to-comp="${p.id}" data-competition="${compId}">Add</button>
+            </div>`).join('')
+        : '<div class="empty">No matches.</div>';
+      resultsEl.querySelectorAll('[data-add-to-comp]').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          await addCompetitionParticipant(btn.dataset.competition, btn.dataset.addToComp);
+          renderCompetitions();
+        });
+      });
     });
   });
 }
@@ -3619,7 +3659,7 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
   const st = document.getElementById('competition-create-status');
   const name = nameEl.value.trim();
   if(!name){ st.textContent = 'Enter a name.'; return; }
-  const selectedIds = Array.from(document.querySelectorAll('.competition-participant-check:checked')).map(cb=>cb.value);
+  const selectedIds = [...competitionSelectedIds];
   st.textContent = 'Creating...';
   try{
     const id = uid();
@@ -3631,7 +3671,10 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
       await addCompetitionParticipant(id, fid);
     }
     nameEl.value = ''; damEl.value = '';
-    document.querySelectorAll('.competition-participant-check').forEach(cb=> cb.checked = false);
+    competitionSelectedIds = new Set();
+    renderCompetitionSelectedPills();
+    document.getElementById('competition-angler-search').value = '';
+    renderCompetitionAnglerSearch();
     st.textContent = 'Created.';
     setTimeout(()=> st.textContent='', 1200);
     renderCompetitions();
@@ -3640,6 +3683,7 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
     st.textContent = 'Could not create — check the Supabase connection.';
   }
 });
+document.getElementById('competition-angler-search').addEventListener('input', renderCompetitionAnglerSearch);
 
 document.getElementById('lb-filter-competition').addEventListener('change', renderLeaderboard);
 document.getElementById('lb-filter-type').addEventListener('change', renderLeaderboard);
