@@ -1313,19 +1313,34 @@ function setConnDot(connected){
 
 // ---------- Supabase REST helpers ----------
 function sbHeaders(extra){
+  const token = (session && session.access_token) ? session.access_token : SUPABASE_ANON_KEY;
   return Object.assign({
     'apikey': SUPABASE_ANON_KEY,
-    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + token,
     'Content-Type': 'application/json'
   }, extra||{});
 }
+
+// If a request comes back 401 (expired token), try refreshing the session once and retrying.
+async function sbFetch(url, options){
+  let res = await fetch(url, options);
+  if(res.status === 401 && session && session.refresh_token){
+    const refreshed = await tryRefreshSession();
+    if(refreshed){
+      const retryOptions = Object.assign({}, options, {headers: sbHeaders(options.headers && options.headers['Prefer'] ? {'Prefer': options.headers['Prefer']} : {})});
+      res = await fetch(url, retryOptions);
+    }
+  }
+  return res;
+}
+
 async function sbGet(path){
-  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {headers: sbHeaders()});
+  const res = await sbFetch(SUPABASE_URL + '/rest/v1/' + path, {headers: sbHeaders()});
   if(!res.ok) throw new Error('GET ' + path + ' failed: ' + res.status);
   return res.json();
 }
 async function sbPost(table, body){
-  const res = await fetch(SUPABASE_URL + '/rest/v1/' + table, {
+  const res = await sbFetch(SUPABASE_URL + '/rest/v1/' + table, {
     method:'POST',
     headers: sbHeaders({'Prefer':'return=representation'}),
     body: JSON.stringify(body)
@@ -1334,7 +1349,7 @@ async function sbPost(table, body){
   return res.json();
 }
 async function sbUpsert(table, body, onConflict){
-  const res = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?on_conflict=' + onConflict, {
+  const res = await sbFetch(SUPABASE_URL + '/rest/v1/' + table + '?on_conflict=' + onConflict, {
     method:'POST',
     headers: sbHeaders({'Prefer':'resolution=merge-duplicates,return=representation'}),
     body: JSON.stringify(body)
@@ -1343,7 +1358,7 @@ async function sbUpsert(table, body, onConflict){
   return res.json();
 }
 async function sbPatch(table, filterQuery, body){
-  const res = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + filterQuery, {
+  const res = await sbFetch(SUPABASE_URL + '/rest/v1/' + table + '?' + filterQuery, {
     method:'PATCH',
     headers: sbHeaders({'Prefer':'return=representation'}),
     body: JSON.stringify(body)
@@ -1352,11 +1367,21 @@ async function sbPatch(table, filterQuery, body){
   return res.json();
 }
 async function sbDelete(table, filterQuery){
-  const res = await fetch(SUPABASE_URL + '/rest/v1/' + table + '?' + filterQuery, {
+  const res = await sbFetch(SUPABASE_URL + '/rest/v1/' + table + '?' + filterQuery, {
     method:'DELETE',
     headers: sbHeaders()
   });
   if(!res.ok) throw new Error('DELETE ' + table + ' failed: ' + res.status);
+}
+async function sbRpc(fnName, args){
+  const res = await sbFetch(SUPABASE_URL + '/rest/v1/rpc/' + fnName, {
+    method:'POST',
+    headers: sbHeaders(),
+    body: JSON.stringify(args || {})
+  });
+  if(!res.ok) throw new Error('RPC ' + fnName + ' failed: ' + res.status + ' ' + await res.text());
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // ---------- Auth (Supabase GoTrue REST) ----------
@@ -1376,6 +1401,25 @@ function loadSessionFromStorage(){
     const raw = localStorage.getItem('pk_fishing_session');
     session = raw ? JSON.parse(raw) : null;
   }catch(e){ session = null; }
+}
+
+async function tryRefreshSession(){
+  if(!session || !session.refresh_token) return false;
+  try{
+    const res = await fetch(AUTH_URL + '/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: session.refresh_token })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.access_token) throw new Error('refresh failed');
+    saveSession({ access_token: data.access_token, refresh_token: data.refresh_token, user: data.user || session.user });
+    return true;
+  }catch(e){
+    console.error('Session refresh failed, signing out', e);
+    clearSession();
+    return false;
+  }
 }
 
 async function authSignUp(email, password){
@@ -1575,14 +1619,15 @@ document.getElementById('signup-btn').addEventListener('click', async ()=>{
       st.textContent = 'Account created — linked to your existing profile!';
     }else{
       id = uid();
-      await insertFisherman(id, name, '', rods, '', email);
-      await sbPatch('fishermen', 'id=eq.'+id, {
-        user_id: authData.user.id,
-        pb_carp_weight: carpWeight,
-        pb_carp_photo: carpPhoto,
-        pb_barbel_weight: barbelWeight,
-        pb_barbel_photo: barbelPhoto
-      });
+      await insertFisherman(id, name, '', rods, '', email, authData.user.id);
+      if(carpWeight !== null || barbelWeight !== null){
+        await sbPatch('fishermen', 'id=eq.'+id, {
+          pb_carp_weight: carpWeight,
+          pb_carp_photo: carpPhoto,
+          pb_barbel_weight: barbelWeight,
+          pb_barbel_photo: barbelPhoto
+        });
+      }
       people.push({
         id, name, dam:'', rods, competition:'', email,
         user_id: authData.user.id,
@@ -1654,7 +1699,7 @@ document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -1664,6 +1709,11 @@ async function loadPeople(){
 
 // ---------- Tackle box (signed-in only) ----------
 function isSignedIn(){ return !!(session && session.user); }
+function isSuperUser(){
+  if(!isSignedIn()) return false;
+  const mine = people.find(p=>p.user_id===session.user.id);
+  return !!(mine && mine.is_admin);
+}
 
 // Rods & Reels from the tackle box, offered as gear picks on the Timers tab.
 // Only loaded/shown for signed-in users — same visibility rule as the rest of the tackle box.
@@ -1767,7 +1817,7 @@ async function renderRigsList(){
   const rigs = await loadRigsFull();
   if(rigs.length===0){ el.innerHTML = '<div class="empty">No rigs built yet.</div>'; return; }
   const rows = rigs.map(r=>{
-    const canDelete = isSignedIn() && session.user.id === r.creator_user_id;
+    const canDelete = isSuperUser() || (isSignedIn() && session.user.id === r.creator_user_id);
     return `<li>
       <div class="who">
         <b>${escapeHtml(r.name)}</b>
@@ -1922,8 +1972,8 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   }
 });
 
-async function insertFisherman(id,name,dam,rods,competition,email){
-  await sbPost('fishermen', {id,name,dam,rods,competition,email: email || null});
+async function insertFisherman(id,name,dam,rods,competition,email,userId){
+  await sbPost('fishermen', {id,name,dam,rods,competition,email: email || null, user_id: userId || null});
   const rows = RODS.map(r=>({fisherman_id:id, rod:r, running:false, start_ts:null, accumulated_ms:0, bom:'', hook1_note:'', hook2_note:'', hook3_note:'', identifier:'', dot_color:'#C1440E', rig:'', hook_count:2}));
   await sbPost('rod_state', rows);
 }
@@ -2630,9 +2680,7 @@ async function checkAndUpdatePersonalBest(entry){
 
 async function likeCurrentPhoto(catchId){
   try{
-    const current = await fetchCatchLikes(catchId);
-    const newLikes = current + 1;
-    await sbPatch('catches', 'id=eq.'+catchId, {likes: newLikes});
+    await sbRpc('increment_catch_likes', {p_catch_id: catchId});
     addLikedCatch(catchId);
     clearDbError();
     showLekkerFlash();
@@ -2640,7 +2688,7 @@ async function likeCurrentPhoto(catchId){
   }catch(e){
     console.error(e);
     showDbError('Could not save like.');
-    renderPhotoLike('Could not save this like — check the Supabase connection (e.g. the "likes" column on catches).');
+    renderPhotoLike('Could not save this like — check the Supabase connection.');
   }
 }
 
@@ -3122,12 +3170,12 @@ async function deleteCompetition(id){ await sbDelete('competitions', 'id=eq.'+id
 function renderCompetitionFollowPicker(){
   const el = document.getElementById('competition-follow-picker');
   if(!el) return;
-  const followed = people.filter(p => followedIds.has(p.id));
-  if(followed.length===0){
+  const pool = isSuperUser() ? people.filter(p=>!p.archived) : people.filter(p => followedIds.has(p.id));
+  if(pool.length===0){
     el.innerHTML = '<div class="empty">You are not following anyone yet — follow anglers from their profile first.</div>';
     return;
   }
-  el.innerHTML = followed.map(p=>`
+  el.innerHTML = pool.map(p=>`
     <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;">
       <input type="checkbox" class="competition-participant-check" value="${p.id}"> ${escapeHtml(p.name)}
     </label>`).join('');
@@ -3157,13 +3205,25 @@ async function renderCompetitions(){
       const p = people.find(x=>x.id===pid);
       return p ? p.name : null;
     }).filter(Boolean);
-    const canDelete = isSignedIn() && session.user.id === c.creator_user_id;
+    const canDelete = isSuperUser() || (isSignedIn() && session.user.id === c.creator_user_id);
+    const canManage = isSuperUser();
+    const addablePool = canManage
+      ? people.filter(p=>!p.archived && !participantIds.includes(p.id))
+      : [];
     parts.push(`<section class="card">
         <h2>${escapeHtml(c.name)}</h2>
         <p class="pc-line muted">${escapeHtml(c.dam||'No dam set')}</p>
         <div class="who" style="flex-wrap:wrap;">
           ${names.length ? names.map(n=>`<span class="pill">${escapeHtml(n)}</span>`).join('') : '<span class="pc-line muted">No anglers added yet.</span>'}
         </div>
+        ${canManage && addablePool.length ? `
+          <div class="field" style="margin-top:10px;">
+            <label>Add angler (admin)</label>
+            <select class="competition-add-select" data-competition="${c.id}">
+              <option value="">Select angler...</option>
+              ${addablePool.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+            </select>
+          </div>` : ''}
         ${canDelete ? `<button class="mini-btn danger" data-competition-remove="${c.id}" style="margin-top:10px;">Delete competition</button>` : ''}
       </section>`);
   }
@@ -3171,6 +3231,13 @@ async function renderCompetitions(){
   el.querySelectorAll('[data-competition-remove]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       await deleteCompetition(btn.dataset.competitionRemove);
+      renderCompetitions();
+    });
+  });
+  el.querySelectorAll('.competition-add-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      if(!sel.value) return;
+      await addCompetitionParticipant(sel.dataset.competition, sel.value);
       renderCompetitions();
     });
   });
