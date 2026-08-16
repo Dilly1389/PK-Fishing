@@ -1749,6 +1749,15 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
         await loadPeople();
         renderAccountArea();
         myFishermanId = matches[0].id;
+      }else{
+        // No profile exists anywhere for this account — create one fresh instead of leaving them stuck
+        const fallbackName = email.split('@')[0];
+        const newId = uid();
+        await insertFisherman(newId, fallbackName, '', 1, '', email, authData.user.id);
+        await loadPeople();
+        renderAccountArea();
+        myFishermanId = newId;
+        st.textContent = 'Welcome back — created a fresh profile for you. Update your display name on the Profile tab.';
       }
     }
     populateAnglerSelect();
