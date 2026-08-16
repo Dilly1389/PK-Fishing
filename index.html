@@ -371,6 +371,7 @@
     <button data-tab="challenges">Challenges</button>
     <button data-tab="competitions">Competitions</button>
     <button data-tab="tackle">Tackle Box</button>
+    <button data-tab="admin" id="admin-tab-btn" style="display:none;">Admin</button>
   </nav>
 
   <main>
@@ -570,6 +571,10 @@
     <div class="panel" id="panel-feed">
       <section class="card">
         <h2>Friends</h2>
+        <div class="field">
+          <label>Search by name</label>
+          <input type="text" id="feed-search-input" placeholder="Type an angler's name...">
+        </div>
         <label id="feed-following-wrap" style="display:none;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:10px;">
           <input type="checkbox" id="feed-following-only"> Following only
         </label>
@@ -658,6 +663,71 @@
       <section class="card">
         <h2>All competitions</h2>
         <div id="competitions-list"><div class="empty">No competitions yet.</div></div>
+      </section>
+    </div>
+
+    <!-- ADMIN -->
+    <div class="panel" id="panel-admin">
+      <section class="card">
+        <h2>Admin: Users</h2>
+        <div class="field">
+          <label>Select angler</label>
+          <select id="admin-user-select"><option value="">Choose...</option></select>
+        </div>
+        <div id="admin-user-actions" style="display:none;">
+          <button class="mini-btn" id="admin-user-view-btn">View / edit profile</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Admin: Competitions</h2>
+        <div class="field">
+          <label>Select competition</label>
+          <select id="admin-competition-select"><option value="">Choose...</option></select>
+        </div>
+        <div id="admin-competition-info" class="pc-line muted"></div>
+        <button class="mini-btn danger" id="admin-competition-delete-btn" style="display:none;margin-top:8px;">Delete competition</button>
+      </section>
+
+      <section class="card">
+        <h2>Admin: Challenges</h2>
+        <div class="field">
+          <label>Select challenge</label>
+          <select id="admin-challenge-select"><option value="">Choose...</option></select>
+        </div>
+        <div id="admin-challenge-info" class="pc-line muted"></div>
+        <button class="mini-btn danger" id="admin-challenge-delete-btn" style="display:none;margin-top:8px;">Delete challenge</button>
+      </section>
+
+      <section class="card">
+        <h2>Admin: Catches</h2>
+        <div class="field">
+          <label>Angler</label>
+          <select id="admin-catch-angler-select"><option value="">Choose...</option></select>
+        </div>
+        <div class="field">
+          <label>Catch</label>
+          <select id="admin-catch-select" disabled><option value="">Choose an angler first...</option></select>
+        </div>
+        <div id="admin-catch-editor" style="display:none;margin-top:10px;">
+          <div class="catch-toggle" id="admin-catch-caught-toggle">
+            <button type="button" class="sel-yes" data-yn="yes">Caught a fish</button>
+            <button type="button" class="sel-no" data-yn="no">No catch</button>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label>Type</label>
+              <input type="text" id="admin-catch-type" placeholder="e.g. Carp">
+            </div>
+            <div class="field">
+              <label>Weight (kg)</label>
+              <input type="number" step="0.01" min="0" id="admin-catch-weight">
+            </div>
+          </div>
+          <button class="primary-btn" id="admin-catch-save-btn">Save changes</button>
+          <div class="status" id="admin-catch-status"></div>
+          <button class="mini-btn danger" id="admin-catch-delete-btn" style="margin-top:10px;">Delete this catch</button>
+        </div>
       </section>
     </div>
 
@@ -1461,6 +1531,8 @@ function renderAccountArea(){
   }
   updateTackleVisibility();
   updateTimersVisibility();
+  const adminTabBtn = document.getElementById('admin-tab-btn');
+  if(adminTabBtn) adminTabBtn.style.display = isSuperUser() ? '' : 'none';
 }
 
 function updateTimersVisibility(){
@@ -2466,6 +2538,45 @@ async function openProfile(personId){
   if(isSignedIn() && myFishermanId && myFishermanId !== p.id){
     html += `<button class="mini-btn" id="profile-follow-btn" data-id="${p.id}" style="margin-bottom:10px;">Follow</button>`;
   }
+  if(isSuperUser()){
+    html += `<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:16px;background:var(--paper);">
+      <p class="sub-heading">Admin: edit this angler</p>
+      <div class="field">
+        <label>Display Name</label>
+        <input type="text" id="admin-edit-name" value="${escapeHtml(p.name)}">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Number of rods</label>
+          <select id="admin-edit-rods">${rodsOptionsHtml(normalizeRodsCount(p.rods))}</select>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="admin-edit-email" value="${escapeHtml(p.email||'')}">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Carp PB (kg)</label>
+          <input type="number" step="0.01" min="0" id="admin-edit-pb-carp" value="${p.pb_carp_weight||''}">
+        </div>
+        <div class="field">
+          <label>Catfish (Barbel) PB (kg)</label>
+          <input type="number" step="0.01" min="0" id="admin-edit-pb-barbel" value="${p.pb_barbel_weight||''}">
+        </div>
+      </div>
+      <button class="primary-btn" id="admin-edit-save-btn">Save changes</button>
+      <div class="status" id="admin-edit-status"></div>
+      <button class="mini-btn danger" id="admin-delete-angler-btn" style="margin-top:12px;">Delete this angler</button>
+      <div id="admin-delete-confirm" style="display:none;margin-top:8px;">
+        <p class="pc-line" style="color:#c04;">This permanently deletes their profile, timers, and catch history. This cannot be undone.</p>
+        <div class="row2">
+          <button class="mini-btn" id="admin-delete-cancel-btn">Cancel</button>
+          <button class="mini-btn danger" id="admin-delete-confirm-btn">Yes, delete permanently</button>
+        </div>
+      </div>
+    </div>`;
+  }
   html += `<div class="profile-summary">
       <div><b>${caughtOnly.length}</b>catches</div>
       <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
@@ -2516,6 +2627,72 @@ async function openProfile(personId){
     followBtn.addEventListener('click', async ()=>{
       await toggleFollow(p.id);
       updateFollowButton(followBtn, p.id);
+    });
+  }
+
+  const adminSaveBtn = document.getElementById('admin-edit-save-btn');
+  if(adminSaveBtn){
+    adminSaveBtn.addEventListener('click', async ()=>{
+      const st = document.getElementById('admin-edit-status');
+      const name = document.getElementById('admin-edit-name').value.trim();
+      const rods = normalizeRodsCount(document.getElementById('admin-edit-rods').value);
+      const email = document.getElementById('admin-edit-email').value.trim();
+      const carpRaw = document.getElementById('admin-edit-pb-carp').value;
+      const barbelRaw = document.getElementById('admin-edit-pb-barbel').value;
+      if(!name){ st.textContent = 'Enter a display name.'; return; }
+      st.textContent = 'Saving...';
+      try{
+        const patch = {
+          name, rods, email: email || null,
+          pb_carp_weight: carpRaw !== '' ? parseFloat(carpRaw) : null,
+          pb_barbel_weight: barbelRaw !== '' ? parseFloat(barbelRaw) : null
+        };
+        await sbPatch('fishermen', 'id=eq.'+p.id, patch);
+        Object.assign(p, patch);
+        if(currentPersonId === p.id && currentPerson){
+          currentPerson.rods = rods;
+          renderRodVisibility();
+        }
+        populateAnglerSelect();
+        st.textContent = 'Saved.';
+        setTimeout(()=> st.textContent='', 1500);
+      }catch(e){
+        console.error(e);
+        st.textContent = 'Could not save — check the Supabase connection.';
+      }
+    });
+  }
+  const adminDeleteBtn = document.getElementById('admin-delete-angler-btn');
+  if(adminDeleteBtn){
+    adminDeleteBtn.addEventListener('click', ()=>{
+      document.getElementById('admin-delete-confirm').style.display = 'block';
+      adminDeleteBtn.style.display = 'none';
+    });
+  }
+  const adminDeleteCancelBtn = document.getElementById('admin-delete-cancel-btn');
+  if(adminDeleteCancelBtn){
+    adminDeleteCancelBtn.addEventListener('click', ()=>{
+      document.getElementById('admin-delete-confirm').style.display = 'none';
+      if(adminDeleteBtn) adminDeleteBtn.style.display = 'inline-block';
+    });
+  }
+  const adminDeleteConfirmBtn = document.getElementById('admin-delete-confirm-btn');
+  if(adminDeleteConfirmBtn){
+    adminDeleteConfirmBtn.addEventListener('click', async ()=>{
+      adminDeleteConfirmBtn.textContent = 'Deleting...';
+      adminDeleteConfirmBtn.disabled = true;
+      try{
+        await sbDelete('fishermen', 'id=eq.'+p.id);
+        people = people.filter(x=>x.id!==p.id);
+        if(currentPersonId===p.id){ currentPersonId=null; currentPerson=null; }
+        populateAnglerSelect();
+        document.getElementById('profile-modal').classList.remove('open');
+      }catch(e){
+        console.error(e);
+        adminDeleteConfirmBtn.textContent = 'Yes, delete permanently';
+        adminDeleteConfirmBtn.disabled = false;
+        alert('Could not delete — check the Supabase connection.');
+      }
     });
   }
 
@@ -2833,6 +3010,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
         renderRigsList();
       }
     }
+    if(btn.dataset.tab==='admin') renderAdminTab();
   });
 });
 document.getElementById('angler-select').addEventListener('change', e=> setActivePerson(e.target.value));
@@ -3018,19 +3196,29 @@ async function loadFeedItems(){
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
 }
 
-async function renderFeed(){
+let lastFeedItems = [];
+
+async function renderFeed(refetch){
   const el = document.getElementById('feed-list');
-  el.innerHTML = '<div class="empty">Loading...</div>';
   const followWrap = document.getElementById('feed-following-wrap');
   const followHint = document.getElementById('feed-following-hint');
   if(followWrap) followWrap.style.display = isSignedIn() ? 'flex' : 'none';
   if(followHint) followHint.style.display = isSignedIn() ? 'none' : 'block';
   const followingOnly = isSignedIn() && document.getElementById('feed-following-only').checked;
+  const searchTerm = document.getElementById('feed-search-input').value.trim().toLowerCase();
 
-  let items = await loadFeedItems();
+  if(refetch !== false || lastFeedItems.length === 0){
+    el.innerHTML = '<div class="empty">Loading...</div>';
+    lastFeedItems = await loadFeedItems();
+  }
+  let items = lastFeedItems;
   if(followingOnly) items = items.filter(it => followedIds.has(it.fishermanId));
+  if(searchTerm) items = items.filter(it => it.fishermanName.toLowerCase().includes(searchTerm));
 
-  if(items.length===0){ el.innerHTML = '<div class="empty">No catches yet.</div>'; return; }
+  if(items.length===0){
+    el.innerHTML = `<div class="empty">${searchTerm ? 'No catches match that name.' : 'No catches yet.'}</div>`;
+    return;
+  }
   el.innerHTML = items.map(it=>{
     if(it.photos.length) photoGalleryCache[it.id] = it.photos;
     const photoHtml = it.photos.length
@@ -3046,8 +3234,9 @@ async function renderFeed(){
     </div>`;
   }).join('');
 }
-document.getElementById('refresh-feed-btn').addEventListener('click', renderFeed);
-document.getElementById('feed-following-only').addEventListener('change', renderFeed);
+document.getElementById('refresh-feed-btn').addEventListener('click', ()=> renderFeed(true));
+document.getElementById('feed-following-only').addEventListener('change', ()=> renderFeed(false));
+document.getElementById('feed-search-input').addEventListener('input', ()=> renderFeed(false));
 
 // ---------- Challenges ----------
 async function insertChallenge(item){ await sbPost('challenges', item); }
@@ -3108,7 +3297,7 @@ async function renderChallenges(){
         <h2>${escapeHtml(ch.name)}</h2>
         <p class="pc-line muted">${escapeHtml(ch.start_date)} → ${escapeHtml(ch.end_date)}${ch.fish_type_filter ? ' · '+escapeHtml(ch.fish_type_filter) : ''} · ranked by ${metricLabel}</p>
         ${rowsHtml || '<div class="empty">No catches yet in this challenge.</div>'}
-        ${isSignedIn() ? `<button class="mini-btn danger" data-challenge-remove="${ch.id}" style="margin-top:10px;">Delete challenge</button>` : ''}
+        ${isSuperUser() ? `<button class="mini-btn danger" data-challenge-remove="${ch.id}" style="margin-top:10px;">Delete challenge</button>` : ''}
       </section>`);
   }
   el.innerHTML = parts.join('');
@@ -3242,6 +3431,157 @@ async function renderCompetitions(){
     });
   });
 }
+
+// ---------- Admin tab ----------
+async function renderAdminTab(){
+  if(!isSuperUser()) return;
+
+  // Users
+  const userSel = document.getElementById('admin-user-select');
+  userSel.innerHTML = '<option value="">Choose...</option>' +
+    people.slice().sort((a,b)=>a.name.localeCompare(b.name))
+      .map(p=>`<option value="${p.id}">${escapeHtml(p.name)}${p.archived?' (archived)':''}</option>`).join('');
+  document.getElementById('admin-user-actions').style.display = 'none';
+
+  // Competitions
+  const compSel = document.getElementById('admin-competition-select');
+  const comps = await loadCompetitions();
+  compSel.innerHTML = '<option value="">Choose...</option>' +
+    comps.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  document.getElementById('admin-competition-info').textContent = '';
+  document.getElementById('admin-competition-delete-btn').style.display = 'none';
+
+  // Challenges
+  const chSel = document.getElementById('admin-challenge-select');
+  const challenges = await loadChallenges();
+  chSel.innerHTML = '<option value="">Choose...</option>' +
+    challenges.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  document.getElementById('admin-challenge-info').textContent = '';
+  document.getElementById('admin-challenge-delete-btn').style.display = 'none';
+
+  // Catches — angler picker (catch picker populates after an angler is chosen)
+  const catchAnglerSel = document.getElementById('admin-catch-angler-select');
+  catchAnglerSel.innerHTML = '<option value="">Choose...</option>' +
+    people.slice().sort((a,b)=>a.name.localeCompare(b.name))
+      .map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+  document.getElementById('admin-catch-select').innerHTML = '<option value="">Choose an angler first...</option>';
+  document.getElementById('admin-catch-select').disabled = true;
+  document.getElementById('admin-catch-editor').style.display = 'none';
+}
+
+document.getElementById('admin-user-select').addEventListener('change', (e)=>{
+  document.getElementById('admin-user-actions').style.display = e.target.value ? 'block' : 'none';
+});
+document.getElementById('admin-user-view-btn').addEventListener('click', ()=>{
+  const id = document.getElementById('admin-user-select').value;
+  if(id) openProfile(id);
+});
+
+document.getElementById('admin-competition-select').addEventListener('change', async (e)=>{
+  const id = e.target.value;
+  const infoEl = document.getElementById('admin-competition-info');
+  const delBtn = document.getElementById('admin-competition-delete-btn');
+  if(!id){ infoEl.textContent=''; delBtn.style.display='none'; return; }
+  const participantIds = await loadCompetitionParticipants(id);
+  const names = participantIds.map(pid=>{ const p=people.find(x=>x.id===pid); return p?p.name:null; }).filter(Boolean);
+  infoEl.textContent = names.length ? names.length + ' anglers: ' + names.join(', ') : 'No anglers added yet.';
+  delBtn.style.display = 'inline-block';
+});
+document.getElementById('admin-competition-delete-btn').addEventListener('click', async ()=>{
+  const id = document.getElementById('admin-competition-select').value;
+  if(!id) return;
+  await deleteCompetition(id);
+  renderAdminTab();
+});
+
+document.getElementById('admin-challenge-select').addEventListener('change', (e)=>{
+  const id = e.target.value;
+  const infoEl = document.getElementById('admin-challenge-info');
+  const delBtn = document.getElementById('admin-challenge-delete-btn');
+  if(!id){ infoEl.textContent=''; delBtn.style.display='none'; return; }
+  infoEl.textContent = 'Selected.';
+  delBtn.style.display = 'inline-block';
+});
+document.getElementById('admin-challenge-delete-btn').addEventListener('click', async ()=>{
+  const id = document.getElementById('admin-challenge-select').value;
+  if(!id) return;
+  await deleteChallenge(id);
+  renderAdminTab();
+});
+
+let adminCatchList = [];
+document.getElementById('admin-catch-angler-select').addEventListener('change', async (e)=>{
+  const anglerId = e.target.value;
+  const catchSel = document.getElementById('admin-catch-select');
+  document.getElementById('admin-catch-editor').style.display = 'none';
+  if(!anglerId){
+    catchSel.innerHTML = '<option value="">Choose an angler first...</option>';
+    catchSel.disabled = true;
+    return;
+  }
+  const rec = await loadPerson(anglerId);
+  adminCatchList = rec ? rec.catches.slice().sort((a,b)=> b.time-a.time) : [];
+  if(adminCatchList.length===0){
+    catchSel.innerHTML = '<option value="">No catches for this angler</option>';
+    catchSel.disabled = true;
+    return;
+  }
+  catchSel.disabled = false;
+  catchSel.innerHTML = '<option value="">Choose...</option>' + adminCatchList.map(c=>{
+    const time = new Date(c.time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const label = c.caught ? `${c.type||'Fish'} — ${c.weight}kg (${time})` : `No catch (${time})`;
+    return `<option value="${c.id}">${escapeHtml(label)}</option>`;
+  }).join('');
+});
+
+document.getElementById('admin-catch-select').addEventListener('change', (e)=>{
+  const id = e.target.value;
+  const editor = document.getElementById('admin-catch-editor');
+  if(!id){ editor.style.display = 'none'; return; }
+  const c = adminCatchList.find(x=>x.id===id);
+  if(!c) return;
+  editor.style.display = 'block';
+  document.querySelectorAll('#admin-catch-caught-toggle button').forEach(b=>{
+    b.classList.toggle('active', (b.dataset.yn==='yes')===!!c.caught);
+  });
+  document.getElementById('admin-catch-type').value = c.type || '';
+  document.getElementById('admin-catch-weight').value = c.weight || '';
+});
+document.querySelectorAll('#admin-catch-caught-toggle button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('#admin-catch-caught-toggle button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+document.getElementById('admin-catch-save-btn').addEventListener('click', async ()=>{
+  const id = document.getElementById('admin-catch-select').value;
+  const st = document.getElementById('admin-catch-status');
+  if(!id){ st.textContent = 'Select a catch first.'; return; }
+  const caught = document.querySelector('#admin-catch-caught-toggle button.sel-yes').classList.contains('active');
+  const type = document.getElementById('admin-catch-type').value.trim();
+  const weight = parseFloat(document.getElementById('admin-catch-weight').value) || 0;
+  st.textContent = 'Saving...';
+  try{
+    await sbPatch('catches', 'id=eq.'+id, {caught, fish_type: caught?type:'', weight: caught?weight:0});
+    st.textContent = 'Saved.';
+    setTimeout(()=> st.textContent='', 1500);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save — check the Supabase connection.';
+  }
+});
+document.getElementById('admin-catch-delete-btn').addEventListener('click', async ()=>{
+  const id = document.getElementById('admin-catch-select').value;
+  if(!id) return;
+  try{
+    await sbDelete('catches', 'id=eq.'+id);
+    document.getElementById('admin-catch-angler-select').dispatchEvent(new Event('change'));
+    document.getElementById('admin-catch-editor').style.display = 'none';
+  }catch(e){
+    console.error(e);
+    alert('Could not delete — check the Supabase connection.');
+  }
+});
 
 document.getElementById('competition-create-btn').addEventListener('click', async ()=>{
   const nameEl = document.getElementById('competition-name');
