@@ -1730,20 +1730,24 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
     const authData = await authSignIn(email, password);
     saveSession({access_token: authData.access_token, refresh_token: authData.refresh_token, user: authData.user});
     st.textContent = '';
+
+    // Always pull fresh data on sign-in so nothing (admin status, rods, etc.) can be stale
+    await loadPeople();
     renderAccountArea();
     await loadGearOptions();
     await loadFollowedIds();
 
     let myFishermanId = null;
-    const rows = await sbGet('fishermen?user_id=eq.'+authData.user.id+'&select=id');
-    if(rows.length){
-      myFishermanId = rows[0].id;
+    const mine = people.find(p=>p.user_id===authData.user.id);
+    if(mine){
+      myFishermanId = mine.id;
     }else{
       // Not linked to any profile yet — check for an unclaimed profile with this same email
       const matches = await sbGet('fishermen?select=id&email=eq.'+encodeURIComponent(email)+'&user_id=is.null');
       if(matches.length){
         await sbPatch('fishermen', 'id=eq.'+matches[0].id, {user_id: authData.user.id});
         await loadPeople();
+        renderAccountArea();
         myFishermanId = matches[0].id;
       }
     }
@@ -3174,9 +3178,15 @@ function formatTimeAgo(ts){
   return new Date(ts).toLocaleDateString([], {month:'short', day:'numeric'});
 }
 
-async function loadFeedItems(){
+async function loadFeedItems(fishermanIds){
   try{
-    const rows = await sbGet('catches?select=*&caught=eq.true&order=time.desc&limit=50');
+    let query = 'catches?select=*&caught=eq.true&order=time.desc';
+    if(fishermanIds && fishermanIds.length){
+      query += '&fisherman_id=in.(' + fishermanIds.join(',') + ')';
+    }else{
+      query += '&limit=50';
+    }
+    const rows = await sbGet(query);
     clearDbError();
     return rows.map(c=>{
       const p = people.find(x=>x.id===c.fisherman_id);
@@ -3197,6 +3207,7 @@ async function loadFeedItems(){
 }
 
 let lastFeedItems = [];
+let lastFeedFetchKey = null;
 
 async function renderFeed(refetch){
   const el = document.getElementById('feed-list');
@@ -3207,16 +3218,26 @@ async function renderFeed(refetch){
   const followingOnly = isSignedIn() && document.getElementById('feed-following-only').checked;
   const searchTerm = document.getElementById('feed-search-input').value.trim().toLowerCase();
 
-  if(refetch !== false || lastFeedItems.length === 0){
+  let matchingIds = null;
+  if(searchTerm){
+    matchingIds = people.filter(p => p.name.toLowerCase().includes(searchTerm)).map(p => p.id);
+    if(matchingIds.length === 0){
+      el.innerHTML = '<div class="empty">No anglers match that name.</div>';
+      return;
+    }
+  }
+
+  const fetchKey = searchTerm;
+  if(refetch === true || fetchKey !== lastFeedFetchKey || lastFeedItems.length === 0){
     el.innerHTML = '<div class="empty">Loading...</div>';
-    lastFeedItems = await loadFeedItems();
+    lastFeedItems = await loadFeedItems(matchingIds);
+    lastFeedFetchKey = fetchKey;
   }
   let items = lastFeedItems;
   if(followingOnly) items = items.filter(it => followedIds.has(it.fishermanId));
-  if(searchTerm) items = items.filter(it => it.fishermanName.toLowerCase().includes(searchTerm));
 
   if(items.length===0){
-    el.innerHTML = `<div class="empty">${searchTerm ? 'No catches match that name.' : 'No catches yet.'}</div>`;
+    el.innerHTML = `<div class="empty">${searchTerm ? 'No catches for that angler yet.' : 'No catches yet.'}</div>`;
     return;
   }
   el.innerHTML = items.map(it=>{
