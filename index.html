@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1440,8 +1439,12 @@ function updateTimersVisibility(){
   // You're always yourself on Timers now — no need to pick from a list
   if(signedIn){
     const myId = getMyFishermanId();
-    if(myId && currentPersonId !== myId){
-      setActivePerson(myId);
+    if(myId){
+      if(currentPersonId !== myId) setActivePerson(myId);
+    }else if(!currentPersonId){
+      // Couldn't find a linked profile — still render so the screen shows
+      // a clear message instead of staying completely blank
+      setActivePerson(null);
     }
   }
 }
@@ -1615,18 +1618,23 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
     await loadGearOptions();
     await loadFollowedIds();
 
-    let rows = await sbGet('fishermen?user_id=eq.'+authData.user.id+'&select=id');
-    if(!rows.length){
+    let myFishermanId = null;
+    const rows = await sbGet('fishermen?user_id=eq.'+authData.user.id+'&select=id');
+    if(rows.length){
+      myFishermanId = rows[0].id;
+    }else{
       // Not linked to any profile yet — check for an unclaimed profile with this same email
       const matches = await sbGet('fishermen?select=id&email=eq.'+encodeURIComponent(email)+'&user_id=is.null');
       if(matches.length){
         await sbPatch('fishermen', 'id=eq.'+matches[0].id, {user_id: authData.user.id});
         await loadPeople();
+        myFishermanId = matches[0].id;
       }
     }
     populateAnglerSelect();
-    // Re-check now that `people` reflects any freshly-linked profile, so the
-    // Timers tab actually loads the signed-in angler's rod cards.
+    if(myFishermanId){
+      await setActivePerson(myFishermanId);
+    }
     updateTimersVisibility();
   }catch(e){
     console.error(e);
