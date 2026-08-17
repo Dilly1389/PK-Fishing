@@ -98,6 +98,17 @@
   }
   #nav-hamburger span{display:block;width:20px;height:2px;background:#fff;border-radius:2px;transition:transform .2s ease,opacity .2s ease;}
   body.spectator-mode #nav-hamburger{display:none !important;}
+  #notif-bell{
+    position:absolute;top:18px;right:14px;
+    width:38px;height:38px;border:none;background:rgba(255,255,255,0.12);
+    border-radius:8px;cursor:pointer;font-size:17px;line-height:1;
+  }
+  #notif-badge{
+    position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 3px;
+    background:var(--rust);color:#fff;border-radius:9px;font-size:10px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--dam);
+  }
+  body.spectator-mode #notif-bell{display:none !important;}
   .status-dot{
     display:inline-block;width:10px;height:10px;border-radius:50%;
     background:#9CA3AF;flex-shrink:0;
@@ -127,6 +138,7 @@
 
   @media (max-width: 640px){
     #nav-hamburger{display:flex;}
+    #notif-bell{right:60px;}
     nav.tabs{
       display:none;flex-direction:column;overflow-x:visible;
       box-shadow:0 8px 20px rgba(0,0,0,0.3);
@@ -384,6 +396,9 @@
 <div class="app">
   <header class="top">
     <h1>👌 PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
+    <button id="notif-bell" aria-label="Notifications" style="display:none;">
+      🔔<span id="notif-badge" style="display:none;"></span>
+    </button>
     <button id="nav-hamburger" aria-label="Menu" aria-expanded="false">
       <span></span><span></span><span></span>
     </button>
@@ -906,6 +921,15 @@
   <div class="modal-card wide">
     <div id="profile-body"></div>
     <button class="primary-btn" id="profile-close">Close</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="notif-modal">
+  <div class="modal-card">
+    <h3 style="margin-top:0;">Notifications</h3>
+    <button class="mini-btn" id="notif-mark-all-read" style="margin-bottom:10px;">Mark all as read</button>
+    <div id="notif-list"><div class="empty">No notifications yet.</div></div>
+    <button class="primary-btn" id="notif-close" style="margin-top:14px;">Close</button>
   </div>
 </div>
 
@@ -1572,6 +1596,7 @@ function renderAccountArea(){
   updateTimersVisibility();
   const adminTabBtn = document.getElementById('admin-tab-btn');
   if(adminTabBtn) adminTabBtn.style.display = isSuperUser() ? '' : 'none';
+  refreshNotifBadge();
 }
 
 function updateTimersVisibility(){
@@ -1839,6 +1864,56 @@ function isSuperUser(){
   return !!(mine && mine.is_admin);
 }
 
+// ---------- Notifications ----------
+async function createNotification(recipientUserId, type, message){
+  if(!recipientUserId) return; // recipient has no account, nothing to notify
+  try{
+    await sbPost('notifications', {id: uid(), recipient_user_id: recipientUserId, type, message});
+  }catch(e){ console.error('createNotification failed', e); }
+}
+async function loadMyNotifications(){
+  if(!isSignedIn()) return [];
+  try{
+    const rows = await sbGet('notifications?select=*&recipient_user_id=eq.'+session.user.id+'&order=created_at.desc&limit=50');
+    return rows;
+  }catch(e){ console.error(e); return []; }
+}
+async function refreshNotifBadge(){
+  const bell = document.getElementById('notif-bell');
+  const badge = document.getElementById('notif-badge');
+  if(!bell) return;
+  if(!isSignedIn()){ bell.style.display = 'none'; return; }
+  bell.style.display = 'block';
+  try{
+    const rows = await sbGet('notifications?select=id&recipient_user_id=eq.'+session.user.id+'&read=eq.false');
+    if(rows.length > 0){
+      badge.textContent = rows.length > 9 ? '9+' : String(rows.length);
+      badge.style.display = 'flex';
+    }else{
+      badge.style.display = 'none';
+    }
+  }catch(e){ console.error(e); }
+}
+async function renderNotifPanel(){
+  const el = document.getElementById('notif-list');
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  const rows = await loadMyNotifications();
+  if(rows.length === 0){ el.innerHTML = '<div class="empty">No notifications yet.</div>'; return; }
+  el.innerHTML = rows.map(n=>`
+    <div class="profile-catch" style="${n.read ? '' : 'border-left:3px solid var(--rust);'}">
+      <div class="pc-line">${escapeHtml(n.message)}</div>
+      <div class="pc-line muted">${formatTimeAgo(new Date(n.created_at).getTime())}</div>
+    </div>`).join('');
+  // Viewing the panel marks everything as read
+  const unreadIds = rows.filter(n=>!n.read).map(n=>n.id);
+  if(unreadIds.length){
+    try{
+      await sbPatch('notifications', 'id=in.('+unreadIds.join(',')+')', {read:true});
+      refreshNotifBadge();
+    }catch(e){ console.error(e); }
+  }
+}
+
 // Rods & Reels from the tackle box, offered as gear picks on the Timers tab.
 // Only loaded/shown for signed-in users — same visibility rule as the rest of the tackle box.
 let knownRodGear = [];
@@ -1879,6 +1954,11 @@ async function toggleFollow(fishermanId){
     }else{
       await sbPost('follows', {id: uid(), follower_user_id: session.user.id, followed_fisherman_id: fishermanId});
       followedIds.add(fishermanId);
+      const followedPerson = people.find(p=>p.id===fishermanId);
+      const myPerson = people.find(p=>p.user_id===session.user.id);
+      if(followedPerson && followedPerson.user_id){
+        createNotification(followedPerson.user_id, 'follow', `${myPerson ? myPerson.name : 'Someone'} started following you`);
+      }
     }
     clearDbError();
   }catch(e){ console.error(e); showDbError('Could not update follow.'); }
@@ -2925,6 +3005,14 @@ async function likeCurrentPhoto(catchId){
     clearDbError();
     showLekkerFlash();
     renderPhotoLike();
+    try{
+      const rows = await sbGet('catches?id=eq.'+catchId+'&select=fisherman_id');
+      const owner = rows[0] ? people.find(p=>p.id===rows[0].fisherman_id) : null;
+      if(owner && owner.user_id && !(isSignedIn() && owner.user_id === session.user.id)){
+        const liker = isSignedIn() ? people.find(p=>p.user_id===session.user.id) : null;
+        createNotification(owner.user_id, 'like', `${liker ? liker.name : 'Someone'} liked your catch photo`);
+      }
+    }catch(e){ console.error('like notification failed', e); }
   }catch(e){
     console.error(e);
     showDbError('Could not save like.');
@@ -3081,11 +3169,28 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
 });
 document.getElementById('angler-select').addEventListener('change', e=> setActivePerson(e.target.value));
 setInterval(renderTimers, 1000);
+setInterval(()=>{ if(isSignedIn()) refreshNotifBadge(); }, 60000);
 
 document.getElementById('nav-hamburger').addEventListener('click', ()=>{
   const nav = document.getElementById('nav-tabs');
   const isOpen = nav.classList.toggle('open');
   document.getElementById('nav-hamburger').setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+});
+
+document.getElementById('notif-bell').addEventListener('click', ()=>{
+  document.getElementById('notif-modal').classList.add('open');
+  renderNotifPanel();
+});
+document.getElementById('notif-close').addEventListener('click', ()=>{
+  document.getElementById('notif-modal').classList.remove('open');
+});
+document.getElementById('notif-mark-all-read').addEventListener('click', async ()=>{
+  if(!isSignedIn()) return;
+  try{
+    await sbPatch('notifications', 'recipient_user_id=eq.'+session.user.id+'&read=eq.false', {read:true});
+    refreshNotifBadge();
+    renderNotifPanel();
+  }catch(e){ console.error(e); }
 });
 
 // Profile (schedule)
@@ -3369,6 +3474,14 @@ async function loadChallenges(){
 async function deleteChallenge(id){ await sbDelete('challenges', 'id=eq.'+id); }
 async function addChallengeParticipant(challengeId, fishermanId){
   await sbPost('challenge_participants', {id: uid(), challenge_id: challengeId, fisherman_id: fishermanId});
+  try{
+    const angler = people.find(p=>p.id===fishermanId);
+    if(angler && angler.user_id){
+      const rows = await sbGet('challenges?id=eq.'+challengeId+'&select=name');
+      const chName = rows[0] ? rows[0].name : 'a challenge';
+      createNotification(angler.user_id, 'challenge_add', `You were added to the challenge "${chName}"`);
+    }
+  }catch(e){ console.error('challenge add notification failed', e); }
 }
 async function loadChallengeParticipants(challengeId){
   try{
@@ -3566,6 +3679,14 @@ document.getElementById('challenge-create-btn').addEventListener('click', async 
 async function insertCompetition(item){ await sbPost('competitions', item); }
 async function addCompetitionParticipant(competitionId, fishermanId){
   await sbPost('competition_participants', {id: uid(), competition_id: competitionId, fisherman_id: fishermanId});
+  try{
+    const angler = people.find(p=>p.id===fishermanId);
+    if(angler && angler.user_id){
+      const rows = await sbGet('competitions?id=eq.'+competitionId+'&select=name');
+      const compName = rows[0] ? rows[0].name : 'a competition';
+      createNotification(angler.user_id, 'competition_add', `You were added to the competition "${compName}"`);
+    }
+  }catch(e){ console.error('competition add notification failed', e); }
 }
 async function loadCompetitions(){
   try{
