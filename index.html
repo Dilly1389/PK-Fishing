@@ -76,6 +76,7 @@
     min-height:100vh;
     background:var(--paper);
     box-shadow:0 0 60px rgba(0,0,0,0.35);
+    position:relative;
   }
   header.top{
     background:linear-gradient(180deg,var(--dam) 0%,var(--dam-deep) 100%);
@@ -128,7 +129,6 @@
     #nav-hamburger{display:flex;}
     nav.tabs{
       display:none;flex-direction:column;overflow-x:visible;
-      position:absolute;left:0;right:0;top:100%;
       box-shadow:0 8px 20px rgba(0,0,0,0.3);
     }
     nav.tabs.open{display:flex;}
@@ -138,7 +138,6 @@
       border-left:3px solid transparent;
     }
     nav.tabs button.active{border-bottom-color:rgba(255,255,255,0.08);border-left-color:var(--rust);}
-    header.top{position:relative;}
   }
   .panel{display:none;}
   .panel.active{display:block;animation:fadein .25s ease;}
