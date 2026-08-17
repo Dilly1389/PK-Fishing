@@ -90,6 +90,13 @@
     display:flex;align-items:center;justify-content:center;gap:9px;
   }
   header.top p{margin:0;color:var(--khaki);font-size:13px;}
+  #nav-hamburger{
+    display:none;position:absolute;top:18px;right:14px;
+    width:38px;height:38px;border:none;background:rgba(255,255,255,0.12);
+    border-radius:8px;cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  }
+  #nav-hamburger span{display:block;width:20px;height:2px;background:#fff;border-radius:2px;transition:transform .2s ease,opacity .2s ease;}
+  body.spectator-mode #nav-hamburger{display:none !important;}
   .status-dot{
     display:inline-block;width:10px;height:10px;border-radius:50%;
     background:#9CA3AF;flex-shrink:0;
@@ -115,6 +122,23 @@
   .app-footer{
     text-align:center;font-size:11px;color:var(--muted);
     padding:14px 14px 20px;
+  }
+
+  @media (max-width: 640px){
+    #nav-hamburger{display:flex;}
+    nav.tabs{
+      display:none;flex-direction:column;overflow-x:visible;
+      position:absolute;left:0;right:0;top:100%;
+      box-shadow:0 8px 20px rgba(0,0,0,0.3);
+    }
+    nav.tabs.open{display:flex;}
+    nav.tabs button{
+      width:100%;text-align:left;padding:14px 18px;
+      border-bottom:1px solid rgba(255,255,255,0.08);
+      border-left:3px solid transparent;
+    }
+    nav.tabs button.active{border-bottom-color:rgba(255,255,255,0.08);border-left-color:var(--rust);}
+    header.top{position:relative;}
   }
   .panel{display:none;}
   .panel.active{display:block;animation:fadein .25s ease;}
@@ -360,10 +384,13 @@
 <div class="app">
   <header class="top">
     <h1>👌 PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
+    <button id="nav-hamburger" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
   </header>
   <div id="db-status"></div>
 
-  <nav class="tabs">
+  <nav class="tabs" id="nav-tabs">
     <button data-tab="timers" id="timers-tab-btn" style="display:none;">Timers</button>
     <button data-tab="schedule" class="active">Profile</button>
     <button data-tab="leaderboard">Leaderboard</button>
@@ -2607,28 +2634,23 @@ async function openProfile(personId){
       <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
       <div><b>${normalizeRodsCount((rec && rec.rods) || p.rods)}</b>rods</div>
     </div>`;
-  const pbCarpWeight = rec ? rec.pbCarpWeight : p.pb_carp_weight;
-  const pbCarpPhoto = rec ? rec.pbCarpPhoto : p.pb_carp_photo;
-  const pbBarbelWeight = rec ? rec.pbBarbelWeight : p.pb_barbel_weight;
-  const pbBarbelPhoto = rec ? rec.pbBarbelPhoto : p.pb_barbel_photo;
-  if(pbCarpWeight || pbBarbelWeight){
-    html += `<p class="sub-heading">Personal best</p><div class="row2" style="margin-bottom:14px;">`;
-    if(pbCarpWeight){
-      html += `<div class="profile-catch" style="flex:1;text-align:center;">
-          <div class="pc-head">Carp</div>
-          <div class="pc-line"><b>${pbCarpWeight}kg</b></div>
-          ${pbCarpPhoto ? `<img class="pc-photo" src="${pbCarpPhoto}" alt="Personal best carp" style="width:100%;height:90px;object-fit:cover;">` : ''}
-        </div>`;
-    }
-    if(pbBarbelWeight){
-      html += `<div class="profile-catch" style="flex:1;text-align:center;">
-          <div class="pc-head">Catfish (Barbel)</div>
-          <div class="pc-line"><b>${pbBarbelWeight}kg</b></div>
-          ${pbBarbelPhoto ? `<img class="pc-photo" src="${pbBarbelPhoto}" alt="Personal best barbel" style="width:100%;height:90px;object-fit:cover;">` : ''}
-        </div>`;
-    }
-    html += `</div>`;
-  }
+  const TROPHY_SPECIES = ['Carp','Mirror Carp','Grass Carp','Barbel','Yellowfish'];
+  const speciesStats = TROPHY_SPECIES.map(species=>{
+    const matches = caughtOnly.filter(c=>c.type===species);
+    const pb = matches.reduce((best,c)=> (!best || (c.weight||0) > (best.weight||0)) ? c : best, null);
+    return {species, count: matches.length, pb};
+  });
+  html += `<p class="sub-heading">My Logbook</p>`;
+  html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">` +
+    speciesStats.map(s=>`
+      <div class="profile-catch" style="flex:1;min-width:105px;text-align:center;">
+        <div class="pc-head">${escapeHtml(s.species)}</div>
+        <div class="pc-line"><b>${s.count}</b> caught</div>
+        ${s.pb ? `<button type="button" class="mini-btn pb-toggle-btn" data-pb-catch="${s.pb.id}" style="margin-top:6px;">PB: ${s.pb.weight}kg</button>` : ''}
+      </div>
+    `).join('') +
+    `</div>`;
+  html += `<div id="pb-detail-area" style="margin-bottom:14px;"></div>`;
   if(photoEntries.length){
     html += `<p class="sub-heading">Photos (${photoEntries.length})</p>`;
     if(photoTypes.length > 1){
@@ -2645,6 +2667,22 @@ async function openProfile(personId){
   html += catches.length ? catches.map(catchDetailHtml).join('') : '<div class="empty">No entries logged yet.</div>';
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
+
+  document.querySelectorAll('.pb-toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const catchId = btn.dataset.pbCatch;
+      const detailArea = document.getElementById('pb-detail-area');
+      if(detailArea.dataset.currentId === catchId){
+        detailArea.innerHTML = '';
+        detailArea.dataset.currentId = '';
+        return;
+      }
+      const c = caughtOnly.find(x=>x.id===catchId);
+      if(!c) return;
+      detailArea.innerHTML = catchDetailHtml(c);
+      detailArea.dataset.currentId = catchId;
+    });
+  });
 
   const followBtn = document.getElementById('profile-follow-btn');
   if(followBtn){
@@ -3021,6 +3059,9 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+    document.getElementById('nav-tabs').classList.remove('open');
+    document.getElementById('nav-hamburger').setAttribute('aria-expanded', 'false');
+    window.scrollTo({top: 0, behavior: 'smooth'});
     if(btn.dataset.tab==='timers') updateTimersVisibility();
     if(btn.dataset.tab==='leaderboard') renderLeaderboard();
     if(btn.dataset.tab==='feed') renderFeed();
@@ -3040,6 +3081,12 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
 });
 document.getElementById('angler-select').addEventListener('change', e=> setActivePerson(e.target.value));
 setInterval(renderTimers, 1000);
+
+document.getElementById('nav-hamburger').addEventListener('click', ()=>{
+  const nav = document.getElementById('nav-tabs');
+  const isOpen = nav.classList.toggle('open');
+  document.getElementById('nav-hamburger').setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+});
 
 // Profile (schedule)
 // Leaderboard
