@@ -1865,10 +1865,13 @@ function isSuperUser(){
 }
 
 // ---------- Notifications ----------
-async function createNotification(recipientUserId, type, message){
+async function createNotification(recipientUserId, type, message, targetType, targetId){
   if(!recipientUserId) return; // recipient has no account, nothing to notify
   try{
-    await sbPost('notifications', {id: uid(), recipient_user_id: recipientUserId, type, message});
+    await sbPost('notifications', {
+      id: uid(), recipient_user_id: recipientUserId, type, message,
+      target_type: targetType || null, target_id: targetId || null
+    });
   }catch(e){ console.error('createNotification failed', e); }
 }
 async function loadMyNotifications(){
@@ -1900,10 +1903,14 @@ async function renderNotifPanel(){
   const rows = await loadMyNotifications();
   if(rows.length === 0){ el.innerHTML = '<div class="empty">No notifications yet.</div>'; return; }
   el.innerHTML = rows.map(n=>`
-    <div class="profile-catch" style="${n.read ? '' : 'border-left:3px solid var(--rust);'}">
+    <div class="profile-catch notif-item" data-notif-id="${n.id}" style="${n.read ? '' : 'border-left:3px solid var(--rust);'}${n.target_type ? 'cursor:pointer;' : ''}">
       <div class="pc-line">${escapeHtml(n.message)}</div>
       <div class="pc-line muted">${formatTimeAgo(new Date(n.created_at).getTime())}</div>
     </div>`).join('');
+  el.querySelectorAll('.notif-item').forEach(div=>{
+    const n = rows.find(x=>x.id===div.dataset.notifId);
+    if(n && n.target_type) div.addEventListener('click', ()=> goToNotificationTarget(n));
+  });
   // Viewing the panel marks everything as read
   const unreadIds = rows.filter(n=>!n.read).map(n=>n.id);
   if(unreadIds.length){
@@ -1911,6 +1918,36 @@ async function renderNotifPanel(){
       await sbPatch('notifications', 'id=in.('+unreadIds.join(',')+')', {read:true});
       refreshNotifBadge();
     }catch(e){ console.error(e); }
+  }
+}
+
+function switchToTab(tabName){
+  const btn = document.querySelector('nav.tabs button[data-tab="'+tabName+'"]');
+  if(btn) btn.click();
+}
+
+async function goToNotificationTarget(n){
+  document.getElementById('notif-modal').classList.remove('open');
+  if(!n.target_type || !n.target_id) return;
+  if(n.target_type === 'profile'){
+    openProfile(n.target_id);
+  }else if(n.target_type === 'catch'){
+    try{
+      const rows = await sbGet('catches?id=eq.'+n.target_id+'&select=photos,photo');
+      if(rows[0]){
+        const photos = rows[0].photos
+          ? (typeof rows[0].photos === 'string' ? JSON.parse(rows[0].photos) : rows[0].photos)
+          : (rows[0].photo ? [rows[0].photo] : []);
+        if(photos.length){
+          photoGalleryCache[n.target_id] = photos;
+          openPhotoModal(photos[0], n.target_id, 0);
+        }
+      }
+    }catch(e){ console.error(e); }
+  }else if(n.target_type === 'competitions'){
+    switchToTab('competitions');
+  }else if(n.target_type === 'challenges'){
+    switchToTab('challenges');
   }
 }
 
@@ -1957,7 +1994,7 @@ async function toggleFollow(fishermanId){
       const followedPerson = people.find(p=>p.id===fishermanId);
       const myPerson = people.find(p=>p.user_id===session.user.id);
       if(followedPerson && followedPerson.user_id){
-        createNotification(followedPerson.user_id, 'follow', `${myPerson ? myPerson.name : 'Someone'} started following you`);
+        createNotification(followedPerson.user_id, 'follow', `${myPerson ? myPerson.name : 'Someone'} started following you`, 'profile', myPerson ? myPerson.id : null);
       }
     }
     clearDbError();
@@ -3011,7 +3048,7 @@ async function likeCurrentPhoto(catchId){
       const owner = rows[0] ? people.find(p=>p.id===rows[0].fisherman_id) : null;
       if(owner && owner.user_id && !(isSignedIn() && owner.user_id === session.user.id)){
         const liker = isSignedIn() ? people.find(p=>p.user_id===session.user.id) : null;
-        createNotification(owner.user_id, 'like', `${liker ? liker.name : 'Someone'} liked your catch photo`);
+        createNotification(owner.user_id, 'like', `${liker ? liker.name : 'Someone'} liked your catch photo`, 'catch', catchId);
       }
     }catch(e){ console.error('like notification failed', e); }
   }catch(e){
@@ -3480,7 +3517,7 @@ async function addChallengeParticipant(challengeId, fishermanId){
     if(angler && angler.user_id){
       const rows = await sbGet('challenges?id=eq.'+challengeId+'&select=name');
       const chName = rows[0] ? rows[0].name : 'a challenge';
-      createNotification(angler.user_id, 'challenge_add', `You were added to the challenge "${chName}"`);
+      createNotification(angler.user_id, 'challenge_add', `You were added to the challenge "${chName}"`, 'challenges', challengeId);
     }
   }catch(e){ console.error('challenge add notification failed', e); }
 }
@@ -3685,7 +3722,7 @@ async function addCompetitionParticipant(competitionId, fishermanId){
     if(angler && angler.user_id){
       const rows = await sbGet('competitions?id=eq.'+competitionId+'&select=name');
       const compName = rows[0] ? rows[0].name : 'a competition';
-      createNotification(angler.user_id, 'competition_add', `You were added to the competition "${compName}"`);
+      createNotification(angler.user_id, 'competition_add', `You were added to the competition "${compName}"`, 'competitions', competitionId);
     }
   }catch(e){ console.error('competition add notification failed', e); }
 }
