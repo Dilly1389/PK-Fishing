@@ -798,7 +798,8 @@
           <div class="row2">
             <div class="field">
               <label>Name</label>
-              <input type="text" id="tackle-name" placeholder="e.g. Size 6 Barbel hook">
+              <input type="text" id="tackle-name" list="tackle-name-suggestions" placeholder="e.g. Size 6 Barbel hook">
+              <datalist id="tackle-name-suggestions"></datalist>
             </div>
             <div class="field">
               <label>Category</label>
@@ -2054,6 +2055,40 @@ async function shareTackleItemWith(tackleItemId, userIds){
   const rows = userIds.map(uidVal=>({id: uid(), tackle_item_id: tackleItemId, shared_with_user_id: uidVal}));
   await sbPost('tackle_item_shares', rows);
 }
+async function loadTackleItemShareUserIds(tackleItemId){
+  try{
+    const rows = await sbGet('tackle_item_shares?select=shared_with_user_id&tackle_item_id=eq.'+tackleItemId);
+    return rows.map(r=>r.shared_with_user_id);
+  }catch(e){ console.error(e); return []; }
+}
+async function unshareTackleItemWith(tackleItemId, userId){
+  await sbDelete('tackle_item_shares', 'tackle_item_id=eq.'+tackleItemId+'&shared_with_user_id=eq.'+userId);
+}
+async function renderTackleItemShareManager(itemId, containerEl){
+  const friends = getMutualFriends();
+  if(friends.length === 0){
+    containerEl.innerHTML = '<div class="empty">No mutual friends yet — you both need to follow each other.</div>';
+    return;
+  }
+  const currentShares = new Set(await loadTackleItemShareUserIds(itemId));
+  containerEl.innerHTML = friends.map(p=>`
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;">
+      <input type="checkbox" class="tackle-manage-share-check" data-item="${itemId}" data-user="${p.user_id}" ${currentShares.has(p.user_id) ? 'checked' : ''}> ${escapeHtml(p.name)}
+    </label>`).join('');
+  containerEl.querySelectorAll('.tackle-manage-share-check').forEach(cb=>{
+    cb.addEventListener('change', async ()=>{
+      cb.disabled = true;
+      try{
+        if(cb.checked){
+          await shareTackleItemWith(cb.dataset.item, [cb.dataset.user]);
+        }else{
+          await unshareTackleItemWith(cb.dataset.item, cb.dataset.user);
+        }
+      }catch(e){ console.error(e); cb.checked = !cb.checked; }
+      cb.disabled = false;
+    });
+  });
+}
 function renderTackleSharePicker(){
   const el = document.getElementById('tackle-share-picker');
   if(!el) return;
@@ -2156,11 +2191,19 @@ document.getElementById('tackle-filter-baittype').addEventListener('change', ren
 
 let tackleItemsCache = [];
 
+function renderTackleNameSuggestions(){
+  const list = document.getElementById('tackle-name-suggestions');
+  if(!list) return;
+  const names = [...new Set(tackleItemsCache.map(it=>it.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  list.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
+}
+
 async function renderTackleList(){
   const el = document.getElementById('tackle-list');
   if(!el) return;
   el.innerHTML = '<div class="empty">Loading...</div>';
   tackleItemsCache = await loadTackleItems();
+  renderTackleNameSuggestions();
 
   const catFilter = document.getElementById('tackle-filter-category').value;
   const baitTypeFilter = document.getElementById('tackle-filter-baittype').value;
@@ -2193,12 +2236,29 @@ async function renderTackleList(){
         <div class="actions">
           ${it.notes ? `<span style="font-size:12px;color:var(--muted);margin-right:6px;">${escapeHtml(it.notes)}</span>` : ''}
           ${it.has_photo ? `<button class="mini-btn" data-tackle-photo="${it.id}">📷</button>` : ''}
+          ${isMine ? `<button class="mini-btn" data-tackle-manage-share="${it.id}">Share</button>` : ''}
           ${canRemove ? `<button class="mini-btn danger" data-tackle-remove="${it.id}">Remove</button>` : ''}
         </div>
+        ${isMine ? `<div class="tackle-share-manager" data-item="${it.id}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
       </li>`;
     }).join('');
     return `<h2 style="font-size:14px;color:var(--khaki);margin:14px 0 6px;">${escapeHtml(cat)}</h2><ul class="people-list">${rows}</ul>`;
   }).join('');
+  el.querySelectorAll('[data-tackle-manage-share]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const itemId = btn.dataset.tackleManageShare;
+      const manager = el.querySelector('.tackle-share-manager[data-item="'+itemId+'"]');
+      if(!manager) return;
+      const isOpen = manager.style.display !== 'none';
+      if(isOpen){
+        manager.style.display = 'none';
+      }else{
+        manager.style.display = 'block';
+        manager.innerHTML = '<div class="empty">Loading...</div>';
+        await renderTackleItemShareManager(itemId, manager);
+      }
+    });
+  });
   el.querySelectorAll('[data-tackle-remove]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       await deleteTackleItem(btn.dataset.tackleRemove);
