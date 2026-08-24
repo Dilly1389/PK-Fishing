@@ -837,9 +837,10 @@
             <label>Photo (optional)</label>
             <input type="file" accept="image/*" id="tackle-photo">
           </div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:12px;">
-            <input type="checkbox" id="tackle-shared"> Share with everyone (otherwise private to you)
-          </label>
+          <div class="field">
+            <label>Share with friends (mutual follows only)</label>
+            <div id="tackle-share-picker"><div class="empty">No mutual friends yet — you both need to follow each other.</div></div>
+          </div>
           <button class="primary-btn" id="tackle-add-btn">Add to tackle box</button>
           <div class="status" id="tackle-status"></div>
         </section>
@@ -1969,6 +1970,7 @@ async function loadGearOptions(){
 
 // ---------- Following (signed-in only) ----------
 let followedIds = new Set();
+let myFollowerUserIds = new Set();
 
 function getMyFishermanId(){
   if(!isSignedIn()) return null;
@@ -1978,11 +1980,24 @@ function getMyFishermanId(){
 
 async function loadFollowedIds(){
   followedIds = new Set();
+  myFollowerUserIds = new Set();
   if(!isSignedIn()) return;
   try{
     const rows = await sbGet('follows?select=followed_fisherman_id&follower_user_id=eq.'+session.user.id);
     followedIds = new Set(rows.map(r=>r.followed_fisherman_id));
   }catch(e){ console.error('loadFollowedIds failed', e); }
+  const myId = getMyFishermanId();
+  if(myId){
+    try{
+      const rows = await sbGet('follows?select=follower_user_id&followed_fisherman_id=eq.'+myId);
+      myFollowerUserIds = new Set(rows.map(r=>r.follower_user_id));
+    }catch(e){ console.error('loadMyFollowers failed', e); }
+  }
+}
+
+// People you follow who also follow you back
+function getMutualFriends(){
+  return people.filter(p => followedIds.has(p.id) && p.user_id && myFollowerUserIds.has(p.user_id));
 }
 
 async function toggleFollow(fishermanId){
@@ -2033,6 +2048,24 @@ async function loadTackleItems(){
 }
 async function insertTackleItem(item){
   await sbPost('tackle_items', item);
+}
+async function shareTackleItemWith(tackleItemId, userIds){
+  if(!userIds.length) return;
+  const rows = userIds.map(uidVal=>({id: uid(), tackle_item_id: tackleItemId, shared_with_user_id: uidVal}));
+  await sbPost('tackle_item_shares', rows);
+}
+function renderTackleSharePicker(){
+  const el = document.getElementById('tackle-share-picker');
+  if(!el) return;
+  const friends = getMutualFriends();
+  if(friends.length === 0){
+    el.innerHTML = '<div class="empty">No mutual friends yet — you both need to follow each other.</div>';
+    return;
+  }
+  el.innerHTML = friends.map(p=>`
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;">
+      <input type="checkbox" class="tackle-share-check" value="${p.user_id}"> ${escapeHtml(p.name)}
+    </label>`).join('');
 }
 async function deleteTackleItem(id){
   await sbDelete('tackle_items', 'id=eq.'+id);
@@ -2147,7 +2180,9 @@ async function renderTackleList(){
     const rows = byCategory[cat].map(it=>{
       const baitTag = it.bait_type ? `<span class="pill" style="background:var(--khaki);color:var(--ink);">${escapeHtml(it.bait_type)}</span>` : '';
       const isMine = isSignedIn() && it.owner_user_id === session.user.id;
-      const sharedTag = it.is_shared ? `<span class="pill">Shared</span>` : (isMine ? `<span class="pill" style="opacity:0.6;">Private</span>` : '');
+      const sharedTag = isMine
+        ? (it.is_shared ? `<span class="pill">Shared with everyone</span>` : `<span class="pill" style="opacity:0.6;">Private</span>`)
+        : `<span class="pill">Shared with you</span>`;
       const canRemove = isMine || isSuperUser();
       return `<li>
         <div class="who">
@@ -2183,7 +2218,6 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   const baitTypeEl = document.getElementById('tackle-baittype');
   const notesEl = document.getElementById('tackle-notes');
   const photoEl = document.getElementById('tackle-photo');
-  const sharedEl = document.getElementById('tackle-shared');
   const st = document.getElementById('tackle-status');
   const name = nameEl.value.trim();
   if(!name){ st.textContent = 'Enter a name.'; return; }
@@ -2195,8 +2229,9 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
       // Small thumbnail only — this is reference data, not a showcase photo
       photo = await resizeImageFile(photoEl.files[0], 240, 0.6);
     }
+    const newItemId = uid();
     await insertTackleItem({
-      id: uid(),
+      id: newItemId,
       name,
       category: catEl.value,
       bait_type: catEl.value === 'Bait' ? (baitTypeEl.value || null) : null,
@@ -2204,13 +2239,15 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
       photo,
       has_photo: !!photo,
       owner_user_id: session.user.id,
-      is_shared: sharedEl.checked
+      is_shared: false
     });
+    const selectedFriendIds = Array.from(document.querySelectorAll('.tackle-share-check:checked')).map(cb=>cb.value);
+    await shareTackleItemWith(newItemId, selectedFriendIds);
     nameEl.value = '';
     notesEl.value = '';
     photoEl.value = '';
     baitTypeEl.value = '';
-    sharedEl.checked = false;
+    document.querySelectorAll('.tackle-share-check').forEach(cb=> cb.checked = false);
     document.getElementById('tackle-baittype-wrap').style.display = 'none';
     st.textContent = 'Added.';
     setTimeout(()=> st.textContent='', 1200);
@@ -3209,6 +3246,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
       updateTackleVisibility();
       if(isSignedIn()){
         renderTackleList();
+        renderTackleSharePicker();
         const hookSel = document.getElementById('rig-hook-count');
         if(hookSel && !hookSel.options.length) hookSel.innerHTML = hookCountOptionsHtml(2);
         renderRigsList();
