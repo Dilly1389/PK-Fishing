@@ -837,6 +837,9 @@
             <label>Photo (optional)</label>
             <input type="file" accept="image/*" id="tackle-photo">
           </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:12px;">
+            <input type="checkbox" id="tackle-shared"> Share with everyone (otherwise private to you)
+          </label>
           <button class="primary-btn" id="tackle-add-btn">Add to tackle box</button>
           <div class="status" id="tackle-status"></div>
         </section>
@@ -2023,7 +2026,7 @@ function updateTackleVisibility(){
 async function loadTackleItems(){
   try{
     // Keep the list fetch light: never pull the photo blob here, only whether one exists
-    const rows = await sbGet('tackle_items?select=id,name,category,bait_type,notes,has_photo&order=category.asc,name.asc');
+    const rows = await sbGet('tackle_items?select=id,name,category,bait_type,notes,has_photo,owner_user_id,is_shared&order=category.asc,name.asc');
     clearDbError();
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
@@ -2143,15 +2146,19 @@ async function renderTackleList(){
   el.innerHTML = catNames.map(cat=>{
     const rows = byCategory[cat].map(it=>{
       const baitTag = it.bait_type ? `<span class="pill" style="background:var(--khaki);color:var(--ink);">${escapeHtml(it.bait_type)}</span>` : '';
+      const isMine = isSignedIn() && it.owner_user_id === session.user.id;
+      const sharedTag = it.is_shared ? `<span class="pill">Shared</span>` : (isMine ? `<span class="pill" style="opacity:0.6;">Private</span>` : '');
+      const canRemove = isMine || isSuperUser();
       return `<li>
         <div class="who">
           <b>${escapeHtml(it.name)}</b>
           ${baitTag}
+          ${sharedTag}
         </div>
         <div class="actions">
           ${it.notes ? `<span style="font-size:12px;color:var(--muted);margin-right:6px;">${escapeHtml(it.notes)}</span>` : ''}
           ${it.has_photo ? `<button class="mini-btn" data-tackle-photo="${it.id}">📷</button>` : ''}
-          <button class="mini-btn danger" data-tackle-remove="${it.id}">Remove</button>
+          ${canRemove ? `<button class="mini-btn danger" data-tackle-remove="${it.id}">Remove</button>` : ''}
         </div>
       </li>`;
     }).join('');
@@ -2176,9 +2183,11 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   const baitTypeEl = document.getElementById('tackle-baittype');
   const notesEl = document.getElementById('tackle-notes');
   const photoEl = document.getElementById('tackle-photo');
+  const sharedEl = document.getElementById('tackle-shared');
   const st = document.getElementById('tackle-status');
   const name = nameEl.value.trim();
   if(!name){ st.textContent = 'Enter a name.'; return; }
+  if(!isSignedIn()){ st.textContent = 'You need to be signed in.'; return; }
   st.textContent = 'Adding...';
   try{
     let photo = null;
@@ -2193,12 +2202,15 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
       bait_type: catEl.value === 'Bait' ? (baitTypeEl.value || null) : null,
       notes: notesEl.value.trim(),
       photo,
-      has_photo: !!photo
+      has_photo: !!photo,
+      owner_user_id: session.user.id,
+      is_shared: sharedEl.checked
     });
     nameEl.value = '';
     notesEl.value = '';
     photoEl.value = '';
     baitTypeEl.value = '';
+    sharedEl.checked = false;
     document.getElementById('tackle-baittype-wrap').style.display = 'none';
     st.textContent = 'Added.';
     setTimeout(()=> st.textContent='', 1200);
