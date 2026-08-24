@@ -888,6 +888,10 @@
             <label>Type of rig</label>
             <input type="text" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo...">
           </div>
+          <div class="field">
+            <label>Brand (optional)</label>
+            <input type="text" id="rig-brand" placeholder="e.g. Korda, Gardner, ESP...">
+          </div>
           <div class="row2">
             <div class="field">
               <label>Bom</label>
@@ -2122,7 +2126,7 @@ async function deleteRig(id){ await sbDelete('rigs', 'id=eq.'+id); }
 async function loadRigsFull(){
   try{
     // Keep the list fetch light: never pull the photo blob here, only whether one exists
-    const rows = await sbGet('rigs?select=id,name,uses_bom,hook_count,creator_user_id,has_photo&order=name.asc');
+    const rows = await sbGet('rigs?select=id,name,brand,uses_bom,hook_count,creator_user_id,has_photo&order=name.asc');
     clearDbError();
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
@@ -2144,6 +2148,7 @@ async function renderRigsList(){
     return `<li>
       <div class="who">
         <b>${escapeHtml(r.name)}</b>
+        ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
         <span class="pill">Bom: ${r.uses_bom ? 'Yes' : 'No'}</span>
         <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
       </div>
@@ -2168,6 +2173,7 @@ async function renderRigsList(){
 }
 document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
   const nameEl = document.getElementById('rig-name');
+  const brandEl = document.getElementById('rig-brand');
   const bomEl = document.getElementById('rig-uses-bom');
   const hookEl = document.getElementById('rig-hook-count');
   const photoEl = document.getElementById('rig-photo');
@@ -2183,6 +2189,7 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
     await insertRig({
       id: uid(),
       name,
+      brand: brandEl.value.trim() || null,
       uses_bom: bomEl.value === 'yes',
       hook_count: parseInt(hookEl.value, 10) || 2,
       creator_user_id: isSignedIn() ? session.user.id : null,
@@ -2190,6 +2197,7 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
       has_photo: !!photo
     });
     nameEl.value = '';
+    brandEl.value = '';
     bomEl.value = 'no';
     photoEl.value = '';
     st.textContent = 'Created.';
