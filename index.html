@@ -901,6 +901,10 @@
               <select id="rig-hook-count"></select>
             </div>
           </div>
+          <div class="field">
+            <label>Photo (optional)</label>
+            <input type="file" accept="image/*" id="rig-photo">
+          </div>
           <button class="primary-btn" id="rig-create-btn">Create rig</button>
           <div class="status" id="rig-create-status"></div>
           <div id="rigs-list" style="margin-top:14px;"><div class="empty">No rigs built yet.</div></div>
@@ -1021,7 +1025,7 @@ const SUPABASE_URL = 'https://quptwbxzstepwfeffljq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_nnO3ZffPD-r08e4E1rjcPQ_47mGq7Xu';
 
 const MAX_RODS = 10;
-const MAX_HOOKS = 3;
+const MAX_HOOKS = 6;
 const RODS = Array.from({length: MAX_RODS}, (_, i) => 'rod' + (i+1));
 const RID_LABEL = {};
 RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
@@ -2117,10 +2121,17 @@ async function insertRig(item){ await sbPost('rigs', item); }
 async function deleteRig(id){ await sbDelete('rigs', 'id=eq.'+id); }
 async function loadRigsFull(){
   try{
-    const rows = await sbGet('rigs?select=*&order=name.asc');
+    // Keep the list fetch light: never pull the photo blob here, only whether one exists
+    const rows = await sbGet('rigs?select=id,name,uses_bom,hook_count,creator_user_id,has_photo&order=name.asc');
     clearDbError();
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
+}
+async function viewRigPhoto(id){
+  try{
+    const rows = await sbGet('rigs?id=eq.'+id+'&select=photo');
+    if(rows[0] && rows[0].photo){ openPhotoModal(rows[0].photo, null); }
+  }catch(e){ console.error(e); showDbError('Could not load photo.'); }
 }
 async function renderRigsList(){
   const el = document.getElementById('rigs-list');
@@ -2137,6 +2148,7 @@ async function renderRigsList(){
         <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
       </div>
       <div class="actions">
+        ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}">📷</button>` : ''}
         ${canDelete ? `<button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>` : ''}
       </div>
     </li>`;
@@ -2150,25 +2162,36 @@ async function renderRigsList(){
       if(currentPerson) renderAll();
     });
   });
+  el.querySelectorAll('[data-rig-photo]').forEach(btn=>{
+    btn.addEventListener('click', ()=> viewRigPhoto(btn.dataset.rigPhoto));
+  });
 }
 document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
   const nameEl = document.getElementById('rig-name');
   const bomEl = document.getElementById('rig-uses-bom');
   const hookEl = document.getElementById('rig-hook-count');
+  const photoEl = document.getElementById('rig-photo');
   const st = document.getElementById('rig-create-status');
   const name = nameEl.value.trim();
   if(!name){ st.textContent = 'Enter a type of rig.'; return; }
   st.textContent = 'Creating...';
   try{
+    let photo = null;
+    if(photoEl.files[0]){
+      photo = await resizeImageFile(photoEl.files[0], 480, 0.7);
+    }
     await insertRig({
       id: uid(),
       name,
       uses_bom: bomEl.value === 'yes',
       hook_count: parseInt(hookEl.value, 10) || 2,
-      creator_user_id: isSignedIn() ? session.user.id : null
+      creator_user_id: isSignedIn() ? session.user.id : null,
+      photo,
+      has_photo: !!photo
     });
     nameEl.value = '';
     bomEl.value = 'no';
+    photoEl.value = '';
     st.textContent = 'Created.';
     setTimeout(()=> st.textContent='', 1200);
     await loadKnownRigs();
