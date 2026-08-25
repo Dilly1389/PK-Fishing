@@ -842,6 +842,9 @@
             <label>Share with friends (mutual follows only)</label>
             <div id="tackle-share-picker"><div class="empty">No mutual friends yet — you both need to follow each other.</div></div>
           </div>
+          <label id="tackle-shared-everyone-wrap" style="display:none;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:12px;">
+            <input type="checkbox" id="tackle-shared-everyone"> Share with everyone (admin only)
+          </label>
           <button class="primary-btn" id="tackle-add-btn">Add to tackle box</button>
           <div class="status" id="tackle-status"></div>
         </section>
@@ -1134,7 +1137,6 @@ function buildRodOptionsHtml(options){
 function buildRigOptionsHtml(){
   let html = '<option value="">None</option>';
   knownRigsFull.forEach(r=>{ html += `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`; });
-  html += '<option value="__other__">+ Add new...</option>';
   return html;
 }
 
@@ -2074,15 +2076,40 @@ async function unshareTackleItemWith(tackleItemId, userId){
 }
 async function renderTackleItemShareManager(itemId, containerEl){
   const friends = getMutualFriends();
-  if(friends.length === 0){
-    containerEl.innerHTML = '<div class="empty">No mutual friends yet — you both need to follow each other.</div>';
-    return;
-  }
   const currentShares = new Set(await loadTackleItemShareUserIds(itemId));
-  containerEl.innerHTML = friends.map(p=>`
-    <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;">
-      <input type="checkbox" class="tackle-manage-share-check" data-item="${itemId}" data-user="${p.user_id}" ${currentShares.has(p.user_id) ? 'checked' : ''}> ${escapeHtml(p.name)}
-    </label>`).join('');
+
+  let everyoneHtml = '';
+  if(isSuperUser()){
+    let isCurrentlyShared = false;
+    try{
+      const rows = await sbGet('tackle_items?id=eq.'+itemId+'&select=is_shared');
+      isCurrentlyShared = !!(rows[0] && rows[0].is_shared);
+    }catch(e){ console.error(e); }
+    everyoneHtml = `<label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;border-bottom:1px solid var(--line);margin-bottom:6px;">
+      <input type="checkbox" id="tackle-manage-everyone-${itemId}" data-item="${itemId}" ${isCurrentlyShared ? 'checked' : ''}> Share with everyone (admin only)
+    </label>`;
+  }
+
+  const friendsHtml = friends.length === 0
+    ? '<div class="empty">No mutual friends yet — you both need to follow each other.</div>'
+    : friends.map(p=>`
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;">
+          <input type="checkbox" class="tackle-manage-share-check" data-item="${itemId}" data-user="${p.user_id}" ${currentShares.has(p.user_id) ? 'checked' : ''}> ${escapeHtml(p.name)}
+        </label>`).join('');
+
+  containerEl.innerHTML = everyoneHtml + friendsHtml;
+
+  const everyoneCb = document.getElementById('tackle-manage-everyone-'+itemId);
+  if(everyoneCb){
+    everyoneCb.addEventListener('change', async ()=>{
+      everyoneCb.disabled = true;
+      try{
+        await sbPatch('tackle_items', 'id=eq.'+itemId, {is_shared: everyoneCb.checked});
+        renderTackleList();
+      }catch(e){ console.error(e); everyoneCb.checked = !everyoneCb.checked; }
+      everyoneCb.disabled = false;
+    });
+  }
   containerEl.querySelectorAll('.tackle-manage-share-check').forEach(cb=>{
     cb.addEventListener('change', async ()=>{
       cb.disabled = true;
@@ -2100,6 +2127,8 @@ async function renderTackleItemShareManager(itemId, containerEl){
 function renderTackleSharePicker(){
   const el = document.getElementById('tackle-share-picker');
   if(!el) return;
+  const everyoneWrap = document.getElementById('tackle-shared-everyone-wrap');
+  if(everyoneWrap) everyoneWrap.style.display = isSuperUser() ? 'flex' : 'none';
   const friends = getMutualFriends();
   if(friends.length === 0){
     el.innerHTML = '<div class="empty">No mutual friends yet — you both need to follow each other.</div>';
@@ -2144,7 +2173,7 @@ async function renderRigsList(){
   const rigs = await loadRigsFull();
   if(rigs.length===0){ el.innerHTML = '<div class="empty">No rigs built yet.</div>'; return; }
   const rows = rigs.map(r=>{
-    const canDelete = isSuperUser() || (isSignedIn() && session.user.id === r.creator_user_id);
+    const canManage = isSuperUser() || (isSignedIn() && session.user.id === r.creator_user_id);
     return `<li>
       <div class="who">
         <b>${escapeHtml(r.name)}</b>
@@ -2154,8 +2183,10 @@ async function renderRigsList(){
       </div>
       <div class="actions">
         ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}">📷</button>` : ''}
-        ${canDelete ? `<button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>` : ''}
+        ${canManage ? `<button class="mini-btn" data-rig-edit="${r.id}">Edit</button>` : ''}
+        ${canManage ? `<button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>` : ''}
       </div>
+      ${canManage ? `<div class="rig-edit-manager" data-rig="${r.id}" data-hooks="${r.hook_count}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
     </li>`;
   }).join('');
   el.innerHTML = '<ul class="people-list">' + rows + '</ul>';
@@ -2169,6 +2200,41 @@ async function renderRigsList(){
   });
   el.querySelectorAll('[data-rig-photo]').forEach(btn=>{
     btn.addEventListener('click', ()=> viewRigPhoto(btn.dataset.rigPhoto));
+  });
+  el.querySelectorAll('[data-rig-edit]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rigId = btn.dataset.rigEdit;
+      const manager = el.querySelector('.rig-edit-manager[data-rig="'+rigId+'"]');
+      if(!manager) return;
+      const isOpen = manager.style.display !== 'none';
+      if(isOpen){
+        manager.style.display = 'none';
+        return;
+      }
+      const currentHooks = parseInt(manager.dataset.hooks, 10) || 2;
+      manager.style.display = 'block';
+      manager.innerHTML = `
+        <div class="field">
+          <label>Number of hooks</label>
+          <select class="rig-edit-hook-select" data-rig="${rigId}">${hookCountOptionsHtml(currentHooks)}</select>
+        </div>
+        <button class="mini-btn" data-rig-save="${rigId}">Save</button>
+        <span class="pc-line muted">Only the hook count can be edited after a rig is created.</span>
+      `;
+      manager.querySelector('[data-rig-save]').addEventListener('click', async ()=>{
+        const sel = manager.querySelector('.rig-edit-hook-select');
+        const newCount = parseInt(sel.value, 10) || 2;
+        try{
+          await sbPatch('rigs', 'id=eq.'+rigId, {hook_count: newCount});
+          await loadKnownRigs();
+          renderRigsList();
+          if(currentPerson) renderAll();
+        }catch(e){
+          console.error(e);
+          alert('Could not save — check the Supabase connection.');
+        }
+      });
+    });
   });
 }
 document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
@@ -2258,6 +2324,7 @@ async function renderTackleList(){
         ? (it.is_shared ? `<span class="pill">Shared with everyone</span>` : `<span class="pill" style="opacity:0.6;">Private</span>`)
         : `<span class="pill">Shared with you</span>`;
       const canRemove = isMine || isSuperUser();
+      const canManageShare = isMine || isSuperUser();
       return `<li>
         <div class="who">
           <b>${escapeHtml(it.name)}</b>
@@ -2267,10 +2334,10 @@ async function renderTackleList(){
         <div class="actions">
           ${it.notes ? `<span style="font-size:12px;color:var(--muted);margin-right:6px;">${escapeHtml(it.notes)}</span>` : ''}
           ${it.has_photo ? `<button class="mini-btn" data-tackle-photo="${it.id}">📷</button>` : ''}
-          ${isMine ? `<button class="mini-btn" data-tackle-manage-share="${it.id}">Share</button>` : ''}
+          ${canManageShare ? `<button class="mini-btn" data-tackle-manage-share="${it.id}">Share</button>` : ''}
           ${canRemove ? `<button class="mini-btn danger" data-tackle-remove="${it.id}">Remove</button>` : ''}
         </div>
-        ${isMine ? `<div class="tackle-share-manager" data-item="${it.id}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
+        ${canManageShare ? `<div class="tackle-share-manager" data-item="${it.id}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
       </li>`;
     }).join('');
     return `<h2 style="font-size:14px;color:var(--khaki);margin:14px 0 6px;">${escapeHtml(cat)}</h2><ul class="people-list">${rows}</ul>`;
@@ -2309,6 +2376,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   const baitTypeEl = document.getElementById('tackle-baittype');
   const notesEl = document.getElementById('tackle-notes');
   const photoEl = document.getElementById('tackle-photo');
+  const everyoneEl = document.getElementById('tackle-shared-everyone');
   const st = document.getElementById('tackle-status');
   const name = nameEl.value.trim();
   if(!name){ st.textContent = 'Enter a name.'; return; }
@@ -2330,7 +2398,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
       photo,
       has_photo: !!photo,
       owner_user_id: session.user.id,
-      is_shared: false
+      is_shared: isSuperUser() && everyoneEl && everyoneEl.checked
     });
     const selectedFriendIds = Array.from(document.querySelectorAll('.tackle-share-check:checked')).map(cb=>cb.value);
     await shareTackleItemWith(newItemId, selectedFriendIds);
@@ -2338,6 +2406,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
     notesEl.value = '';
     photoEl.value = '';
     baitTypeEl.value = '';
+    if(everyoneEl) everyoneEl.checked = false;
     document.querySelectorAll('.tackle-share-check').forEach(cb=> cb.checked = false);
     document.getElementById('tackle-baittype-wrap').style.display = 'none';
     st.textContent = 'Added.';
@@ -2496,7 +2565,6 @@ function rodCardHtml(r){
       <div class="field">
         <label>Rig</label>
         <select class="rod-select" data-rod="${r}" data-key="rig">${buildRigOptionsHtml()}</select>
-        <input type="text" class="rod-field rod-select-other" data-rod="${r}" data-key="rig" placeholder="Describe the rig..." style="display:none;margin-top:6px;">
       </div>
       <div id="rig-fields-${r}"></div>
       <hr class="divider">
@@ -2540,7 +2608,10 @@ function rodCardHtml(r){
           <div class="catch-photo-preview" data-rod="${r}" style="display:none;"></div>
         </div>
       </div>
-      <button class="primary-btn log-catch-btn" data-rod="${r}" style="display:none;">Log entry</button>
+      <div class="row2">
+        <button class="mini-btn cancel-catch-btn" data-rod="${r}" style="display:none;">Cancel</button>
+        <button class="primary-btn log-catch-btn" data-rod="${r}" style="display:none;">Log entry</button>
+      </div>
       <div class="catch-list" data-rod="${r}" style="margin-top:10px;"></div>
     </section>`;
 }
@@ -2588,11 +2659,6 @@ function attachRodCardHandlers(){
       if(key === 'rig') renderRigFields(rod);
     });
   });
-  document.querySelectorAll('.rod-select-other[data-key="rig"]').forEach(inp=>{
-    inp.addEventListener('blur', ()=>{
-      renderRigFields(inp.dataset.rod);
-    });
-  });
   document.querySelectorAll('.rod-dot').forEach(inp=>{
     inp.addEventListener('change', async ()=>{
       if(!currentPerson) return;
@@ -2634,10 +2700,37 @@ function attachRodCardHandlers(){
       if(catchFieldsEl) catchFieldsEl.style.display = yes ? 'block' : 'none';
       const logBtn = document.querySelector('.log-catch-btn[data-rod="'+rod+'"]');
       if(logBtn) logBtn.style.display = yes ? 'block' : 'none';
+      const cancelBtn = document.querySelector('.cancel-catch-btn[data-rod="'+rod+'"]');
+      if(cancelBtn) cancelBtn.style.display = yes ? 'inline-block' : 'none';
       if(!yes){
         // No catch needs no extra detail — go straight to confirmation
         showConfirmation(buildCatchEntry(rod));
       }
+    });
+  });
+  document.querySelectorAll('.cancel-catch-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rod = btn.dataset.rod;
+      catchToggle[rod] = false;
+      document.querySelectorAll('.catch-toggle[data-rod="'+rod+'"] button').forEach(b=>{
+        b.classList.toggle('active', b.dataset.yn === 'no');
+      });
+      const catchFieldsEl = document.querySelector('.catch-fields[data-rod="'+rod+'"]');
+      if(catchFieldsEl) catchFieldsEl.style.display = 'none';
+      const logBtn = document.querySelector('.log-catch-btn[data-rod="'+rod+'"]');
+      if(logBtn) logBtn.style.display = 'none';
+      btn.style.display = 'none';
+      // Clear whatever was entered so the form starts fresh next time
+      const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
+      const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
+      const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
+      const photoEl = document.querySelector('.catch-photo[data-rod="'+rod+'"]');
+      if(typeEl) typeEl.value = '';
+      if(typeOtherEl){ typeOtherEl.value = ''; typeOtherEl.style.display = 'none'; }
+      if(weightEl) weightEl.value = '';
+      if(photoEl) photoEl.value = '';
+      pendingPhotos[rod] = [];
+      renderPhotoPreview(rod);
     });
   });
   document.querySelectorAll('.catch-type').forEach(sel=>{
@@ -3328,7 +3421,10 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     document.getElementById('nav-tabs').classList.remove('open');
     document.getElementById('nav-hamburger').setAttribute('aria-expanded', 'false');
     window.scrollTo({top: 0, behavior: 'smooth'});
-    if(btn.dataset.tab==='timers') updateTimersVisibility();
+    if(btn.dataset.tab==='timers'){
+      updateTimersVisibility();
+      loadKnownRigs().then(()=>{ if(currentPerson) renderAll(); });
+    }
     if(btn.dataset.tab==='leaderboard') renderLeaderboard();
     if(btn.dataset.tab==='feed') renderFeed();
     if(btn.dataset.tab==='challenges') renderChallenges();
