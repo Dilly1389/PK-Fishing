@@ -804,6 +804,7 @@
             <div class="field">
               <label>Category</label>
               <select id="tackle-category">
+                <option value="" selected>Select category</option>
                 <option value="Bait">Bait</option>
                 <option value="Dips">Dips</option>
                 <option value="Hooks">Hooks</option>
@@ -901,7 +902,13 @@
             <select id="tackle-filter-visibility">
               <option value="">Everything I can see</option>
               <option value="shared-with-me">Shared with me</option>
-              <option value="private">My private items</option>
+              <option value="private">My list (private + items I'm using)</option>
+            </select>
+          </div>
+          <div class="field" id="tackle-filter-sharedby-wrap" style="display:none;">
+            <label>Shared by</label>
+            <select id="tackle-filter-sharedby">
+              <option value="">Anyone</option>
             </select>
           </div>
           <div id="tackle-list"><div class="empty">No tackle added yet.</div></div>
@@ -2146,11 +2153,11 @@ async function loadTackleItems(){
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
 }
 async function loadSharedWithMeTackleItemIds(){
-  if(!isSignedIn()) return new Set();
+  if(!isSignedIn()) return new Map();
   try{
-    const rows = await sbGet('tackle_item_shares?select=tackle_item_id&shared_with_user_id=eq.'+session.user.id);
-    return new Set(rows.map(r=>r.tackle_item_id));
-  }catch(e){ console.error(e); return new Set(); }
+    const rows = await sbGet('tackle_item_shares?select=tackle_item_id,in_use&shared_with_user_id=eq.'+session.user.id);
+    return new Map(rows.map(r=>[r.tackle_item_id, !!r.in_use]));
+  }catch(e){ console.error(e); return new Map(); }
 }
 async function insertTackleItem(item){
   await sbPost('tackle_items', item);
@@ -2486,6 +2493,7 @@ document.getElementById('tackle-filter-category').addEventListener('change', (e)
 });
 document.getElementById('tackle-filter-baittype').addEventListener('change', renderTackleList);
 document.getElementById('tackle-filter-visibility').addEventListener('change', renderTackleList);
+document.getElementById('tackle-filter-sharedby').addEventListener('change', renderTackleList);
 
 let tackleItemsCache = [];
 
@@ -2507,11 +2515,36 @@ async function renderTackleList(){
   const catFilter = document.getElementById('tackle-filter-category').value;
   const baitTypeFilter = document.getElementById('tackle-filter-baittype').value;
   const visFilter = document.getElementById('tackle-filter-visibility').value;
+  const sharedByWrap = document.getElementById('tackle-filter-sharedby-wrap');
+  const sharedBySel = document.getElementById('tackle-filter-sharedby');
+
   let items = tackleItemsCache;
   if(catFilter) items = items.filter(it=> (it.category||'Other') === catFilter);
   if(catFilter === 'Bait' && baitTypeFilter) items = items.filter(it=> it.bait_type === baitTypeFilter);
-  if(visFilter === 'shared-with-me') items = items.filter(it=> sharedWithMeIds.has(it.id) && !(isSignedIn() && it.owner_user_id === session.user.id));
-  if(visFilter === 'private') items = items.filter(it=> isSignedIn() && it.owner_user_id === session.user.id && !it.is_shared);
+
+  if(visFilter === 'shared-with-me'){
+    sharedByWrap.style.display = 'block';
+    const sharedWithMeItems = tackleItemsCache.filter(it=> sharedWithMeIds.has(it.id) && !(isSignedIn() && it.owner_user_id === session.user.id));
+    const sharerUserIds = [...new Set(sharedWithMeItems.map(it=>it.owner_user_id))];
+    const currentSharedBy = sharedBySel.value;
+    sharedBySel.innerHTML = '<option value="">Anyone</option>' +
+      sharerUserIds.map(uidVal=>{
+        const p = people.find(x=>x.user_id===uidVal);
+        return p ? `<option value="${uidVal}">${escapeHtml(p.name)}</option>` : '';
+      }).join('');
+    if([...sharedBySel.options].some(o=>o.value===currentSharedBy)) sharedBySel.value = currentSharedBy;
+
+    items = items.filter(it=> sharedWithMeIds.has(it.id) && !(isSignedIn() && it.owner_user_id === session.user.id));
+    if(sharedBySel.value) items = items.filter(it=> it.owner_user_id === sharedBySel.value);
+  }else{
+    sharedByWrap.style.display = 'none';
+  }
+  if(visFilter === 'private'){
+    items = items.filter(it=>
+      (isSignedIn() && it.owner_user_id === session.user.id && !it.is_shared)
+      || (sharedWithMeIds.get(it.id) === true)
+    );
+  }
 
   if(items.length===0){ el.innerHTML = '<div class="empty">No tackle matches this filter.</div>'; return; }
   const byCategory = {};
@@ -2525,7 +2558,8 @@ async function renderTackleList(){
     const rows = byCategory[cat].map(it=>{
       const baitTag = it.bait_type ? `<span class="pill" style="background:var(--khaki);color:var(--ink);">${escapeHtml(it.bait_type)}</span>` : '';
       const isMine = isSignedIn() && it.owner_user_id === session.user.id;
-      let sharedTag;
+      let sharedTag = '';
+      let useToggleHtml = '';
       if(isMine){
         sharedTag = it.is_shared ? `<span class="pill">Shared with everyone</span>` : `<span class="pill" style="opacity:0.6;">Private</span>`;
       }else if(it.is_shared){
@@ -2533,6 +2567,10 @@ async function renderTackleList(){
       }else if(sharedWithMeIds.has(it.id)){
         const owner = people.find(p=>p.user_id===it.owner_user_id);
         sharedTag = `<span class="pill">Shared with you by ${escapeHtml(owner ? owner.name : 'a friend')}</span>`;
+        const inUse = sharedWithMeIds.get(it.id) === true;
+        useToggleHtml = `<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);margin-top:4px;">
+          <input type="checkbox" class="tackle-use-toggle" data-item="${it.id}" ${inUse ? 'checked' : ''}> Use (show in my list, still credited to ${escapeHtml(owner ? owner.name : 'them')})
+        </label>`;
       }else{
         sharedTag = `<span class="pill" style="opacity:0.6;">Private (someone else's — visible to you as admin)</span>`;
       }
@@ -2545,6 +2583,7 @@ async function renderTackleList(){
           ${baitTag}
           ${sharedTag}
         </div>
+        ${useToggleHtml}
         <div class="actions">
           ${it.notes ? `<span style="font-size:12px;color:var(--muted);margin-right:6px;">${escapeHtml(it.notes)}</span>` : ''}
           ${it.has_photo ? `<button class="mini-btn" data-tackle-photo="${it.id}">📷</button>` : ''}
@@ -2600,6 +2639,19 @@ await loadTackleCategoryOptions();
   el.querySelectorAll('[data-tackle-photo]').forEach(btn=>{
     btn.addEventListener('click', ()=> viewTacklePhoto(btn.dataset.tacklePhoto));
   });
+  el.querySelectorAll('.tackle-use-toggle').forEach(cb=>{
+    cb.addEventListener('change', async ()=>{
+      cb.disabled = true;
+      try{
+        await sbPatch('tackle_item_shares', 'tackle_item_id=eq.'+cb.dataset.item+'&shared_with_user_id=eq.'+session.user.id, {in_use: cb.checked});
+      }catch(e){
+        console.error(e);
+        cb.checked = !cb.checked;
+        alert('Could not save: ' + (e.message || 'unknown error'));
+      }
+      cb.disabled = false;
+    });
+  });
 }
 
 document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
@@ -2612,6 +2664,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   const st = document.getElementById('tackle-status');
   const name = nameEl.value.trim();
   if(!name){ st.textContent = 'Enter a name.'; return; }
+  if(!catEl.value){ st.textContent = 'Select a category.'; return; }
   if(!isSignedIn()){ st.textContent = 'You need to be signed in.'; return; }
   st.textContent = 'Adding...';
   try{
@@ -2621,11 +2674,12 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
       photo = await resizeImageFile(photoEl.files[0], 240, 0.6);
     }
     const newItemId = uid();
+    const categoryValue = catEl.value;
     await insertTackleItem({
       id: newItemId,
       name,
-      category: catEl.value,
-      bait_type: catEl.value === 'Bait' ? (baitTypeEl.value || null) : null,
+      category: categoryValue,
+      bait_type: categoryValue === 'Bait' ? (baitTypeEl.value || null) : null,
       notes: notesEl.value.trim(),
       photo,
       has_photo: !!photo,
@@ -2638,13 +2692,14 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
     notesEl.value = '';
     photoEl.value = '';
     baitTypeEl.value = '';
+    catEl.value = '';
     if(everyoneEl) everyoneEl.checked = false;
     document.querySelectorAll('.tackle-share-check').forEach(cb=> cb.checked = false);
     document.getElementById('tackle-baittype-wrap').style.display = 'none';
     st.textContent = 'Added.';
     setTimeout(()=> st.textContent='', 1200);
     renderTackleList();
-    if(catEl.value === 'Rods' || catEl.value === 'Reels'){
+    if(categoryValue === 'Rods' || categoryValue === 'Reels'){
       await loadGearOptions();
 await loadTackleCategoryOptions();
       if(currentPerson) renderAll();
