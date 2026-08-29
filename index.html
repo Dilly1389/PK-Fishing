@@ -483,7 +483,7 @@
               </div>
               <div class="field">
                 <label>Carp — photo</label>
-                <input type="file" accept="image/*" id="signup-pb-carp-photo">
+                <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="signup-pb-carp-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="signup-pb-carp-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="signup-pb-carp-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="signup-pb-carp-photo" style="display:none;">
               </div>
             </div>
             <div class="row2">
@@ -493,7 +493,7 @@
               </div>
               <div class="field">
                 <label>Catfish (Barbel) — photo</label>
-                <input type="file" accept="image/*" id="signup-pb-barbel-photo">
+                <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="signup-pb-barbel-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="signup-pb-barbel-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="signup-pb-barbel-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="signup-pb-barbel-photo" style="display:none;">
               </div>
             </div>
             <button class="primary-btn" id="signup-btn">Create account</button>
@@ -560,7 +560,7 @@
           </div>
           <div class="field">
             <label>Carp — photo</label>
-            <input type="file" accept="image/*" id="details-pb-carp-photo">
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="details-pb-carp-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="details-pb-carp-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="details-pb-carp-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="details-pb-carp-photo" style="display:none;">
           </div>
         </div>
         <div class="row2">
@@ -570,7 +570,7 @@
           </div>
           <div class="field">
             <label>Catfish (Barbel) — photo</label>
-            <input type="file" accept="image/*" id="details-pb-barbel-photo">
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="details-pb-barbel-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="details-pb-barbel-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="details-pb-barbel-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="details-pb-barbel-photo" style="display:none;">
           </div>
         </div>
         <button class="primary-btn" id="details-save-btn">Save details</button>
@@ -821,11 +821,14 @@
             <select id="tackle-baittype">
               <option value="">Select type</option>
               <option value="Boilies">Boilies</option>
+              <option value="Pop-ups">Pop-ups</option>
+              <option value="Wafters">Wafters</option>
+              <option value="Tiger nuts">Tiger nuts</option>
+              <option value="Liquid">Liquid</option>
               <option value="Pellets">Pellets</option>
               <option value="Particles/Seeds">Particles/Seeds</option>
               <option value="Sweetcorn">Sweetcorn</option>
               <option value="Groundbait">Groundbait</option>
-              <option value="Pop-ups">Pop-ups</option>
               <option value="Paste">Paste</option>
               <option value="Other">Other</option>
             </select>
@@ -836,7 +839,7 @@
           </div>
           <div class="field">
             <label>Photo (optional)</label>
-            <input type="file" accept="image/*" id="tackle-photo">
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="tackle-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="tackle-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="tackle-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="tackle-photo" style="display:none;">
           </div>
           <div class="field">
             <label>Share with friends (mutual follows only)</label>
@@ -872,11 +875,14 @@
               <select id="tackle-filter-baittype">
                 <option value="">All bait types</option>
                 <option value="Boilies">Boilies</option>
+                <option value="Pop-ups">Pop-ups</option>
+                <option value="Wafters">Wafters</option>
+                <option value="Tiger nuts">Tiger nuts</option>
+                <option value="Liquid">Liquid</option>
                 <option value="Pellets">Pellets</option>
                 <option value="Particles/Seeds">Particles/Seeds</option>
                 <option value="Sweetcorn">Sweetcorn</option>
                 <option value="Groundbait">Groundbait</option>
-                <option value="Pop-ups">Pop-ups</option>
                 <option value="Paste">Paste</option>
                 <option value="Other">Other</option>
               </select>
@@ -910,7 +916,7 @@
           </div>
           <div class="field">
             <label>Photo (optional)</label>
-            <input type="file" accept="image/*" id="rig-photo">
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="rig-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="rig-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="rig-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="rig-photo" style="display:none;">
           </div>
           <button class="primary-btn" id="rig-create-btn">Create rig</button>
           <div class="status" id="rig-create-status"></div>
@@ -1015,7 +1021,7 @@
       </div>
       <div class="field">
         <label>Photos</label>
-        <input type="file" accept="image/*" id="edit-catch-photo-input">
+        <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="edit-catch-photo-input">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="edit-catch-photo-input">🖼️ Gallery</button></div><div class="photo-filename" data-target="edit-catch-photo-input" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="edit-catch-photo-input" style="display:none;">
         <div class="catch-photo-preview" id="edit-catch-photo-preview" style="display:none;"></div>
       </div>
     </div>
@@ -1406,7 +1412,7 @@ document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
     clearDbError();
   }catch(e){
     console.error(e);
-    st.textContent = 'Could not save — check the Supabase connection.';
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
   }
 });
 
@@ -1427,6 +1433,28 @@ function elapsedMs(t){
 function escapeHtml(s){
   return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+
+// Camera / Gallery photo buttons — works across the whole app via delegation,
+// since some of these buttons live inside dynamically rebuilt content (Timers rod cards)
+document.addEventListener('click', (e)=>{
+  const camBtn = e.target.closest('.photo-camera-btn');
+  const galBtn = e.target.closest('.photo-gallery-btn');
+  if(!camBtn && !galBtn) return;
+  const btn = camBtn || galBtn;
+  const input = btn.dataset.target
+    ? document.getElementById(btn.dataset.target)
+    : document.querySelector('.catch-photo[data-rod="'+btn.dataset.targetRod+'"]');
+  if(!input) return;
+  if(camBtn){ input.setAttribute('capture', 'environment'); }
+  else{ input.removeAttribute('capture'); }
+  input.click();
+});
+document.addEventListener('change', (e)=>{
+  if(e.target.matches('input[type="file"][id]')){
+    const label = document.querySelector('.photo-filename[data-target="'+e.target.id+'"]');
+    if(label) label.textContent = e.target.files[0] ? e.target.files[0].name : '';
+  }
+});
 
 // Photo likes — one 👌 per photo per browser/device, stored locally (not tied to any account)
 function getLikedCatches(){
@@ -1703,7 +1731,7 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
     setTimeout(()=> st.textContent='', 1500);
   }catch(e){
     console.error(e);
-    st.textContent = 'Could not save — check the Supabase connection.';
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
   }
 });
 
@@ -2231,7 +2259,7 @@ async function renderRigsList(){
           if(currentPerson) renderAll();
         }catch(e){
           console.error(e);
-          alert('Could not save — check the Supabase connection.');
+          alert('Could not save: ' + (e.message || 'unknown error'));
         }
       });
     });
@@ -2273,7 +2301,7 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
     if(currentPerson) renderAll();
   }catch(e){
     console.error(e);
-    st.textContent = 'Could not create — check the Supabase connection.';
+    st.textContent = 'Could not create: ' + (e.message || 'unknown error');
   }
 });
 
@@ -2418,7 +2446,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
     }
   }catch(e){
     console.error(e);
-    st.textContent = 'Could not add — check the Supabase connection.';
+    st.textContent = 'Could not add: ' + (e.message || 'unknown error');
   }
 });
 
@@ -2604,7 +2632,11 @@ function rodCardHtml(r){
         </div>
         <div class="field">
           <label>Photos (optional — add as many as you like)</label>
-          <input type="file" accept="image/*" class="catch-photo" data-rod="${r}">
+          <div style="display:flex;gap:8px;margin-bottom:6px;">
+            <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}">📷 Take Photo</button>
+            <button type="button" class="mini-btn photo-gallery-btn" data-target-rod="${r}">🖼️ Gallery</button>
+          </div>
+          <input type="file" accept="image/*" class="catch-photo" data-rod="${r}" style="display:none;">
           <div class="catch-photo-preview" data-rod="${r}" style="display:none;"></div>
         </div>
       </div>
@@ -3072,7 +3104,7 @@ async function openProfile(personId){
         setTimeout(()=> st.textContent='', 1500);
       }catch(e){
         console.error(e);
-        st.textContent = 'Could not save — check the Supabase connection.';
+        st.textContent = 'Could not save: ' + (e.message || 'unknown error');
       }
     });
   }
@@ -3105,7 +3137,7 @@ async function openProfile(personId){
         console.error(e);
         adminDeleteConfirmBtn.textContent = 'Yes, delete permanently';
         adminDeleteConfirmBtn.disabled = false;
-        alert('Could not delete — check the Supabase connection.');
+        alert('Could not delete: ' + (e.message || 'unknown error'));
       }
     });
   }
@@ -3287,7 +3319,7 @@ async function likeCurrentPhoto(catchId){
   }catch(e){
     console.error(e);
     showDbError('Could not save like.');
-    renderPhotoLike('Could not save this like — check the Supabase connection.');
+    renderPhotoLike('Could not save this like: ' + (e.message || 'unknown error'));
   }
 }
 
@@ -3321,7 +3353,7 @@ document.getElementById('photo-comment-post-btn').addEventListener('click', asyn
     renderPhotoComments();
   }catch(e){
     console.error(e);
-    st.textContent = 'Could not post — check the Supabase connection.';
+    st.textContent = 'Could not post: ' + (e.message || 'unknown error');
   }
 });
 
@@ -3946,7 +3978,7 @@ document.getElementById('challenge-create-btn').addEventListener('click', async 
     renderChallenges();
   }catch(e){
     console.error(e);
-    st.textContent = 'Could not create — check the Supabase connection.';
+    st.textContent = 'Could not create: ' + (e.message || 'unknown error');
   }
 });
 
@@ -4235,7 +4267,7 @@ document.getElementById('admin-catch-save-btn').addEventListener('click', async 
     setTimeout(()=> st.textContent='', 1500);
   }catch(e){
     console.error(e);
-    st.textContent = 'Could not save — check the Supabase connection.';
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
   }
 });
 document.getElementById('admin-catch-delete-btn').addEventListener('click', async ()=>{
@@ -4247,7 +4279,7 @@ document.getElementById('admin-catch-delete-btn').addEventListener('click', asyn
     document.getElementById('admin-catch-editor').style.display = 'none';
   }catch(e){
     console.error(e);
-    alert('Could not delete — check the Supabase connection.');
+    alert('Could not delete: ' + (e.message || 'unknown error'));
   }
 });
 
@@ -4278,7 +4310,7 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
     renderCompetitions();
   }catch(e){
     console.error(e);
-    st.textContent = 'Could not create — check the Supabase connection.';
+    st.textContent = 'Could not create: ' + (e.message || 'unknown error');
   }
 });
 document.getElementById('competition-angler-search').addEventListener('input', renderCompetitionAnglerSearch);
