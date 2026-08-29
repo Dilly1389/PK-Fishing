@@ -804,15 +804,15 @@
             <div class="field">
               <label>Category</label>
               <select id="tackle-category">
-                <option value="Rods">Rods</option>
-                <option value="Reels">Reels</option>
-                <option value="Hooks">Hooks</option>
-                <option value="Weights/Leads">Weights/Leads</option>
-                <option value="Swivels/Rig rings">Swivels/Rig rings</option>
-                <option value="Line/Braid">Line/Braid</option>
                 <option value="Bait">Bait</option>
                 <option value="Dips">Dips</option>
+                <option value="Hooks">Hooks</option>
+                <option value="Line/Braid">Line/Braid</option>
                 <option value="Other">Other</option>
+                <option value="Reels">Reels</option>
+                <option value="Rods">Rods</option>
+                <option value="Swivels/Rig rings">Swivels/Rig rings</option>
+                <option value="Weights/Leads">Weights/Leads</option>
               </select>
             </div>
           </div>
@@ -820,21 +820,21 @@
             <label>Bait type</label>
             <select id="tackle-baittype">
               <option value="">Select type</option>
-              <option value="Boilies">Boilies</option>
-              <option value="Pop-ups">Pop-ups</option>
-              <option value="Wafters">Wafters</option>
-              <option value="Tiger nuts">Tiger nuts</option>
-              <option value="Small hard floats">Small hard floats</option>
               <option value="Big hard floats">Big hard floats</option>
-              <option value="Small soft floats">Small soft floats</option>
               <option value="Big soft floats">Big soft floats</option>
-              <option value="Oozer">Oozer</option>
-              <option value="Pellets">Pellets</option>
-              <option value="Particles/Seeds">Particles/Seeds</option>
-              <option value="Mielies">Mielies</option>
+              <option value="Boilies">Boilies</option>
               <option value="Groundbait">Groundbait</option>
-              <option value="Paste">Paste</option>
+              <option value="Mielies">Mielies</option>
+              <option value="Oozer">Oozer</option>
               <option value="Other">Other</option>
+              <option value="Particles/Seeds">Particles/Seeds</option>
+              <option value="Paste">Paste</option>
+              <option value="Pellets">Pellets</option>
+              <option value="Pop-ups">Pop-ups</option>
+              <option value="Small hard floats">Small hard floats</option>
+              <option value="Small soft floats">Small soft floats</option>
+              <option value="Tiger nuts">Tiger nuts</option>
+              <option value="Wafters">Wafters</option>
             </select>
           </div>
           <div class="field">
@@ -863,38 +863,46 @@
               <label>Category</label>
               <select id="tackle-filter-category">
                 <option value="">All categories</option>
-                <option value="Rods">Rods</option>
-                <option value="Reels">Reels</option>
-                <option value="Hooks">Hooks</option>
-                <option value="Weights/Leads">Weights/Leads</option>
-                <option value="Swivels/Rig rings">Swivels/Rig rings</option>
-                <option value="Line/Braid">Line/Braid</option>
                 <option value="Bait">Bait</option>
                 <option value="Dips">Dips</option>
+                <option value="Hooks">Hooks</option>
+                <option value="Line/Braid">Line/Braid</option>
                 <option value="Other">Other</option>
+                <option value="Reels">Reels</option>
+                <option value="Rods">Rods</option>
+                <option value="Swivels/Rig rings">Swivels/Rig rings</option>
+                <option value="Weights/Leads">Weights/Leads</option>
               </select>
             </div>
             <div class="field" id="tackle-filter-baittype-wrap" style="display:none;">
               <label>Bait type</label>
               <select id="tackle-filter-baittype">
                 <option value="">All bait types</option>
-                <option value="Boilies">Boilies</option>
-                <option value="Pop-ups">Pop-ups</option>
-                <option value="Wafters">Wafters</option>
-                <option value="Tiger nuts">Tiger nuts</option>
-                <option value="Small hard floats">Small hard floats</option>
                 <option value="Big hard floats">Big hard floats</option>
-                <option value="Small soft floats">Small soft floats</option>
                 <option value="Big soft floats">Big soft floats</option>
-                <option value="Oozer">Oozer</option>
-                <option value="Pellets">Pellets</option>
-                <option value="Particles/Seeds">Particles/Seeds</option>
-                <option value="Mielies">Mielies</option>
+                <option value="Boilies">Boilies</option>
                 <option value="Groundbait">Groundbait</option>
-                <option value="Paste">Paste</option>
+                <option value="Mielies">Mielies</option>
+                <option value="Oozer">Oozer</option>
                 <option value="Other">Other</option>
+                <option value="Particles/Seeds">Particles/Seeds</option>
+                <option value="Paste">Paste</option>
+                <option value="Pellets">Pellets</option>
+                <option value="Pop-ups">Pop-ups</option>
+                <option value="Small hard floats">Small hard floats</option>
+                <option value="Small soft floats">Small soft floats</option>
+                <option value="Tiger nuts">Tiger nuts</option>
+                <option value="Wafters">Wafters</option>
               </select>
             </div>
+          </div>
+          <div class="field">
+            <label>Show</label>
+            <select id="tackle-filter-visibility">
+              <option value="">Everything I can see</option>
+              <option value="shared-with-me">Shared with me</option>
+              <option value="private">My private items</option>
+            </select>
           </div>
           <div id="tackle-list"><div class="empty">No tackle added yet.</div></div>
         </section>
@@ -2178,15 +2186,15 @@ async function renderTackleItemEditForm(itemId, containerEl){
       <div class="field">
         <label>Category</label>
         <select class="tackle-edit-category">
-          <option value="Rods" ${item.category==='Rods'?'selected':''}>Rods</option>
-          <option value="Reels" ${item.category==='Reels'?'selected':''}>Reels</option>
-          <option value="Hooks" ${item.category==='Hooks'?'selected':''}>Hooks</option>
-          <option value="Weights/Leads" ${item.category==='Weights/Leads'?'selected':''}>Weights/Leads</option>
-          <option value="Swivels/Rig rings" ${item.category==='Swivels/Rig rings'?'selected':''}>Swivels/Rig rings</option>
-          <option value="Line/Braid" ${item.category==='Line/Braid'?'selected':''}>Line/Braid</option>
           <option value="Bait" ${item.category==='Bait'?'selected':''}>Bait</option>
           <option value="Dips" ${item.category==='Dips'?'selected':''}>Dips</option>
+          <option value="Hooks" ${item.category==='Hooks'?'selected':''}>Hooks</option>
+          <option value="Line/Braid" ${item.category==='Line/Braid'?'selected':''}>Line/Braid</option>
           <option value="Other" ${item.category==='Other'?'selected':''}>Other</option>
+          <option value="Reels" ${item.category==='Reels'?'selected':''}>Reels</option>
+          <option value="Rods" ${item.category==='Rods'?'selected':''}>Rods</option>
+          <option value="Swivels/Rig rings" ${item.category==='Swivels/Rig rings'?'selected':''}>Swivels/Rig rings</option>
+          <option value="Weights/Leads" ${item.category==='Weights/Leads'?'selected':''}>Weights/Leads</option>
         </select>
       </div>
     </div>
@@ -2194,21 +2202,21 @@ async function renderTackleItemEditForm(itemId, containerEl){
       <label>Bait type</label>
       <select class="tackle-edit-baittype">
         <option value="">Select type</option>
-        <option value="Boilies" ${item.bait_type==='Boilies'?'selected':''}>Boilies</option>
-        <option value="Pop-ups" ${item.bait_type==='Pop-ups'?'selected':''}>Pop-ups</option>
-        <option value="Wafters" ${item.bait_type==='Wafters'?'selected':''}>Wafters</option>
-        <option value="Tiger nuts" ${item.bait_type==='Tiger nuts'?'selected':''}>Tiger nuts</option>
-        <option value="Small hard floats" ${item.bait_type==='Small hard floats'?'selected':''}>Small hard floats</option>
         <option value="Big hard floats" ${item.bait_type==='Big hard floats'?'selected':''}>Big hard floats</option>
-        <option value="Small soft floats" ${item.bait_type==='Small soft floats'?'selected':''}>Small soft floats</option>
         <option value="Big soft floats" ${item.bait_type==='Big soft floats'?'selected':''}>Big soft floats</option>
-        <option value="Oozer" ${item.bait_type==='Oozer'?'selected':''}>Oozer</option>
-        <option value="Pellets" ${item.bait_type==='Pellets'?'selected':''}>Pellets</option>
-        <option value="Particles/Seeds" ${item.bait_type==='Particles/Seeds'?'selected':''}>Particles/Seeds</option>
-        <option value="Mielies" ${item.bait_type==='Mielies'?'selected':''}>Mielies</option>
+        <option value="Boilies" ${item.bait_type==='Boilies'?'selected':''}>Boilies</option>
         <option value="Groundbait" ${item.bait_type==='Groundbait'?'selected':''}>Groundbait</option>
-        <option value="Paste" ${item.bait_type==='Paste'?'selected':''}>Paste</option>
+        <option value="Mielies" ${item.bait_type==='Mielies'?'selected':''}>Mielies</option>
+        <option value="Oozer" ${item.bait_type==='Oozer'?'selected':''}>Oozer</option>
         <option value="Other" ${item.bait_type==='Other'?'selected':''}>Other</option>
+        <option value="Particles/Seeds" ${item.bait_type==='Particles/Seeds'?'selected':''}>Particles/Seeds</option>
+        <option value="Paste" ${item.bait_type==='Paste'?'selected':''}>Paste</option>
+        <option value="Pellets" ${item.bait_type==='Pellets'?'selected':''}>Pellets</option>
+        <option value="Pop-ups" ${item.bait_type==='Pop-ups'?'selected':''}>Pop-ups</option>
+        <option value="Small hard floats" ${item.bait_type==='Small hard floats'?'selected':''}>Small hard floats</option>
+        <option value="Small soft floats" ${item.bait_type==='Small soft floats'?'selected':''}>Small soft floats</option>
+        <option value="Tiger nuts" ${item.bait_type==='Tiger nuts'?'selected':''}>Tiger nuts</option>
+        <option value="Wafters" ${item.bait_type==='Wafters'?'selected':''}>Wafters</option>
       </select>
     </div>
     <div class="field">
@@ -2477,6 +2485,7 @@ document.getElementById('tackle-filter-category').addEventListener('change', (e)
   renderTackleList();
 });
 document.getElementById('tackle-filter-baittype').addEventListener('change', renderTackleList);
+document.getElementById('tackle-filter-visibility').addEventListener('change', renderTackleList);
 
 let tackleItemsCache = [];
 
@@ -2497,9 +2506,12 @@ async function renderTackleList(){
 
   const catFilter = document.getElementById('tackle-filter-category').value;
   const baitTypeFilter = document.getElementById('tackle-filter-baittype').value;
+  const visFilter = document.getElementById('tackle-filter-visibility').value;
   let items = tackleItemsCache;
   if(catFilter) items = items.filter(it=> (it.category||'Other') === catFilter);
   if(catFilter === 'Bait' && baitTypeFilter) items = items.filter(it=> it.bait_type === baitTypeFilter);
+  if(visFilter === 'shared-with-me') items = items.filter(it=> sharedWithMeIds.has(it.id) && !(isSignedIn() && it.owner_user_id === session.user.id));
+  if(visFilter === 'private') items = items.filter(it=> isSignedIn() && it.owner_user_id === session.user.id && !it.is_shared);
 
   if(items.length===0){ el.innerHTML = '<div class="empty">No tackle matches this filter.</div>'; return; }
   const byCategory = {};
@@ -2519,7 +2531,8 @@ async function renderTackleList(){
       }else if(it.is_shared){
         sharedTag = `<span class="pill">Shared with everyone</span>`;
       }else if(sharedWithMeIds.has(it.id)){
-        sharedTag = `<span class="pill">Shared with you</span>`;
+        const owner = people.find(p=>p.user_id===it.owner_user_id);
+        sharedTag = `<span class="pill">Shared with you by ${escapeHtml(owner ? owner.name : 'a friend')}</span>`;
       }else{
         sharedTag = `<span class="pill" style="opacity:0.6;">Private (someone else's — visible to you as admin)</span>`;
       }
