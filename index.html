@@ -2381,6 +2381,7 @@ async function renderRigsList(){
   if(rigs.length===0){ el.innerHTML = '<div class="empty">No rigs built yet.</div>'; return; }
   const rows = rigs.map(r=>{
     const canManage = isSuperUser() || (isSignedIn() && session.user.id === r.creator_user_id);
+    const canEditHooks = isSignedIn();
     return `<li>
       <div class="who">
         <b>${escapeHtml(r.name)}</b>
@@ -2390,10 +2391,10 @@ async function renderRigsList(){
       </div>
       <div class="actions">
         ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}">📷</button>` : ''}
-        ${canManage ? `<button class="mini-btn" data-rig-edit="${r.id}">Edit</button>` : ''}
+        ${canEditHooks ? `<button class="mini-btn" data-rig-edit="${r.id}">Edit</button>` : ''}
         ${canManage ? `<button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>` : ''}
       </div>
-      ${canManage ? `<div class="rig-edit-manager" data-rig="${r.id}" data-hooks="${r.hook_count}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
+      ${canEditHooks ? `<div class="rig-edit-manager" data-rig="${r.id}" data-hooks="${r.hook_count}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
     </li>`;
   }).join('');
   el.innerHTML = '<ul class="people-list">' + rows + '</ul>';
