@@ -1161,6 +1161,79 @@ function setSelectOrOther(sel, otherInput, val){
   }
 }
 
+function parseMultiValue(str){
+  return (str||'').split(',').map(s=>s.trim()).filter(Boolean);
+}
+function joinMultiValue(arr){
+  return arr.join(', ');
+}
+
+function multiPickerFieldHtml(rod, key, label){
+  return `<div class="field">
+    <label>${escapeHtml(label)}</label>
+    <input type="text" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search your tackle box...">
+    <div class="multi-picker-results" data-rod="${rod}" data-key="${key}"></div>
+    <div class="multi-picker-pills" data-rod="${rod}" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
+  </div>`;
+}
+
+function multiPickerSourceList(key){
+  return key === 'bom' ? knownDipNames : knownBaitNames;
+}
+
+function renderMultiPickerPills(rod, key){
+  const pillsEl = document.querySelector('.multi-picker-pills[data-rod="'+rod+'"][data-key="'+key+'"]');
+  if(!pillsEl || !currentPerson) return;
+  const current = parseMultiValue(currentPerson.notes[rod][key]);
+  pillsEl.innerHTML = current.map(v=>`
+    <span class="pill" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(v)}<button type="button" class="multi-picker-remove" data-rod="${rod}" data-key="${key}" data-value="${escapeHtml(v)}" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;">×</button></span>
+  `).join('');
+  pillsEl.querySelectorAll('.multi-picker-remove').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const arr = parseMultiValue(currentPerson.notes[rod][key]).filter(v=>v!==btn.dataset.value);
+      currentPerson.notes[rod][key] = joinMultiValue(arr);
+      await saveRodState(currentPersonId, rod);
+      renderMultiPickerPills(rod, key);
+    });
+  });
+}
+
+function renderMultiPickerResults(rod, key){
+  const searchEl = document.querySelector('.multi-picker-search[data-rod="'+rod+'"][data-key="'+key+'"]');
+  const resultsEl = document.querySelector('.multi-picker-results[data-rod="'+rod+'"][data-key="'+key+'"]');
+  if(!searchEl || !resultsEl || !currentPerson) return;
+  const term = searchEl.value.trim().toLowerCase();
+  if(!term){ resultsEl.innerHTML = ''; return; }
+  const current = parseMultiValue(currentPerson.notes[rod][key]);
+  const sourceList = multiPickerSourceList(key);
+  const matches = sourceList.filter(name => name.toLowerCase().includes(term) && !current.includes(name)).slice(0, 6);
+  resultsEl.innerHTML = matches.length
+    ? matches.map(name=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
+          <span style="font-size:14px;">${escapeHtml(name)}</span>
+          <button type="button" class="multi-picker-add" data-rod="${rod}" data-key="${key}" data-value="${escapeHtml(name)}">Add</button>
+        </div>`).join('')
+    : '<div class="empty">No matches in your tackle box.</div>';
+  resultsEl.querySelectorAll('.multi-picker-add').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const arr = parseMultiValue(currentPerson.notes[rod][key]);
+      if(!arr.includes(btn.dataset.value)) arr.push(btn.dataset.value);
+      currentPerson.notes[rod][key] = joinMultiValue(arr);
+      await saveRodState(currentPersonId, rod);
+      searchEl.value = '';
+      resultsEl.innerHTML = '';
+      renderMultiPickerPills(rod, key);
+    });
+  });
+}
+
+// Live-filter as the person types, works across dynamically rebuilt rod cards via delegation
+document.addEventListener('input', (e)=>{
+  if(e.target.matches('.multi-picker-search')){
+    renderMultiPickerResults(e.target.dataset.rod, e.target.dataset.key);
+  }
+});
+
 function renderRigFields(rod){
   const container = document.getElementById('rig-fields-'+rod);
   if(!container || !currentPerson) return;
@@ -1174,62 +1247,19 @@ function renderRigFields(rod){
 
   let html = '';
   if(rigDef.usesBom){
-    html += `<div class="field">
-      <label>Bom</label>
-      <select class="rod-select" data-rod="${rod}" data-key="bom">${buildRodOptionsHtml(knownBomOptions)}</select>
-      <input type="text" class="rod-field rod-select-other" data-rod="${rod}" data-key="bom" placeholder="Describe the bom..." style="display:none;margin-top:6px;">
-    </div>`;
+    html += multiPickerFieldHtml(rod, 'bom', 'Bom');
   }
   if(rigDef.hookCount > 0){
     html += '<div class="hooks-row">';
-    for(let n=1; n<=rigDef.hookCount; n++){ html += hookFieldHtml(rod, n); }
+    for(let n=1; n<=rigDef.hookCount; n++){
+      html += multiPickerFieldHtml(rod, 'hook'+n, 'Hook '+n);
+    }
     html += '</div>';
   }
   container.innerHTML = html;
 
-  if(rigDef.usesBom){
-    setSelectOrOther(
-      container.querySelector('.rod-select[data-key="bom"]'),
-      container.querySelector('.rod-select-other[data-key="bom"]'),
-      currentPerson.notes[rod].bom || ''
-    );
-  }
-  for(let n=1; n<=rigDef.hookCount; n++){
-    const key = 'hook'+n;
-    setSelectOrOther(
-      container.querySelector('.rod-select[data-key="'+key+'"]'),
-      container.querySelector('.rod-select-other[data-key="'+key+'"]'),
-      currentPerson.notes[rod][key] || ''
-    );
-  }
-
-  attachRigFieldHandlers(rod);
-}
-
-function attachRigFieldHandlers(rod){
-  const container = document.getElementById('rig-fields-'+rod);
-  if(!container) return;
-  container.querySelectorAll('.rod-field').forEach(ta=>{
-    ta.addEventListener('blur', async ()=>{
-      if(!currentPerson) return;
-      currentPerson.notes[rod][ta.dataset.key] = ta.value;
-      await saveRodState(currentPersonId, rod);
-    });
-  });
-  container.querySelectorAll('.rod-select').forEach(sel=>{
-    sel.addEventListener('change', async ()=>{
-      const key = sel.dataset.key;
-      const otherInput = container.querySelector('.rod-select-other[data-key="'+key+'"]');
-      if(sel.value === '__other__'){
-        if(otherInput){ otherInput.style.display = 'block'; otherInput.focus(); }
-        return;
-      }
-      if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
-      if(!currentPerson) return;
-      currentPerson.notes[rod][key] = sel.value;
-      await saveRodState(currentPersonId, rod);
-    });
-  });
+  if(rigDef.usesBom) renderMultiPickerPills(rod, 'bom');
+  for(let n=1; n<=rigDef.hookCount; n++){ renderMultiPickerPills(rod, 'hook'+n); }
 }
 
 function getRodFieldValue(rod, key){
@@ -1818,6 +1848,7 @@ document.getElementById('signup-btn').addEventListener('click', async ()=>{
 
     renderAccountArea();
     await loadGearOptions();
+await loadTackleCategoryOptions();
     await loadFollowedIds();
     populateAnglerSelect();
     await setActivePerson(id);
@@ -1842,6 +1873,7 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
     await loadPeople();
     renderAccountArea();
     await loadGearOptions();
+await loadTackleCategoryOptions();
     await loadFollowedIds();
 
     let myFishermanId = null;
@@ -2007,6 +2039,18 @@ async function loadGearOptions(){
   }catch(e){ console.error('loadGearOptions failed', e); }
 }
 
+// Dips (for Bom) and Bait (for Hooks), sourced from the signed-in user's visible tackle box
+let knownDipNames = [];
+let knownBaitNames = [];
+async function loadTackleCategoryOptions(){
+  if(!isSignedIn()){ knownDipNames = []; knownBaitNames = []; return; }
+  try{
+    const rows = await sbGet('tackle_items?select=name,category&category=in.(Dips,Bait)&order=name.asc');
+    knownDipNames = rows.filter(r=>r.category==='Dips').map(r=>r.name);
+    knownBaitNames = rows.filter(r=>r.category==='Bait').map(r=>r.name);
+  }catch(e){ console.error('loadTackleCategoryOptions failed', e); }
+}
+
 // ---------- Following (signed-in only) ----------
 let followedIds = new Set();
 let myFollowerUserIds = new Set();
@@ -2085,6 +2129,13 @@ async function loadTackleItems(){
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
 }
+async function loadSharedWithMeTackleItemIds(){
+  if(!isSignedIn()) return new Set();
+  try{
+    const rows = await sbGet('tackle_item_shares?select=tackle_item_id&shared_with_user_id=eq.'+session.user.id);
+    return new Set(rows.map(r=>r.tackle_item_id));
+  }catch(e){ console.error(e); return new Set(); }
+}
 async function insertTackleItem(item){
   await sbPost('tackle_items', item);
 }
@@ -2102,6 +2153,107 @@ async function loadTackleItemShareUserIds(tackleItemId){
 async function unshareTackleItemWith(tackleItemId, userId){
   await sbDelete('tackle_item_shares', 'tackle_item_id=eq.'+tackleItemId+'&shared_with_user_id=eq.'+userId);
 }
+async function renderTackleItemEditForm(itemId, containerEl){
+  let item;
+  try{
+    const rows = await sbGet('tackle_items?id=eq.'+itemId+'&select=id,name,category,bait_type,notes,photo,has_photo');
+    item = rows[0];
+  }catch(e){ console.error(e); containerEl.innerHTML = '<div class="empty">Could not load item.</div>'; return; }
+  if(!item){ containerEl.innerHTML = '<div class="empty">Item not found.</div>'; return; }
+
+  containerEl.innerHTML = `
+    <div class="row2">
+      <div class="field">
+        <label>Name</label>
+        <input type="text" class="tackle-edit-name" value="${escapeHtml(item.name)}">
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select class="tackle-edit-category">
+          <option value="Rods" ${item.category==='Rods'?'selected':''}>Rods</option>
+          <option value="Reels" ${item.category==='Reels'?'selected':''}>Reels</option>
+          <option value="Hooks" ${item.category==='Hooks'?'selected':''}>Hooks</option>
+          <option value="Weights/Leads" ${item.category==='Weights/Leads'?'selected':''}>Weights/Leads</option>
+          <option value="Swivels/Rig rings" ${item.category==='Swivels/Rig rings'?'selected':''}>Swivels/Rig rings</option>
+          <option value="Line/Braid" ${item.category==='Line/Braid'?'selected':''}>Line/Braid</option>
+          <option value="Bait" ${item.category==='Bait'?'selected':''}>Bait</option>
+          <option value="Dips" ${item.category==='Dips'?'selected':''}>Dips</option>
+          <option value="Other" ${item.category==='Other'?'selected':''}>Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="field tackle-edit-baittype-wrap" style="display:${item.category==='Bait'?'block':'none'};">
+      <label>Bait type</label>
+      <select class="tackle-edit-baittype">
+        <option value="">Select type</option>
+        <option value="Boilies" ${item.bait_type==='Boilies'?'selected':''}>Boilies</option>
+        <option value="Pop-ups" ${item.bait_type==='Pop-ups'?'selected':''}>Pop-ups</option>
+        <option value="Wafters" ${item.bait_type==='Wafters'?'selected':''}>Wafters</option>
+        <option value="Tiger nuts" ${item.bait_type==='Tiger nuts'?'selected':''}>Tiger nuts</option>
+        <option value="Liquid" ${item.bait_type==='Liquid'?'selected':''}>Liquid</option>
+        <option value="Pellets" ${item.bait_type==='Pellets'?'selected':''}>Pellets</option>
+        <option value="Particles/Seeds" ${item.bait_type==='Particles/Seeds'?'selected':''}>Particles/Seeds</option>
+        <option value="Sweetcorn" ${item.bait_type==='Sweetcorn'?'selected':''}>Sweetcorn</option>
+        <option value="Groundbait" ${item.bait_type==='Groundbait'?'selected':''}>Groundbait</option>
+        <option value="Paste" ${item.bait_type==='Paste'?'selected':''}>Paste</option>
+        <option value="Other" ${item.bait_type==='Other'?'selected':''}>Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <input type="text" class="tackle-edit-notes" value="${escapeHtml(item.notes||'')}">
+    </div>
+    <div class="field">
+      <label>Replace photo (optional)</label>
+      <div style="display:flex;gap:8px;margin-bottom:6px;">
+        <button type="button" class="mini-btn photo-camera-btn" data-target="tackle-edit-photo-${itemId}">📷 Take Photo</button>
+        <button type="button" class="mini-btn photo-gallery-btn" data-target="tackle-edit-photo-${itemId}">🖼️ Gallery</button>
+      </div>
+      <div class="photo-filename" data-target="tackle-edit-photo-${itemId}" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div>
+      <input type="file" accept="image/*" id="tackle-edit-photo-${itemId}" style="display:none;">
+    </div>
+    <button class="primary-btn tackle-edit-save-btn" data-item="${itemId}">Save changes</button>
+    <div class="status tackle-edit-status" data-item="${itemId}"></div>
+  `;
+
+  const catSel = containerEl.querySelector('.tackle-edit-category');
+  const baitWrap = containerEl.querySelector('.tackle-edit-baittype-wrap');
+  catSel.addEventListener('change', ()=>{
+    baitWrap.style.display = catSel.value === 'Bait' ? 'block' : 'none';
+  });
+
+  containerEl.querySelector('.tackle-edit-save-btn').addEventListener('click', async ()=>{
+    const st = containerEl.querySelector('.tackle-edit-status');
+    const name = containerEl.querySelector('.tackle-edit-name').value.trim();
+    if(!name){ st.textContent = 'Enter a name.'; return; }
+    st.textContent = 'Saving...';
+    try{
+      const patch = {
+        name,
+        category: catSel.value,
+        bait_type: catSel.value === 'Bait' ? (containerEl.querySelector('.tackle-edit-baittype').value || null) : null,
+        notes: containerEl.querySelector('.tackle-edit-notes').value.trim()
+      };
+      const photoInput = document.getElementById('tackle-edit-photo-'+itemId);
+      if(photoInput && photoInput.files[0]){
+        patch.photo = await resizeImageFile(photoInput.files[0], 240, 0.6);
+        patch.has_photo = true;
+      }
+      await sbPatch('tackle_items', 'id=eq.'+itemId, patch);
+      st.textContent = 'Saved.';
+      setTimeout(()=> st.textContent='', 1200);
+      renderTackleList();
+      await loadGearOptions();
+await loadTackleCategoryOptions();
+      if(currentPerson) renderAll();
+    }catch(e){
+      console.error(e);
+      st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+    }
+  });
+}
+
+
 async function renderTackleItemShareManager(itemId, containerEl){
   const friends = getMutualFriends();
   const currentShares = new Set(await loadTackleItemShareUserIds(itemId));
@@ -2329,6 +2481,7 @@ async function renderTackleList(){
   el.innerHTML = '<div class="empty">Loading...</div>';
   tackleItemsCache = await loadTackleItems();
   renderTackleNameSuggestions();
+  const sharedWithMeIds = await loadSharedWithMeTackleItemIds();
 
   const catFilter = document.getElementById('tackle-filter-category').value;
   const baitTypeFilter = document.getElementById('tackle-filter-baittype').value;
@@ -2348,11 +2501,19 @@ async function renderTackleList(){
     const rows = byCategory[cat].map(it=>{
       const baitTag = it.bait_type ? `<span class="pill" style="background:var(--khaki);color:var(--ink);">${escapeHtml(it.bait_type)}</span>` : '';
       const isMine = isSignedIn() && it.owner_user_id === session.user.id;
-      const sharedTag = isMine
-        ? (it.is_shared ? `<span class="pill">Shared with everyone</span>` : `<span class="pill" style="opacity:0.6;">Private</span>`)
-        : `<span class="pill">Shared with you</span>`;
+      let sharedTag;
+      if(isMine){
+        sharedTag = it.is_shared ? `<span class="pill">Shared with everyone</span>` : `<span class="pill" style="opacity:0.6;">Private</span>`;
+      }else if(it.is_shared){
+        sharedTag = `<span class="pill">Shared with everyone</span>`;
+      }else if(sharedWithMeIds.has(it.id)){
+        sharedTag = `<span class="pill">Shared with you</span>`;
+      }else{
+        sharedTag = `<span class="pill" style="opacity:0.6;">Private (someone else's — visible to you as admin)</span>`;
+      }
       const canRemove = isMine || isSuperUser();
       const canManageShare = isMine || isSuperUser();
+      const canEdit = isMine || isSuperUser();
       return `<li>
         <div class="who">
           <b>${escapeHtml(it.name)}</b>
@@ -2362,14 +2523,31 @@ async function renderTackleList(){
         <div class="actions">
           ${it.notes ? `<span style="font-size:12px;color:var(--muted);margin-right:6px;">${escapeHtml(it.notes)}</span>` : ''}
           ${it.has_photo ? `<button class="mini-btn" data-tackle-photo="${it.id}">📷</button>` : ''}
+          ${canEdit ? `<button class="mini-btn" data-tackle-edit="${it.id}">Edit</button>` : ''}
           ${canManageShare ? `<button class="mini-btn" data-tackle-manage-share="${it.id}">Share</button>` : ''}
           ${canRemove ? `<button class="mini-btn danger" data-tackle-remove="${it.id}">Remove</button>` : ''}
         </div>
+        ${canEdit ? `<div class="tackle-edit-manager" data-item="${it.id}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
         ${canManageShare ? `<div class="tackle-share-manager" data-item="${it.id}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
       </li>`;
     }).join('');
     return `<h2 style="font-size:14px;color:var(--khaki);margin:14px 0 6px;">${escapeHtml(cat)}</h2><ul class="people-list">${rows}</ul>`;
   }).join('');
+  el.querySelectorAll('[data-tackle-edit]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const itemId = btn.dataset.tackleEdit;
+      const manager = el.querySelector('.tackle-edit-manager[data-item="'+itemId+'"]');
+      if(!manager) return;
+      const isOpen = manager.style.display !== 'none';
+      if(isOpen){
+        manager.style.display = 'none';
+      }else{
+        manager.style.display = 'block';
+        manager.innerHTML = '<div class="empty">Loading...</div>';
+        await renderTackleItemEditForm(itemId, manager);
+      }
+    });
+  });
   el.querySelectorAll('[data-tackle-manage-share]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const itemId = btn.dataset.tackleManageShare;
@@ -2390,6 +2568,7 @@ async function renderTackleList(){
       await deleteTackleItem(btn.dataset.tackleRemove);
       renderTackleList();
       await loadGearOptions();
+await loadTackleCategoryOptions();
       if(currentPerson) renderAll();
     });
   });
@@ -2442,6 +2621,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
     renderTackleList();
     if(catEl.value === 'Rods' || catEl.value === 'Reels'){
       await loadGearOptions();
+await loadTackleCategoryOptions();
       if(currentPerson) renderAll();
     }
   }catch(e){
@@ -2479,19 +2659,35 @@ async function loadPerson(id){
     RODS.forEach(r=>{
       const row = rodRows.find(x=>x.rod===r);
       timers[r] = row ? {running:row.running, startTs:row.start_ts, accumulatedMs:row.accumulated_ms} : {running:false,startTs:null,accumulatedMs:0};
-      notes[r] = row
-        ? {bom:row.bom||'', hook1:row.hook1_note||'', hook2:row.hook2_note||'', hook3:row.hook3_note||'', identifier:row.identifier||'', dotColor:row.dot_color||'#C1440E', rig:row.rig||'', hookCount:row.hook_count||2, rodItemId:row.rod_item_id||'', reelItemId:row.reel_item_id||''}
-        : {bom:'',hook1:'',hook2:'',hook3:'',identifier:'',dotColor:'#C1440E',rig:'',hookCount:2,rodItemId:'',reelItemId:''};
+      const noteObj = {
+        bom: row ? (row.bom||'') : '',
+        identifier: row ? (row.identifier||'') : '',
+        dotColor: row ? (row.dot_color||'#C1440E') : '#C1440E',
+        rig: row ? (row.rig||'') : '',
+        hookCount: row ? (row.hook_count||2) : 2,
+        rodItemId: row ? (row.rod_item_id||'') : '',
+        reelItemId: row ? (row.reel_item_id||'') : ''
+      };
+      for(let n=1; n<=MAX_HOOKS; n++){
+        noteObj['hook'+n] = row ? (row['hook'+n+'_note']||'') : '';
+      }
+      notes[r] = noteObj;
     });
-    const catches = catchRows.map(c=>({
-      id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
-      time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
-      bom:c.bom||'', hook1:c.hook1_note||'', hook2:c.hook2_note||'', hook3:c.hook3_note||'',
-      rig: c.rig || '',
-      rodIdentifier: c.rod_identifier || '',
-      photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
-      likes: c.likes || 0
-    }));
+    const catches = catchRows.map(c=>{
+      const entry = {
+        id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
+        time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
+        bom:c.bom||'',
+        rig: c.rig || '',
+        rodIdentifier: c.rod_identifier || '',
+        photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
+        likes: c.likes || 0
+      };
+      for(let n=1; n<=MAX_HOOKS; n++){
+        entry['hook'+n] = c['hook'+n+'_note'] || '';
+      }
+      return entry;
+    });
     clearDbError();
     return {
       name:f.name, dam:f.dam, competition:f.competition||'', rods:normalizeRodsCount(f.rods), timers, notes, catches,
@@ -2510,28 +2706,32 @@ async function saveRodState(personId, rod){
   const t = currentPerson.timers[rod];
   const n = currentPerson.notes[rod];
   try{
-    await sbUpsert('rod_state', {
+    const payload = {
       fisherman_id: personId, rod,
       running: t.running, start_ts: t.startTs, accumulated_ms: t.accumulatedMs,
-      bom: n.bom, hook1_note: n.hook1, hook2_note: n.hook2, hook3_note: n.hook3,
+      bom: n.bom,
       identifier: n.identifier, dot_color: n.dotColor, rig: n.rig, hook_count: n.hookCount,
       rod_item_id: n.rodItemId || null, reel_item_id: n.reelItemId || null
-    }, 'fisherman_id,rod');
+    };
+    for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = n['hook'+i] || ''; }
+    await sbUpsert('rod_state', payload, 'fisherman_id,rod');
     clearDbError();
   }catch(e){ console.error(e); showDbError('Could not save to Supabase.'); }
 }
 
 async function insertCatch(personId, entry){
   try{
-    await sbPost('catches', {
+    const payload = {
       id: entry.id, fisherman_id: personId, rod: entry.rod, hook: entry.hook,
       caught: entry.caught, fish_type: entry.type, weight: entry.weight,
       time: new Date(entry.time).toISOString(), timer_elapsed_ms: entry.timerElapsed,
-      bom: entry.bom, hook1_note: entry.hook1, hook2_note: entry.hook2, hook3_note: entry.hook3 || '',
+      bom: entry.bom,
       rig: entry.rig || '',
       rod_identifier: entry.rodIdentifier || '',
       photos: JSON.stringify(entry.photos || [])
-    });
+    };
+    for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = entry['hook'+i] || ''; }
+    await sbPost('catches', payload);
     clearDbError();
   }catch(e){ console.error(e); showDbError('Could not save catch to Supabase.'); }
 }
@@ -2787,15 +2987,13 @@ function buildCatchEntry(rod){
   const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
   const typeValue = typeEl.value === 'Other' ? typeOtherEl.value : typeEl.value;
   const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
-  const bomVal = getRodFieldValue(rod, 'bom');
-  const hook1Val = getRodFieldValue(rod, 'hook1');
-  const hook2Val = getRodFieldValue(rod, 'hook2');
-  const hook3Val = getRodFieldValue(rod, 'hook3');
+  const notes = currentPerson.notes[rod];
+  const bomVal = notes.bom || '';
   const rigVal = getRodFieldValue(rod, 'rig');
   const idEl = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="identifier"]');
   const rodIdentifier = idEl ? idEl.value : '';
 
-  return {
+  const entry = {
     id: uid(),
     caught,
     rod,
@@ -2805,13 +3003,14 @@ function buildCatchEntry(rod){
     time: Date.now(),
     timerElapsed: elapsedMs(currentPerson.timers[rod]),
     bom: bomVal,
-    hook1: hook1Val,
-    hook2: hook2Val,
-    hook3: hook3Val,
     rig: rigVal,
     rodIdentifier: rodIdentifier,
     photos: caught ? (pendingPhotos[rod] || []).slice() : []
   };
+  for(let n=1; n<=MAX_HOOKS; n++){
+    entry['hook'+n] = notes['hook'+n] || '';
+  }
+  return entry;
 }
 
 let pendingEntry = null;
@@ -2831,7 +3030,12 @@ function showConfirmation(entry){
     html += `<p style="font-size:12px;">Rig: ${escapeHtml(entry.rig)}</p>`;
   }
   html += `<p style="font-size:12px;">Bom: ${escapeHtml(entry.bom||'—')}</p>`;
-  html += `<p style="font-size:12px;">Hook 1: ${escapeHtml(entry.hook1||'—')} · Hook 2: ${escapeHtml(entry.hook2||'—')}${entry.hook3 ? ' · Hook 3: '+escapeHtml(entry.hook3) : ''}</p>`;
+  const hookParts = [];
+  for(let n=1; n<=MAX_HOOKS; n++){
+    const val = entry['hook'+n];
+    if(val || n<=2) hookParts.push('Hook '+n+': '+escapeHtml(val||'—'));
+  }
+  html += `<p style="font-size:12px;">${hookParts.join(' &middot; ')}</p>`;
   if(entry.photos && entry.photos.length){
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
       entry.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
@@ -2849,14 +3053,16 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
 
   // Clear this rod's rig/bait/hook notes and reset its timer for the next session,
   // but keep the identifier, color, and hook count (those are rod-level settings, not per-catch)
-  currentPerson.notes[rod] = {
-    bom:'', hook1:'', hook2:'', hook3:'', rig:'',
+  const clearedNotes = {
+    bom:'', rig:'',
     identifier: currentPerson.notes[rod].identifier,
     dotColor: currentPerson.notes[rod].dotColor,
     hookCount: currentPerson.notes[rod].hookCount,
     rodItemId: currentPerson.notes[rod].rodItemId,
     reelItemId: currentPerson.notes[rod].reelItemId
   };
+  for(let n=1; n<=MAX_HOOKS; n++){ clearedNotes['hook'+n] = ''; }
+  currentPerson.notes[rod] = clearedNotes;
   currentPerson.timers[rod] = {running:false, startTs:null, accumulatedMs:0};
 
   const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
@@ -2922,10 +3128,11 @@ function catchDetailHtml(c){
     html += `<div class="pc-line muted">Rig: ${escapeHtml(c.rig)}</div>`;
   }
   html += `<div class="pc-line muted">Bom: ${escapeHtml(c.bom||'—')}</div>`;
-  html += `<div class="pc-line muted">Hook 1: ${escapeHtml(c.hook1||'—')}</div>`;
-  html += `<div class="pc-line muted">Hook 2: ${escapeHtml(c.hook2||'—')}</div>`;
-  if(c.hook3){
-    html += `<div class="pc-line muted">Hook 3: ${escapeHtml(c.hook3)}</div>`;
+  for(let n=1; n<=MAX_HOOKS; n++){
+    const val = c['hook'+n];
+    if(val || n<=2){
+      html += `<div class="pc-line muted">Hook ${n}: ${escapeHtml(val||'—')}</div>`;
+    }
   }
   if(c.photos && c.photos.length){
     photoGalleryCache[c.id] = c.photos;
@@ -4341,6 +4548,7 @@ const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') ===
   await loadKnownRodOptions();
   await loadKnownRigs();
   await loadGearOptions();
+await loadTackleCategoryOptions();
   await loadFollowedIds();
   populateAnglerSelect();
 })();
