@@ -22,6 +22,13 @@
       var titleMeta = document.getElementById('apple-title-meta');
       if(titleMeta) titleMeta.setAttribute('content', 'PK Leaderboard');
     }
+    // Apply any saved theme before first paint, so there's no flash of the wrong colours
+    try{
+      var savedTheme = localStorage.getItem('pk_fishing_theme');
+      if(savedTheme === 'dark' || savedTheme === 'light'){
+        document.documentElement.setAttribute('data-theme', savedTheme);
+      }
+    }catch(e){}
   })();
 </script>
 <style>
@@ -39,8 +46,9 @@
     --catch-green:#A61B2B;
     --radius:14px;
   }
+  /* Dark palette, shared by the system preference and the manual toggle */
   @media (prefers-color-scheme: dark){
-    :root{
+    :root:not([data-theme="light"]){
       --dam:#7A0F1A;
       --dam-deep:#4A0810;
       --khaki:#E8AFAF;
@@ -53,6 +61,19 @@
       --line:#3A2323;
       --catch-green:#C83244;
     }
+  }
+  :root[data-theme="dark"]{
+    --dam:#7A0F1A;
+    --dam-deep:#4A0810;
+    --khaki:#E8AFAF;
+    --rust:#FF5464;
+    --cream:#FFFFFF;
+    --paper:#141010;
+    --card-bg:#1F1616;
+    --ink:#F5EAEA;
+    --muted:#C79999;
+    --line:#3A2323;
+    --catch-green:#C83244;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--dam);}
@@ -182,10 +203,15 @@
   input[type="color"].rod-dot::-webkit-color-swatch-wrapper{padding:0;border-radius:50%;}
   input[type="color"].rod-dot::-webkit-color-swatch{border:1px solid var(--line);border-radius:50%;}
   input[type="color"].rod-dot::-moz-color-swatch{border:1px solid var(--line);border-radius:50%;}
-  .rod-id-input{
-    flex:1;min-width:110px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;
-    font-size:13px;background:var(--card-bg);color:var(--ink);font-family:inherit;
+  .rod-name-input{
+    flex:1;min-width:110px;padding:4px 8px;
+    border:1px solid transparent;border-radius:8px;
+    font-size:17px;font-weight:700;font-family:inherit;
+    background:transparent;color:var(--ink);
   }
+  .rod-name-input:hover{border-color:var(--line);}
+  .rod-name-input:focus{border-color:var(--dam);background:var(--card-bg);outline:none;}
+  .rod-name-input::placeholder{color:var(--ink);opacity:1;font-weight:700;}
 
   .bobber-row{display:flex;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap;}
   .bobber{
@@ -404,6 +430,14 @@
     </button>
   </header>
   <div id="db-status"></div>
+  <div id="offline-banner" style="display:none;background:#8a5a00;color:#fff;padding:8px 14px;font-size:12px;text-align:center;"></div>
+  <div id="install-banner" style="display:none;background:var(--dam-deep);color:#fff;padding:10px 14px;font-size:13px;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+    <span id="install-banner-text">Add PK Fishing to your home screen for quick access.</span>
+    <span style="display:flex;gap:8px;">
+      <button class="mini-btn" id="install-app-btn">Add</button>
+      <button class="mini-btn" id="install-dismiss-btn">Not now</button>
+    </span>
+  </div>
 
   <nav class="tabs" id="nav-tabs">
     <button data-tab="timers" id="timers-tab-btn" style="display:none;">Timers</button>
@@ -429,6 +463,34 @@
           <label>Angler</label>
           <select id="angler-select" autocomplete="off"></select>
         </div>
+
+        <section class="card" id="session-setup">
+          <h2>Start a session</h2>
+          <div class="field">
+            <label>Venue</label>
+            <input type="text" maxlength="100" id="session-venue" list="session-venue-suggestions" placeholder="Where are you fishing?">
+            <datalist id="session-venue-suggestions"></datalist>
+          </div>
+          <div class="field">
+            <label>How many rods?</label>
+            <select id="session-rods"></select>
+          </div>
+          <button class="primary-btn" id="session-start-btn">Start session</button>
+          <div class="status" id="session-status"></div>
+        </section>
+
+        <div id="session-active-bar" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:14px;font-weight:700;" id="session-active-venue"></div>
+            <div class="pc-line muted" id="session-active-meta"></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="font-size:12px;color:var(--muted);">Rods</label>
+            <select id="session-active-rods" class="mini-btn" style="padding:6px 8px;"></select>
+            <button class="mini-btn danger" id="session-end-btn">End session</button>
+          </div>
+        </div>
+
         <div id="rod-cards"></div>
       </div>
     </div>
@@ -439,78 +501,60 @@
         <h2>Account</h2>
 
         <div id="auth-forms">
-          <div class="catch-toggle" id="auth-mode-toggle">
-            <button type="button" class="sel-yes" data-mode="signup">Sign up</button>
-            <button type="button" class="sel-no" data-mode="signin">Sign in</button>
-          </div>
-
           <div id="signup-form" style="display:none;">
             <div class="field">
               <label>Display Name / Nickname</label>
-              <input type="text" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
+              <input type="text" maxlength="100" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
             </div>
             <div class="field">
-              <label>Number of rods</label>
-              <select id="signup-rods">
-                <option value="1" selected>1 rod</option>
-                <option value="2">2 rods</option>
-                <option value="3">3 rods</option>
-                <option value="4">4 rods</option>
-                <option value="5">5 rods</option>
-                <option value="6">6 rods</option>
-                <option value="7">7 rods</option>
-                <option value="8">8 rods</option>
-                <option value="9">9 rods</option>
-                <option value="10">10 rods</option>
-              </select>
+              <label>Country</label>
+              <select id="signup-country"></select>
             </div>
             <div class="row2">
               <div class="field">
                 <label>Email</label>
-                <input type="email" id="signup-email" placeholder="you@example.com">
+                <input type="email" maxlength="120" id="signup-email" placeholder="you@example.com">
               </div>
               <div class="field">
                 <label>Password</label>
-                <input type="password" id="signup-password" placeholder="At least 6 characters">
-              </div>
-            </div>
-            <hr class="divider">
-            <p class="sub-heading">Personal best (optional)</p>
-            <div class="row2">
-              <div class="field">
-                <label>Carp — weight (kg)</label>
-                <input type="number" step="0.01" min="0" id="signup-pb-carp-weight" placeholder="e.g. 12.4">
-              </div>
-              <div class="field">
-                <label>Carp — photo</label>
-                <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="signup-pb-carp-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="signup-pb-carp-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="signup-pb-carp-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="signup-pb-carp-photo" style="display:none;">
-              </div>
-            </div>
-            <div class="row2">
-              <div class="field">
-                <label>Catfish (Barbel) — weight (kg)</label>
-                <input type="number" step="0.01" min="0" id="signup-pb-barbel-weight" placeholder="e.g. 8.1">
-              </div>
-              <div class="field">
-                <label>Catfish (Barbel) — photo</label>
-                <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="signup-pb-barbel-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="signup-pb-barbel-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="signup-pb-barbel-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="signup-pb-barbel-photo" style="display:none;">
+                <input type="password" maxlength="200" id="signup-password" placeholder="At least 6 characters">
               </div>
             </div>
             <button class="primary-btn" id="signup-btn">Create account</button>
             <div class="status" id="signup-status"></div>
+            <p class="pc-line muted" style="margin-top:14px;text-align:center;">
+              Already have an account? <button type="button" id="show-signin-link" style="background:none;border:none;color:var(--dam);font-weight:700;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;text-decoration:underline;">Sign in</button>
+            </p>
           </div>
 
-          <div id="signin-form" style="display:none;">
+          <div id="signin-form">
             <div class="field">
               <label>Email</label>
-              <input type="email" id="signin-email" placeholder="you@example.com">
+              <input type="email" maxlength="120" id="signin-email" placeholder="you@example.com">
             </div>
             <div class="field">
               <label>Password</label>
-              <input type="password" id="signin-password" placeholder="Password">
+              <input type="password" maxlength="200" id="signin-password" placeholder="Password">
             </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:12px;">
+              <input type="checkbox" id="keep-signed-in" checked> Keep me signed in on this device
+            </label>
             <button class="primary-btn" id="signin-btn">Sign in</button>
             <div class="status" id="signin-status"></div>
+
+            <div style="display:flex;align-items:center;gap:10px;margin:16px 0;">
+              <div style="flex:1;height:1px;background:var(--line);"></div>
+              <span class="pc-line muted">or</span>
+              <div style="flex:1;height:1px;background:var(--line);"></div>
+            </div>
+            <button class="mini-btn" id="google-signin-btn" style="width:100%;padding:12px;display:flex;align-items:center;justify-content:center;gap:8px;">
+              <span style="font-weight:700;">G</span> Continue with Google
+            </button>
+            <div class="status" id="google-signin-status"></div>
+
+            <p class="pc-line muted" style="margin-top:14px;text-align:center;">
+              New here? <button type="button" id="show-signup-link" style="background:none;border:none;color:var(--dam);font-weight:700;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;text-decoration:underline;">Create an account</button>
+            </p>
           </div>
         </div>
 
@@ -524,16 +568,16 @@
         <h2>My details</h2>
         <div class="field">
           <label>Display Name / Nickname</label>
-          <input type="text" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
+          <input type="text" maxlength="100" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
         </div>
         <div class="row2">
           <div class="field">
             <label>Name</label>
-            <input type="text" id="details-first-name" placeholder="First name">
+            <input type="text" maxlength="100" id="details-first-name" placeholder="First name">
           </div>
           <div class="field">
             <label>Surname</label>
-            <input type="text" id="details-last-name" placeholder="Surname">
+            <input type="text" maxlength="100" id="details-last-name" placeholder="Surname">
           </div>
         </div>
         <div class="field">
@@ -541,40 +585,55 @@
           <select id="details-country"></select>
         </div>
         <p class="pc-line muted" style="margin-top:-6px;margin-bottom:12px;">Name, surname, and country are private — only you can see them here, never shown publicly.</p>
-        <div class="row2">
-          <div class="field">
-            <label>Number of rods</label>
-            <select id="details-rods"></select>
-          </div>
-          <div class="field">
-            <label>Email</label>
-            <input type="email" id="details-email" placeholder="you@example.com">
-          </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" maxlength="120" id="details-email" placeholder="you@example.com">
         </div>
         <hr class="divider">
-        <p class="sub-heading">Personal best</p>
-        <div class="row2">
-          <div class="field">
-            <label>Carp — weight (kg)</label>
-            <input type="number" step="0.01" min="0" id="details-pb-carp-weight" placeholder="e.g. 12.4">
-          </div>
-          <div class="field">
-            <label>Carp — photo</label>
-            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="details-pb-carp-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="details-pb-carp-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="details-pb-carp-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="details-pb-carp-photo" style="display:none;">
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field">
-            <label>Catfish (Barbel) — weight (kg)</label>
-            <input type="number" step="0.01" min="0" id="details-pb-barbel-weight" placeholder="e.g. 8.1">
-          </div>
-          <div class="field">
-            <label>Catfish (Barbel) — photo</label>
-            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="details-pb-barbel-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="details-pb-barbel-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="details-pb-barbel-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="details-pb-barbel-photo" style="display:none;">
-          </div>
-        </div>
+        <p class="sub-heading">Trophy Room species</p>
+        <p class="pc-line muted" style="margin-bottom:8px;">Pick which species show in your Trophy Room. You can still log a catch as any species.</p>
+        <div id="details-trophy-species" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;"></div>
         <button class="primary-btn" id="details-save-btn">Save details</button>
         <div class="status" id="details-save-status"></div>
+      </section>
+
+      <section class="card">
+        <h2>How it works</h2>
+        <p class="pc-line muted">A quick walkthrough of rigs, sessions, timers and insights.</p>
+        <button class="mini-btn" id="show-onboarding-btn">Show me again</button>
+      </section>
+
+      <section class="card">
+        <h2>Appearance</h2>
+        <div class="field">
+          <label>Theme</label>
+          <select id="theme-select">
+            <option value="system">Match my device</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="card" id="my-insights-card" style="display:none;">
+        <h2>My insights</h2>
+        <p class="pc-line muted">See what's actually working — which rigs land fish, which baits perform, and how long your rods really soak.</p>
+        <button class="primary-btn" id="open-insights-btn">View my insights</button>
+      </section>
+
+      <section class="card" id="danger-zone-card" style="display:none;">
+        <h2>Delete my data</h2>
+        <p class="pc-line muted">Permanently removes your angler profile, every catch you've logged, your rod timers, sessions, venues, and tackle box items. This cannot be undone.</p>
+        <button class="mini-btn danger" id="delete-account-btn">Delete everything</button>
+        <div id="delete-account-confirm" style="display:none;margin-top:10px;">
+          <p class="pc-line" style="color:#c04;">Type <b>DELETE</b> below to confirm.</p>
+          <input type="text" maxlength="100" id="delete-account-confirm-input" placeholder="DELETE" style="margin-bottom:8px;">
+          <div class="row2">
+            <button class="mini-btn" id="delete-account-cancel-btn">Cancel</button>
+            <button class="mini-btn danger" id="delete-account-final-btn">Permanently delete</button>
+          </div>
+        </div>
+        <div class="status" id="delete-account-status"></div>
       </section>
     </div>
 
@@ -604,7 +663,7 @@
         </label>
         <p id="lb-following-hint" class="pc-line muted" style="display:none;margin-bottom:10px;">Sign in from the Profile tab to filter by who you follow.</p>
         <div id="lb-competition-dam" class="pc-line muted" style="display:none;margin-bottom:8px;"></div>
-        <div id="leaderboard-list"><div class="empty">No catches logged yet.</div></div>
+        <div id="leaderboard-list"><div class="empty">No catches logged yet — the leaderboard fills up as people start logging fish.</div></div>
       </section>
       <button class="primary-btn" id="refresh-lb-btn" style="background:var(--dam);">Refresh</button>
     </div>
@@ -619,9 +678,9 @@
         <h2>Friends</h2>
         <div class="field">
           <label>Search by name</label>
-          <input type="text" id="feed-search-input" placeholder="Type an angler's name...">
+          <input type="text" maxlength="100" id="feed-search-input" placeholder="Type an angler's name...">
         </div>
-        <div id="feed-list"><div class="empty">No catches yet.</div></div>
+        <div id="feed-list"><div class="empty">No catches yet — this is where recent catches from you and your friends will appear.</div></div>
       </section>
       <button class="primary-btn" id="refresh-feed-btn" style="background:var(--dam);">Refresh</button>
     </div>
@@ -632,7 +691,7 @@
         <h2>Create a challenge</h2>
         <div class="field">
           <label>Name</label>
-          <input type="text" id="challenge-name" placeholder="e.g. Biggest bag this month">
+          <input type="text" maxlength="100" id="challenge-name" placeholder="e.g. Biggest bag this month">
         </div>
         <div class="row2">
           <div class="field">
@@ -673,7 +732,7 @@
         <p class="sub-heading">Add anglers (optional — leave empty for open to everyone)</p>
         <div class="field">
           <label>Search by name or email</label>
-          <input type="text" id="challenge-angler-search" placeholder="Type a name or email...">
+          <input type="text" maxlength="100" id="challenge-angler-search" placeholder="Type a name or email...">
         </div>
         <div id="challenge-angler-search-results"></div>
         <div id="challenge-selected-anglers" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
@@ -682,7 +741,7 @@
       </section>
       <section class="card">
         <h2>Challenges</h2>
-        <div id="challenges-list"><div class="empty">No challenges yet.</div></div>
+        <div id="challenges-list"><div class="empty">No challenges yet — create one above to set a target over a date range.</div></div>
       </section>
     </div>
 
@@ -697,17 +756,17 @@
         <div class="row2">
           <div class="field">
             <label>Name</label>
-            <input type="text" id="competition-name" placeholder="e.g. October Weekend">
+            <input type="text" maxlength="100" id="competition-name" placeholder="e.g. October Weekend">
           </div>
           <div class="field">
-            <label>Dam</label>
-            <input type="text" id="competition-dam" placeholder="Dam">
+            <label>Venue</label>
+            <input type="text" maxlength="100" id="competition-dam" placeholder="Where is it being fished?">
           </div>
         </div>
         <p class="sub-heading">Add anglers</p>
         <div class="field">
           <label>Search by name or email</label>
-          <input type="text" id="competition-angler-search" placeholder="Type a name or email...">
+          <input type="text" maxlength="100" id="competition-angler-search" placeholder="Type a name or email...">
         </div>
         <div id="competition-angler-search-results"></div>
         <div id="competition-selected-anglers" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
@@ -716,7 +775,7 @@
       </section>
       <section class="card">
         <h2>All competitions</h2>
-        <div id="competitions-list"><div class="empty">No competitions yet.</div></div>
+        <div id="competitions-list"><div class="empty">No competitions yet — create one above and add the anglers taking part.</div></div>
       </section>
     </div>
 
@@ -771,11 +830,11 @@
           <div class="row2">
             <div class="field">
               <label>Type</label>
-              <input type="text" id="admin-catch-type" placeholder="e.g. Carp">
+              <input type="text" maxlength="100" id="admin-catch-type" placeholder="e.g. Carp">
             </div>
             <div class="field">
               <label>Weight (kg)</label>
-              <input type="number" step="0.01" min="0" id="admin-catch-weight">
+              <input type="number" step="0.01" min="0" max="500" id="admin-catch-weight">
             </div>
           </div>
           <button class="primary-btn" id="admin-catch-save-btn">Save changes</button>
@@ -798,7 +857,7 @@
           <div class="row2">
             <div class="field">
               <label>Name</label>
-              <input type="text" id="tackle-name" list="tackle-name-suggestions" placeholder="e.g. Size 6 Barbel hook">
+              <input type="text" maxlength="100" id="tackle-name" list="tackle-name-suggestions" placeholder="e.g. Size 6 Barbel hook">
               <datalist id="tackle-name-suggestions"></datalist>
             </div>
             <div class="field">
@@ -840,7 +899,7 @@
           </div>
           <div class="field">
             <label>Notes (optional)</label>
-            <input type="text" id="tackle-notes" placeholder="e.g. brand, size, qty">
+            <input type="text" maxlength="100" id="tackle-notes" placeholder="e.g. brand, size, qty">
           </div>
           <div class="field">
             <label>Photo (optional)</label>
@@ -911,18 +970,18 @@
               <option value="">Anyone</option>
             </select>
           </div>
-          <div id="tackle-list"><div class="empty">No tackle added yet.</div></div>
+          <div id="tackle-list"><div class="empty">No tackle added yet — add your rods, reels, bait and dips above.</div></div>
         </section>
 
         <section class="card">
           <h2>Build a rig</h2>
           <div class="field">
             <label>Type of rig</label>
-            <input type="text" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo...">
+            <input type="text" maxlength="100" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo...">
           </div>
           <div class="field">
             <label>Brand (optional)</label>
-            <input type="text" id="rig-brand" placeholder="e.g. Korda, Gardner, ESP...">
+            <input type="text" maxlength="100" id="rig-brand" placeholder="e.g. Korda, Gardner, ESP...">
           </div>
           <div class="row2">
             <div class="field">
@@ -943,7 +1002,7 @@
           </div>
           <button class="primary-btn" id="rig-create-btn">Create rig</button>
           <div class="status" id="rig-create-status"></div>
-          <div id="rigs-list" style="margin-top:14px;"><div class="empty">No rigs built yet.</div></div>
+          <div id="rigs-list" style="margin-top:14px;"><div class="empty">No rigs built yet — build one above, then tick "Use" to see it on your Timers.</div></div>
         </section>
       </div>
     </div>
@@ -973,8 +1032,44 @@
   <div class="modal-card">
     <h3 style="margin-top:0;">Notifications</h3>
     <button class="mini-btn" id="notif-mark-all-read" style="margin-bottom:10px;">Mark all as read</button>
-    <div id="notif-list"><div class="empty">No notifications yet.</div></div>
+    <div id="notif-list"><div class="empty">No notifications yet — you'll hear when someone follows you, likes a catch, or adds you to a competition.</div></div>
     <button class="primary-btn" id="notif-close" style="margin-top:14px;">Close</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="onboarding-modal">
+  <div class="modal-card">
+    <h3 style="margin-top:0;">👌 Welcome to PK Fishing</h3>
+    <p class="pc-line">Here's how it works:</p>
+    <div class="profile-catch">
+      <div class="pc-head">1. Build your rigs</div>
+      <div class="pc-line muted">On the Tackle Box tab, add your gear and build the rigs you fish. Tick "Use" on a rig to make it show up on your Timers.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">2. Start a session</div>
+      <div class="pc-line muted">On the Timers tab, set your venue and how many rods you're on. Your rods appear, ready to go.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">3. Run your timers</div>
+      <div class="pc-line muted">Start a timer when a rod goes out. Pick the rig, bait and bom you're using for that rod.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">4. Log your catches</div>
+      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time is recorded automatically.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">5. See what's working</div>
+      <div class="pc-line muted">Over time, My Insights on the Profile tab shows which rigs and baits actually land fish for you.</div>
+    </div>
+    <button class="primary-btn" id="onboarding-close" style="margin-top:14px;">Got it</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="insights-modal">
+  <div class="modal-card wide">
+    <h3 style="margin-top:0;">My insights</h3>
+    <div id="insights-body"><div class="empty">Loading...</div></div>
+    <button class="primary-btn" id="insights-close" style="margin-top:14px;">Close</button>
   </div>
 </div>
 
@@ -990,10 +1085,10 @@
     <div id="photo-comment-section" style="text-align:left;margin-top:14px;display:none;">
       <p class="sub-heading" style="margin-bottom:8px;">Comments on this catch</p>
       <div class="field">
-        <input type="text" id="photo-comment-author" placeholder="Your name (optional)">
+        <input type="text" maxlength="100" id="photo-comment-author" placeholder="Your name (optional)">
       </div>
       <div class="field">
-        <textarea id="photo-comment-message" placeholder="Comment on this catch..."></textarea>
+        <textarea maxlength="500" id="photo-comment-message" placeholder="Comment on this catch..."></textarea>
       </div>
       <button class="primary-btn" id="photo-comment-post-btn">Post comment</button>
       <div class="status" id="photo-comment-status"></div>
@@ -1035,11 +1130,11 @@
             <option value="Eel">Eel</option>
             <option value="Other">Other</option>
           </select>
-          <input type="text" id="edit-catch-type-other" placeholder="Type of fish" style="display:none;margin-top:8px;">
+          <input type="text" maxlength="100" id="edit-catch-type-other" placeholder="Type of fish" style="display:none;margin-top:8px;">
         </div>
         <div class="field">
           <label>Weight (kg)</label>
-          <input type="number" step="0.01" min="0" id="edit-catch-weight" placeholder="e.g. 2.4">
+          <input type="number" step="0.01" min="0" max="500" id="edit-catch-weight" placeholder="e.g. 2.4">
         </div>
       </div>
       <div class="field">
@@ -1061,10 +1156,26 @@ const SUPABASE_URL = 'https://quptwbxzstepwfeffljq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_nnO3ZffPD-r08e4E1rjcPQ_47mGq7Xu';
 
 const MAX_RODS = 10;
-const MAX_HOOKS = 6;
+const MAX_HOOKS = 4;
 const RODS = Array.from({length: MAX_RODS}, (_, i) => 'rod' + (i+1));
 const RID_LABEL = {};
 RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
+
+// Master species list for the Trophy Room. Each angler picks which of these
+// they want shown — this doesn't limit what you can log a catch as.
+const ALL_TROPHY_SPECIES = [
+  'Carp','Mirror Carp','Grass Carp','Barbel','Yellowfish',
+  'Bass','Tilapia','Koi','Mudfish','Eel'
+];
+const DEFAULT_TROPHY_SPECIES = ['Carp','Mirror Carp','Grass Carp','Barbel','Yellowfish'];
+
+function getTrophySpeciesFor(person){
+  if(!person || !person.trophy_species) return DEFAULT_TROPHY_SPECIES;
+  try{
+    const arr = JSON.parse(person.trophy_species);
+    return (Array.isArray(arr) && arr.length) ? arr : DEFAULT_TROPHY_SPECIES;
+  }catch(e){ return DEFAULT_TROPHY_SPECIES; }
+}
 
 const COUNTRY_LIST = [
   "South Africa","Afghanistan","Albania","Algeria","Andorra","Angola","Argentina","Armenia","Australia",
@@ -1147,11 +1258,28 @@ async function loadKnownRodOptions(){
   }catch(e){ console.error('loadKnownRodOptions failed', e); }
 }
 
+async function loadMyRigUseIds(){
+  if(!isSignedIn()) return new Set();
+  try{
+    const rows = await sbGet('rig_uses?select=rig_id&user_id=eq.'+session.user.id);
+    return new Set(rows.map(r=>r.rig_id));
+  }catch(e){ console.error('loadMyRigUseIds failed', e); return new Set(); }
+}
+
 async function loadKnownRigs(){
   try{
     const rows = await sbGet('rigs?select=id,name,uses_bom,hook_count&order=name.asc');
-    knownRigsFull = rows.map(r=>({id:r.id, name:r.name, usesBom:!!r.uses_bom, hookCount:r.hook_count||0}));
-  }catch(e){ console.error('loadKnownRigs failed', e); knownRigsFull = []; }
+    // The Timers dropdown only shows rigs you've ticked as "in use"
+    const inUse = await loadMyRigUseIds();
+    knownRigsFull = rows
+      .filter(r=>inUse.has(r.id))
+      .map(r=>({id:r.id, name:r.name, usesBom:!!r.uses_bom, hookCount:r.hook_count||0}));
+    clearDbError();
+  }catch(e){
+    console.error('loadKnownRigs failed', e);
+    knownRigsFull = [];
+    showDbError('Could not load rigs: ' + (e.message || 'unknown error'));
+  }
 }
 function findRigDef(name){
   return knownRigsFull.find(r=>r.name === name) || null;
@@ -1164,6 +1292,9 @@ function buildRodOptionsHtml(options){
   return html;
 }
 function buildRigOptionsHtml(){
+  if(knownRigsFull.length === 0){
+    return '<option value="">No rigs yet — tick "Use" on the Tackle Box tab</option>';
+  }
   let html = '<option value="">None</option>';
   knownRigsFull.forEach(r=>{ html += `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`; });
   return html;
@@ -1194,7 +1325,7 @@ function joinMultiValue(arr){
 function multiPickerFieldHtml(rod, key, label){
   return `<div class="field">
     <label>${escapeHtml(label)}</label>
-    <input type="text" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search your tackle box...">
+    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search your tackle box...">
     <div class="multi-picker-results" data-rod="${rod}" data-key="${key}"></div>
     <div class="multi-picker-pills" data-rod="${rod}" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
   </div>`;
@@ -1300,15 +1431,28 @@ function hookFieldHtml(r, n){
   return `<div class="field">
       <label>Hook ${n}</label>
       <select class="rod-select" data-rod="${r}" data-key="${key}">${buildRodOptionsHtml(knownHookOptions)}</select>
-      <input type="text" class="rod-field rod-select-other" data-rod="${r}" data-key="${key}" placeholder="Rig, bait, depth..." style="display:none;margin-top:6px;">
+      <input type="text" maxlength="100" class="rod-field rod-select-other" data-rod="${r}" data-key="${key}" placeholder="Rig, bait, depth..." style="display:none;margin-top:6px;">
     </div>`;
 }
 
+
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15MB — generous for a phone photo, blocks absurd files
 
 function resizeImageFile(file, maxDim, quality){
   maxDim = maxDim || 800;
   quality = quality || 0.7;
   return new Promise((resolve, reject)=>{
+    // Validate before doing any work — this is the single choke point every
+    // upload in the app goes through
+    if(!file){ reject(new Error('No file selected')); return; }
+    if(!file.type || !file.type.startsWith('image/')){
+      reject(new Error('That file is not an image'));
+      return;
+    }
+    if(file.size > MAX_UPLOAD_BYTES){
+      reject(new Error('That image is too large (max ' + Math.round(MAX_UPLOAD_BYTES/1024/1024) + 'MB)'));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e)=>{
       const img = new Image();
@@ -1429,7 +1573,10 @@ document.getElementById('edit-catch-photo-input').addEventListener('change', asy
     const dataUrl = await resizeImageFile(file);
     editPhotos.push(dataUrl);
     renderEditPhotoPreview();
-  }catch(e){ console.error('Photo processing failed', e); }
+  }catch(e){
+    console.error('Photo processing failed', e);
+    alert(e.message || 'Could not process that photo.');
+  }
   inp.value = '';
 });
 
@@ -1483,6 +1630,12 @@ function elapsedMs(t){
   if(!t) return 0;
   return (t.accumulatedMs||0) + (t.running ? (Date.now()-t.startTs) : 0);
 }
+// Guard for destructive actions — a single mis-tap shouldn't delete
+// something other people are relying on.
+function confirmDelete(what){
+  return window.confirm('Delete ' + what + '?\n\nThis cannot be undone.');
+}
+
 function escapeHtml(s){
   return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -1541,6 +1694,259 @@ function setConnDot(connected){
 }
 
 // ---------- Supabase REST helpers ----------
+// ---------- Offline queue ----------
+// Catches logged and rod/timer state changed without a connection are stored
+// locally in IndexedDB and replayed against Supabase once we're back online.
+const OFFLINE_DB = 'pk_fishing_offline';
+const OFFLINE_STORE = 'pending_catches';
+const OFFLINE_ROD_STORE = 'pending_rod_state';
+const OFFLINE_SESSION_STORE = 'pending_sessions';
+const OFFLINE_VENUE_STORE = 'pending_venues';
+
+function openOfflineDb(){
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(OFFLINE_DB, 3);
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if(!db.objectStoreNames.contains(OFFLINE_STORE)){
+        db.createObjectStore(OFFLINE_STORE, {keyPath: 'id'});
+      }
+      if(!db.objectStoreNames.contains(OFFLINE_ROD_STORE)){
+        // Keyed by fisherman+rod so repeated saves just overwrite the latest state
+        db.createObjectStore(OFFLINE_ROD_STORE, {keyPath: 'key'});
+      }
+      if(!db.objectStoreNames.contains(OFFLINE_SESSION_STORE)){
+        db.createObjectStore(OFFLINE_SESSION_STORE, {keyPath: 'id'});
+      }
+      if(!db.objectStoreNames.contains(OFFLINE_VENUE_STORE)){
+        db.createObjectStore(OFFLINE_VENUE_STORE, {keyPath: 'id'});
+      }
+    };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+// Generic helpers for the simpler offline stores
+async function offlinePut(storeName, record){
+  try{
+    const db = await openOfflineDb();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.objectStore(storeName).put(record);
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+    return true;
+  }catch(e){ console.error('offlinePut failed', storeName, e); return false; }
+}
+async function offlineGetAll(storeName){
+  try{
+    const db = await openOfflineDb();
+    return await new Promise((resolve, reject)=>{
+      const tx = db.transaction(storeName, 'readonly');
+      const req = tx.objectStore(storeName).getAll();
+      req.onsuccess = ()=> resolve(req.result || []);
+      req.onerror = ()=> reject(req.error);
+    });
+  }catch(e){ console.error(e); return []; }
+}
+async function offlineDelete(storeName, key){
+  try{
+    const db = await openOfflineDb();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.objectStore(storeName).delete(key);
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }catch(e){ console.error(e); }
+}
+
+async function queuePendingRodState(payload){
+  try{
+    const db = await openOfflineDb();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(OFFLINE_ROD_STORE, 'readwrite');
+      tx.objectStore(OFFLINE_ROD_STORE).put({
+        key: payload.fisherman_id + '|' + payload.rod,
+        payload,
+        queuedAt: Date.now()
+      });
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+    return true;
+  }catch(e){ console.error('Could not queue rod state offline', e); return false; }
+}
+
+async function getPendingRodStates(){
+  try{
+    const db = await openOfflineDb();
+    return await new Promise((resolve, reject)=>{
+      const tx = db.transaction(OFFLINE_ROD_STORE, 'readonly');
+      const req = tx.objectStore(OFFLINE_ROD_STORE).getAll();
+      req.onsuccess = ()=> resolve(req.result || []);
+      req.onerror = ()=> reject(req.error);
+    });
+  }catch(e){ console.error(e); return []; }
+}
+
+async function removePendingRodState(key){
+  try{
+    const db = await openOfflineDb();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(OFFLINE_ROD_STORE, 'readwrite');
+      tx.objectStore(OFFLINE_ROD_STORE).delete(key);
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }catch(e){ console.error(e); }
+}
+
+async function queuePendingCatch(personId, entry){
+  try{
+    const db = await openOfflineDb();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+      tx.objectStore(OFFLINE_STORE).put({id: entry.id, personId, entry, queuedAt: Date.now()});
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+    return true;
+  }catch(e){ console.error('Could not queue catch offline', e); return false; }
+}
+
+async function getPendingCatches(){
+  try{
+    const db = await openOfflineDb();
+    return await new Promise((resolve, reject)=>{
+      const tx = db.transaction(OFFLINE_STORE, 'readonly');
+      const req = tx.objectStore(OFFLINE_STORE).getAll();
+      req.onsuccess = ()=> resolve(req.result || []);
+      req.onerror = ()=> reject(req.error);
+    });
+  }catch(e){ console.error(e); return []; }
+}
+
+async function removePendingCatch(id){
+  try{
+    const db = await openOfflineDb();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+      tx.objectStore(OFFLINE_STORE).delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }catch(e){ console.error(e); }
+}
+
+function buildCatchPayload(personId, entry){
+  const payload = {
+    id: entry.id, fisherman_id: personId, rod: entry.rod, hook: entry.hook,
+    caught: entry.caught, fish_type: entry.type, weight: entry.weight,
+    time: new Date(entry.time).toISOString(), timer_elapsed_ms: entry.timerElapsed,
+    bom: entry.bom,
+    rig: entry.rig || '',
+    rod_identifier: entry.rodIdentifier || '',
+    photos: JSON.stringify(entry.photos || []),
+    latitude: entry.latitude != null ? entry.latitude : null,
+    longitude: entry.longitude != null ? entry.longitude : null,
+    venue_id: entry.venueId || null,
+    session_id: entry.sessionId || null
+  };
+  for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = entry['hook'+i] || ''; }
+  return payload;
+}
+
+let isSyncing = false;
+async function syncPendingCatches(){
+  if(isSyncing || !navigator.onLine || !isSignedIn()) return;
+  const pending = await getPendingCatches();
+  const pendingRods = await getPendingRodStates();
+  const pendingVenues = await offlineGetAll(OFFLINE_VENUE_STORE);
+  const pendingSessions = await offlineGetAll(OFFLINE_SESSION_STORE);
+  if(pending.length === 0 && pendingRods.length === 0 && pendingVenues.length === 0 && pendingSessions.length === 0){
+    updateOfflineBanner();
+    return;
+  }
+  isSyncing = true;
+  let synced = 0;
+
+  // Venues and sessions go first — catches reference them
+  for(const item of pendingVenues){
+    try{
+      await sbPost('venues', item.record);
+      await offlineDelete(OFFLINE_VENUE_STORE, item.id);
+      synced++;
+    }catch(e){ console.error('Sync failed for venue', item.id, e); }
+  }
+  for(const item of pendingSessions){
+    try{
+      await sbPost('sessions', item.record);
+      await offlineDelete(OFFLINE_SESSION_STORE, item.id);
+      synced++;
+    }catch(e){ console.error('Sync failed for session', item.id, e); }
+  }
+
+  for(const item of pending){
+    try{
+      await sbPost('catches', buildCatchPayload(item.personId, item.entry));
+      await removePendingCatch(item.id);
+      synced++;
+    }catch(e){
+      console.error('Sync failed for catch', item.id, e);
+      break; // stop on first failure; try again next time
+    }
+  }
+  for(const item of pendingRods){
+    try{
+      await sbUpsert('rod_state', item.payload, 'fisherman_id,rod');
+      await removePendingRodState(item.key);
+      synced++;
+    }catch(e){
+      console.error('Sync failed for rod state', item.key, e);
+      break;
+    }
+  }
+
+  isSyncing = false;
+  updateOfflineBanner();
+  if(synced > 0 && currentPerson){
+    currentPerson = await loadPerson(currentPersonId);
+    renderAll();
+  }
+}
+
+async function updateOfflineBanner(){
+  const banner = document.getElementById('offline-banner');
+  if(!banner) return;
+  const pending = await getPendingCatches();
+  const pendingRods = await getPendingRodStates();
+  const pendingSessions = await offlineGetAll(OFFLINE_SESSION_STORE);
+  const pendingVenues = await offlineGetAll(OFFLINE_VENUE_STORE);
+  const total = pending.length + pendingRods.length + pendingSessions.length + pendingVenues.length;
+  const parts = [];
+  if(pending.length) parts.push(`${pending.length} catch${pending.length===1?'':'es'}`);
+  if(pendingSessions.length) parts.push('session');
+  if(pendingRods.length) parts.push('timer state');
+  const label = parts.length ? parts.join(' + ') : 'changes';
+  if(!navigator.onLine){
+    banner.style.display = 'block';
+    banner.textContent = total
+      ? `Offline — ${label} waiting to sync`
+      : 'Offline — everything will sync when you reconnect';
+  }else if(total){
+    banner.style.display = 'block';
+    banner.textContent = `Syncing ${label}...`;
+  }else{
+    banner.style.display = 'none';
+  }
+}
+
+window.addEventListener('online', ()=>{ updateOfflineBanner(); syncPendingCatches(); });
+window.addEventListener('offline', updateOfflineBanner);
+
 function sbHeaders(extra){
   const token = (session && session.access_token) ? session.access_token : SUPABASE_ANON_KEY;
   return Object.assign({
@@ -1617,17 +2023,29 @@ async function sbRpc(fnName, args){
 const AUTH_URL = SUPABASE_URL + '/auth/v1';
 let session = null; // {access_token, refresh_token, user:{id, email}}
 
+// "Keep me signed in" decides whether the session survives closing the browser.
+// localStorage persists; sessionStorage clears when the tab/app closes.
+function sessionStore(){
+  try{
+    return localStorage.getItem('pk_fishing_keep_signed_in') === 'false' ? sessionStorage : localStorage;
+  }catch(e){ return localStorage; }
+}
+function setKeepSignedIn(keep){
+  try{ localStorage.setItem('pk_fishing_keep_signed_in', keep ? 'true' : 'false'); }catch(e){}
+}
 function saveSession(s){
   session = s;
-  try{ localStorage.setItem('pk_fishing_session', JSON.stringify(s)); }catch(e){}
+  try{ sessionStore().setItem('pk_fishing_session', JSON.stringify(s)); }catch(e){}
 }
 function clearSession(){
   session = null;
+  // Clear from both, so switching the preference can't leave a stale copy behind
   try{ localStorage.removeItem('pk_fishing_session'); }catch(e){}
+  try{ sessionStorage.removeItem('pk_fishing_session'); }catch(e){}
 }
 function loadSessionFromStorage(){
   try{
-    const raw = localStorage.getItem('pk_fishing_session');
+    const raw = sessionStorage.getItem('pk_fishing_session') || localStorage.getItem('pk_fishing_session');
     session = raw ? JSON.parse(raw) : null;
   }catch(e){ session = null; }
 }
@@ -1672,21 +2090,92 @@ async function authSignIn(email, password){
   return data;
 }
 
+// ---------- Google sign-in (OAuth) ----------
+// Supabase redirects back with tokens in the URL hash after Google approves.
+function startGoogleSignIn(){
+  setKeepSignedIn(true);
+  const redirectTo = encodeURIComponent(window.location.origin + window.location.pathname);
+  window.location.href = AUTH_URL + '/authorize?provider=google&redirect_to=' + redirectTo;
+}
+
+async function handleOAuthReturn(){
+  if(!window.location.hash || window.location.hash.indexOf('access_token') === -1) return false;
+  const params = new URLSearchParams(window.location.hash.substring(1));
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if(!accessToken) return false;
+  try{
+    // Fetch the user record that goes with this token
+    const res = await fetch(AUTH_URL + '/user', {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + accessToken }
+    });
+    const user = await res.json();
+    if(!res.ok || !user.id) throw new Error('Could not verify Google sign-in');
+    saveSession({access_token: accessToken, refresh_token: refreshToken, user});
+    // Clear the tokens out of the address bar
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    return true;
+  }catch(e){
+    console.error('OAuth return failed', e);
+    return false;
+  }
+}
+
+// After a Google sign-in there may be no angler profile yet — create or link one
+async function ensureProfileForCurrentUser(){
+  if(!isSignedIn()) return null;
+  const existing = people.find(p=>p.user_id === session.user.id);
+  if(existing) return {id: existing.id, isNew: false};
+
+  const email = session.user.email || '';
+  // Claim an unclaimed profile with this email if one exists
+  if(email){
+    try{
+      const matches = await sbGet('fishermen?select=id&email=eq.'+encodeURIComponent(email)+'&user_id=is.null');
+      if(matches.length){
+        await sbPatch('fishermen', 'id=eq.'+matches[0].id, {user_id: session.user.id});
+        await loadPeople();
+        return {id: matches[0].id, isNew: false};
+      }
+    }catch(e){ console.error('profile link lookup failed', e); }
+  }
+  // Otherwise create a fresh one, named from the Google account
+  try{
+    const fallbackName = (session.user.user_metadata && session.user.user_metadata.full_name)
+      || (email ? email.split('@')[0] : 'Angler');
+    const newId = uid();
+    await insertFisherman(newId, fallbackName, '', 1, '', email, session.user.id);
+    await loadPeople();
+    return {id: newId, isNew: true};
+  }catch(e){ console.error('Could not create profile', e); return null; }
+}
+
+document.getElementById('google-signin-btn').addEventListener('click', ()=>{
+  document.getElementById('google-signin-status').textContent = 'Redirecting to Google...';
+  startGoogleSignIn();
+});
+
 function renderAccountArea(){
   const authForms = document.getElementById('auth-forms');
   const signedInArea = document.getElementById('account-signed-in');
   const detailsCard = document.getElementById('my-details-card');
+  const insightsCard = document.getElementById('my-insights-card');
+  const dangerCard = document.getElementById('danger-zone-card');
   if(session && session.user){
     if(authForms) authForms.style.display = 'none';
     if(signedInArea) signedInArea.style.display = 'block';
     const label = document.getElementById('signed-in-as');
     if(label) label.textContent = 'Signed in as ' + session.user.email;
     if(detailsCard) detailsCard.style.display = 'block';
+    if(insightsCard) insightsCard.style.display = 'block';
+    if(dangerCard) dangerCard.style.display = 'block';
     populateMyDetails();
   }else{
     if(authForms) authForms.style.display = 'block';
     if(signedInArea) signedInArea.style.display = 'none';
     if(detailsCard) detailsCard.style.display = 'none';
+    if(insightsCard) insightsCard.style.display = 'none';
+    if(dangerCard) dangerCard.style.display = 'none';
   }
   updateTackleVisibility();
   updateTimersVisibility();
@@ -1732,13 +2221,15 @@ function populateMyDetails(){
   document.getElementById('details-first-name').value = p.first_name || '';
   document.getElementById('details-last-name').value = p.last_name || '';
   document.getElementById('details-country').innerHTML = countryOptionsHtml(p.country || '');
-  const rodsSel = document.getElementById('details-rods');
-  const myRods = normalizeRodsCount(p.rods);
-  rodsSel.innerHTML = rodsOptionsHtml(myRods);
-  rodsSel.value = String(myRods);
   document.getElementById('details-email').value = p.email || '';
-  document.getElementById('details-pb-carp-weight').value = p.pb_carp_weight || '';
-  document.getElementById('details-pb-barbel-weight').value = p.pb_barbel_weight || '';
+  const selected = getTrophySpeciesFor(p);
+  const speciesEl = document.getElementById('details-trophy-species');
+  if(speciesEl){
+    speciesEl.innerHTML = ALL_TROPHY_SPECIES.map(s=>`
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);">
+        <input type="checkbox" class="trophy-species-check" value="${escapeHtml(s)}" ${selected.includes(s) ? 'checked' : ''}> ${escapeHtml(s)}
+      </label>`).join('');
+  }
 }
 
 document.getElementById('details-save-btn').addEventListener('click', async ()=>{
@@ -1750,35 +2241,20 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
   const firstName = document.getElementById('details-first-name').value.trim();
   const lastName = document.getElementById('details-last-name').value.trim();
   const country = document.getElementById('details-country').value;
-  const rods = normalizeRodsCount(document.getElementById('details-rods').value);
   const email = document.getElementById('details-email').value.trim();
-  const carpWeightRaw = document.getElementById('details-pb-carp-weight').value;
-  const barbelWeightRaw = document.getElementById('details-pb-barbel-weight').value;
-  const carpWeight = carpWeightRaw ? parseFloat(carpWeightRaw) : null;
-  const barbelWeight = barbelWeightRaw ? parseFloat(barbelWeightRaw) : null;
-  const carpPhotoFile = document.getElementById('details-pb-carp-photo').files[0];
-  const barbelPhotoFile = document.getElementById('details-pb-barbel-photo').files[0];
 
   if(!name){ st.textContent = 'Enter a display name.'; return; }
   st.textContent = 'Saving...';
   try{
     const patch = {
-      name, rods, email: email || null,
+      name, email: email || null,
       first_name: firstName || null, last_name: lastName || null, country: country || null
     };
-    if(carpWeightRaw !== ''){ patch.pb_carp_weight = carpWeight; }
-    if(barbelWeightRaw !== ''){ patch.pb_barbel_weight = barbelWeight; }
-    if(carpPhotoFile){ patch.pb_carp_photo = await resizeImageFile(carpPhotoFile); }
-    if(barbelPhotoFile){ patch.pb_barbel_photo = await resizeImageFile(barbelPhotoFile); }
+    const chosenSpecies = Array.from(document.querySelectorAll('.trophy-species-check:checked')).map(cb=>cb.value);
+    patch.trophy_species = chosenSpecies.length ? JSON.stringify(chosenSpecies) : null;
 
     await sbPatch('fishermen', 'id=eq.'+p.id, patch);
     Object.assign(p, patch);
-    if(currentPersonId === p.id && currentPerson){
-      currentPerson.rods = rods;
-      renderRodVisibility();
-    }
-    document.getElementById('details-pb-carp-photo').value = '';
-    document.getElementById('details-pb-barbel-photo').value = '';
     populateAnglerSelect();
     st.textContent = 'Saved.';
     setTimeout(()=> st.textContent='', 1500);
@@ -1788,24 +2264,25 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
   }
 });
 
-document.querySelectorAll('#auth-mode-toggle button').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('#auth-mode-toggle button').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    const mode = btn.dataset.mode;
-    document.getElementById('signup-form').style.display = mode==='signup' ? 'block' : 'none';
-    document.getElementById('signin-form').style.display = mode==='signin' ? 'block' : 'none';
-  });
+document.getElementById('show-signup-link').addEventListener('click', ()=>{
+  document.getElementById('signup-form').style.display = 'block';
+  document.getElementById('signin-form').style.display = 'none';
+});
+document.getElementById('show-signin-link').addEventListener('click', ()=>{
+  document.getElementById('signup-form').style.display = 'none';
+  document.getElementById('signin-form').style.display = 'block';
 });
 
 document.getElementById('signup-btn').addEventListener('click', async ()=>{
   const name = document.getElementById('signup-name').value.trim();
-  const rods = parseInt(document.getElementById('signup-rods').value) || 1;
+  const country = document.getElementById('signup-country').value;
+  const rods = 1; // rods are chosen per-session on the Timers tab now
   const email = document.getElementById('signup-email').value.trim();
   const password = document.getElementById('signup-password').value;
   const st = document.getElementById('signup-status');
 
   if(!name){ st.textContent = 'Enter a name.'; return; }
+  if(!country){ st.textContent = 'Select your country.'; return; }
   if(!email || !password){ st.textContent = 'Enter an email and password.'; return; }
   if(password.length < 6){ st.textContent = 'Password must be at least 6 characters.'; return; }
 
@@ -1816,16 +2293,8 @@ document.getElementById('signup-btn').addEventListener('click', async ()=>{
       st.textContent = 'Account created — check your email to confirm, then sign in.';
       return;
     }
+    setKeepSignedIn(true);
     saveSession({access_token: authData.access_token, refresh_token: authData.refresh_token, user: authData.user});
-
-    const carpWeightRaw = document.getElementById('signup-pb-carp-weight').value;
-    const barbelWeightRaw = document.getElementById('signup-pb-barbel-weight').value;
-    const carpWeight = carpWeightRaw ? parseFloat(carpWeightRaw) : null;
-    const barbelWeight = barbelWeightRaw ? parseFloat(barbelWeightRaw) : null;
-    const carpPhotoFile = document.getElementById('signup-pb-carp-photo').files[0];
-    const barbelPhotoFile = document.getElementById('signup-pb-barbel-photo').files[0];
-    const carpPhoto = carpPhotoFile ? await resizeImageFile(carpPhotoFile) : null;
-    const barbelPhoto = barbelPhotoFile ? await resizeImageFile(barbelPhotoFile) : null;
 
     // If someone already entered this email on an existing (unclaimed) profile,
     // link that profile instead of creating a duplicate.
@@ -1838,33 +2307,17 @@ document.getElementById('signup-btn').addEventListener('click', async ()=>{
     let id;
     if(matchId){
       id = matchId;
-      const patch = {user_id: authData.user.id};
-      if(carpWeight !== null){ patch.pb_carp_weight = carpWeight; patch.pb_carp_photo = carpPhoto; }
-      if(barbelWeight !== null){ patch.pb_barbel_weight = barbelWeight; patch.pb_barbel_photo = barbelPhoto; }
-      await sbPatch('fishermen', 'id=eq.'+id, patch);
+      await sbPatch('fishermen', 'id=eq.'+id, {user_id: authData.user.id, country});
       const p = people.find(x=>x.id===id);
-      if(p){
-        p.user_id = authData.user.id;
-        if(carpWeight !== null){ p.pb_carp_weight = carpWeight; p.pb_carp_photo = carpPhoto; }
-        if(barbelWeight !== null){ p.pb_barbel_weight = barbelWeight; p.pb_barbel_photo = barbelPhoto; }
-      }
+      if(p){ p.user_id = authData.user.id; p.country = country; }
       st.textContent = 'Account created — linked to your existing profile!';
     }else{
       id = uid();
       await insertFisherman(id, name, '', rods, '', email, authData.user.id);
-      if(carpWeight !== null || barbelWeight !== null){
-        await sbPatch('fishermen', 'id=eq.'+id, {
-          pb_carp_weight: carpWeight,
-          pb_carp_photo: carpPhoto,
-          pb_barbel_weight: barbelWeight,
-          pb_barbel_photo: barbelPhoto
-        });
-      }
+      await sbPatch('fishermen', 'id=eq.'+id, {country});
       people.push({
-        id, name, dam:'', rods, competition:'', email,
-        user_id: authData.user.id,
-        pb_carp_weight: carpWeight, pb_carp_photo: carpPhoto,
-        pb_barbel_weight: barbelWeight, pb_barbel_photo: barbelPhoto
+        id, name, dam:'', rods, competition:'', email, country,
+        user_id: authData.user.id
       });
       st.textContent = 'Account created!';
     }
@@ -1875,6 +2328,8 @@ await loadTackleCategoryOptions();
     await loadFollowedIds();
     populateAnglerSelect();
     await setActivePerson(id);
+    // New account — walk them through how the app works
+    showOnboarding();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not create account.';
@@ -1889,6 +2344,9 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
   st.textContent = 'Signing in...';
   try{
     const authData = await authSignIn(email, password);
+    // Set the preference before saving, so it lands in the right storage
+    const keepEl = document.getElementById('keep-signed-in');
+    setKeepSignedIn(keepEl ? keepEl.checked : true);
     saveSession({access_token: authData.access_token, refresh_token: authData.refresh_token, user: authData.user});
     st.textContent = '';
 
@@ -1946,7 +2404,7 @@ document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,trophy_species,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -1963,14 +2421,24 @@ function isSuperUser(){
 }
 
 // ---------- Notifications ----------
-async function createNotification(recipientUserId, type, message, targetType, targetId){
-  if(!recipientUserId) return; // recipient has no account, nothing to notify
-  try{
-    await sbPost('notifications', {
-      id: uid(), recipient_user_id: recipientUserId, type, message,
-      target_type: targetType || null, target_id: targetId || null
-    });
-  }catch(e){ console.error('createNotification failed', e); }
+// Notifications are created server-side only. Each function verifies the
+// triggering event actually happened and composes the message itself, so the
+// client can't fabricate notifications or send them to arbitrary people.
+async function notifyFollow(followedFishermanId){
+  try{ await sbRpc('notify_follow', {p_followed_fisherman_id: followedFishermanId}); }
+  catch(e){ console.error('notify_follow failed', e); }
+}
+async function notifyCatchLike(catchId){
+  try{ await sbRpc('notify_catch_like', {p_catch_id: catchId}); }
+  catch(e){ console.error('notify_catch_like failed', e); }
+}
+async function notifyCompetitionAdd(competitionId, fishermanId){
+  try{ await sbRpc('notify_competition_add', {p_competition_id: competitionId, p_fisherman_id: fishermanId}); }
+  catch(e){ console.error('notify_competition_add failed', e); }
+}
+async function notifyChallengeAdd(challengeId, fishermanId){
+  try{ await sbRpc('notify_challenge_add', {p_challenge_id: challengeId, p_fisherman_id: fishermanId}); }
+  catch(e){ console.error('notify_challenge_add failed', e); }
 }
 async function loadMyNotifications(){
   if(!isSignedIn()) return [];
@@ -2059,7 +2527,7 @@ async function loadGearOptions(){
     const rows = await sbGet('tackle_items?select=id,name,category&category=in.(Rods,Reels)&order=name.asc');
     knownRodGear = rows.filter(r=>r.category==='Rods').map(r=>({id:r.id,name:r.name}));
     knownReelGear = rows.filter(r=>r.category==='Reels').map(r=>({id:r.id,name:r.name}));
-  }catch(e){ console.error('loadGearOptions failed', e); }
+  }catch(e){ console.error('loadGearOptions failed', e); showDbError('Could not load rod/reel gear: ' + (e.message || 'unknown error')); }
 }
 
 // Dips (for Bom) and Bait (for Hooks), sourced from the signed-in user's visible tackle box
@@ -2071,7 +2539,7 @@ async function loadTackleCategoryOptions(){
     const rows = await sbGet('tackle_items?select=name,category&category=in.(Dips,Bait)&order=name.asc');
     knownDipNames = rows.filter(r=>r.category==='Dips').map(r=>r.name);
     knownBaitNames = rows.filter(r=>r.category==='Bait').map(r=>r.name);
-  }catch(e){ console.error('loadTackleCategoryOptions failed', e); }
+  }catch(e){ console.error('loadTackleCategoryOptions failed', e); showDbError('Could not load bait/dip options: ' + (e.message || 'unknown error')); }
 }
 
 // ---------- Following (signed-in only) ----------
@@ -2091,7 +2559,7 @@ async function loadFollowedIds(){
   try{
     const rows = await sbGet('follows?select=followed_fisherman_id&follower_user_id=eq.'+session.user.id);
     followedIds = new Set(rows.map(r=>r.followed_fisherman_id));
-  }catch(e){ console.error('loadFollowedIds failed', e); }
+  }catch(e){ console.error('loadFollowedIds failed', e); showDbError('Could not load your follows: ' + (e.message || 'unknown error')); }
   const myId = getMyFishermanId();
   if(myId){
     try{
@@ -2115,11 +2583,7 @@ async function toggleFollow(fishermanId){
     }else{
       await sbPost('follows', {id: uid(), follower_user_id: session.user.id, followed_fisherman_id: fishermanId});
       followedIds.add(fishermanId);
-      const followedPerson = people.find(p=>p.id===fishermanId);
-      const myPerson = people.find(p=>p.user_id===session.user.id);
-      if(followedPerson && followedPerson.user_id){
-        createNotification(followedPerson.user_id, 'follow', `${myPerson ? myPerson.name : 'Someone'} started following you`, 'profile', myPerson ? myPerson.id : null);
-      }
+      notifyFollow(fishermanId);
     }
     clearDbError();
   }catch(e){ console.error(e); showDbError('Could not update follow.'); }
@@ -2188,7 +2652,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
     <div class="row2">
       <div class="field">
         <label>Name</label>
-        <input type="text" class="tackle-edit-name" value="${escapeHtml(item.name)}">
+        <input type="text" maxlength="100" class="tackle-edit-name" value="${escapeHtml(item.name)}">
       </div>
       <div class="field">
         <label>Category</label>
@@ -2228,7 +2692,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
     </div>
     <div class="field">
       <label>Notes</label>
-      <input type="text" class="tackle-edit-notes" value="${escapeHtml(item.notes||'')}">
+      <input type="text" maxlength="100" class="tackle-edit-notes" value="${escapeHtml(item.notes||'')}">
     </div>
     <div class="field">
       <label>Replace photo (optional)</label>
@@ -2378,7 +2842,8 @@ async function renderRigsList(){
   if(!el) return;
   el.innerHTML = '<div class="empty">Loading...</div>';
   const rigs = await loadRigsFull();
-  if(rigs.length===0){ el.innerHTML = '<div class="empty">No rigs built yet.</div>'; return; }
+  if(rigs.length===0){ el.innerHTML = '<div class="empty">No rigs built yet — build one above, then tick "Use" to see it on your Timers.</div>'; return; }
+  const inUse = await loadMyRigUseIds();
   const rows = rigs.map(r=>{
     const canManage = isSuperUser() || (isSignedIn() && session.user.id === r.creator_user_id);
     const canEditHooks = isSignedIn();
@@ -2389,6 +2854,9 @@ async function renderRigsList(){
         <span class="pill">Bom: ${r.uses_bom ? 'Yes' : 'No'}</span>
         <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
       </div>
+      ${isSignedIn() ? `<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);margin-top:4px;">
+        <input type="checkbox" class="rig-use-toggle" data-rig="${r.id}" ${inUse.has(r.id) ? 'checked' : ''}> Use (show in my Timers rig list)
+      </label>` : ''}
       <div class="actions">
         ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}">📷</button>` : ''}
         ${canEditHooks ? `<button class="mini-btn" data-rig-edit="${r.id}">Edit</button>` : ''}
@@ -2398,8 +2866,29 @@ async function renderRigsList(){
     </li>`;
   }).join('');
   el.innerHTML = '<ul class="people-list">' + rows + '</ul>';
+  el.querySelectorAll('.rig-use-toggle').forEach(cb=>{
+    cb.addEventListener('change', async ()=>{
+      cb.disabled = true;
+      try{
+        if(cb.checked){
+          await sbPost('rig_uses', {id: uid(), user_id: session.user.id, rig_id: cb.dataset.rig});
+        }else{
+          await sbDelete('rig_uses', 'user_id=eq.'+session.user.id+'&rig_id=eq.'+cb.dataset.rig);
+        }
+        await loadKnownRigs();
+        if(currentPerson) renderAll();
+      }catch(e){
+        console.error(e);
+        cb.checked = !cb.checked;
+        alert('Could not save: ' + (e.message || 'unknown error'));
+      }
+      cb.disabled = false;
+    });
+  });
   el.querySelectorAll('[data-rig-remove]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
+      const rig = rigs.find(x=>x.id===btn.dataset.rigRemove);
+      if(!confirmDelete('the rig "' + (rig ? rig.name : 'this rig') + '"')) return;
       await deleteRig(btn.dataset.rigRemove);
       await loadKnownRigs();
       renderRigsList();
@@ -2420,20 +2909,40 @@ async function renderRigsList(){
         return;
       }
       const currentHooks = parseInt(manager.dataset.hooks, 10) || 2;
+      const rig = rigs.find(x=>x.id===rigId);
       manager.style.display = 'block';
       manager.innerHTML = `
+        ${isSuperUser() ? `
+          <div class="row2">
+            <div class="field">
+              <label>Rig name (admin)</label>
+              <input type="text" maxlength="100" class="rig-edit-name" value="${escapeHtml(rig ? rig.name : '')}">
+            </div>
+            <div class="field">
+              <label>Brand (admin)</label>
+              <input type="text" maxlength="100" class="rig-edit-brand" value="${escapeHtml(rig && rig.brand ? rig.brand : '')}">
+            </div>
+          </div>` : ''}
         <div class="field">
           <label>Number of hooks</label>
           <select class="rig-edit-hook-select" data-rig="${rigId}">${hookCountOptionsHtml(currentHooks)}</select>
         </div>
         <button class="mini-btn" data-rig-save="${rigId}">Save</button>
-        <span class="pc-line muted">Only the hook count can be edited after a rig is created.</span>
+        ${isSuperUser() ? '' : '<span class="pc-line muted">Only the hook count can be edited after a rig is created.</span>'}
       `;
       manager.querySelector('[data-rig-save]').addEventListener('click', async ()=>{
         const sel = manager.querySelector('.rig-edit-hook-select');
-        const newCount = parseInt(sel.value, 10) || 2;
+        const patch = {hook_count: parseInt(sel.value, 10) || 2};
+        if(isSuperUser()){
+          const nameEl = manager.querySelector('.rig-edit-name');
+          const brandEl = manager.querySelector('.rig-edit-brand');
+          const newName = nameEl ? nameEl.value.trim() : '';
+          if(!newName){ alert('Enter a rig name.'); return; }
+          patch.name = newName;
+          patch.brand = brandEl ? (brandEl.value.trim() || null) : null;
+        }
         try{
-          await sbPatch('rigs', 'id=eq.'+rigId, {hook_count: newCount});
+          await sbPatch('rigs', 'id=eq.'+rigId, patch);
           await loadKnownRigs();
           renderRigsList();
           if(currentPerson) renderAll();
@@ -2460,8 +2969,9 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
     if(photoEl.files[0]){
       photo = await resizeImageFile(photoEl.files[0], 480, 0.7);
     }
+    const newRigId = uid();
     await insertRig({
-      id: uid(),
+      id: newRigId,
       name,
       brand: brandEl.value.trim() || null,
       uses_bom: bomEl.value === 'yes',
@@ -2470,6 +2980,12 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
       photo,
       has_photo: !!photo
     });
+    // You presumably want to use a rig you just built
+    if(isSignedIn()){
+      try{
+        await sbPost('rig_uses', {id: uid(), user_id: session.user.id, rig_id: newRigId});
+      }catch(e){ console.error('Could not auto-tick new rig', e); }
+    }
     nameEl.value = '';
     brandEl.value = '';
     bomEl.value = 'no';
@@ -2630,6 +3146,8 @@ async function renderTackleList(){
   });
   el.querySelectorAll('[data-tackle-remove]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
+      const item = tackleItemsCache.find(x=>x.id===btn.dataset.tackleRemove);
+      if(!confirmDelete('"' + (item ? item.name : 'this item') + '" from your tackle box')) return;
       await deleteTackleItem(btn.dataset.tackleRemove);
       renderTackleList();
       await loadGearOptions();
@@ -2736,9 +3254,14 @@ async function loadPerson(id){
     ]);
     const f = fRows[0];
     if(!f) return null;
+    // Any rod state still waiting to sync is newer than what the server has,
+    // so it takes precedence — otherwise a reload would wipe an unsynced timer.
+    const pendingRods = await getPendingRodStates();
+    const pendingByRod = {};
+    pendingRods.filter(p=>p.payload.fisherman_id===id).forEach(p=>{ pendingByRod[p.payload.rod] = p.payload; });
     const timers={}, notes={};
     RODS.forEach(r=>{
-      const row = rodRows.find(x=>x.rod===r);
+      const row = pendingByRod[r] || rodRows.find(x=>x.rod===r);
       timers[r] = row ? {running:row.running, startTs:row.start_ts, accumulatedMs:row.accumulated_ms} : {running:false,startTs:null,accumulatedMs:0};
       const noteObj = {
         bom: row ? (row.bom||'') : '',
@@ -2761,6 +3284,8 @@ async function loadPerson(id){
         bom:c.bom||'',
         rig: c.rig || '',
         rodIdentifier: c.rod_identifier || '',
+        venueId: c.venue_id || null,
+        sessionId: c.session_id || null,
         photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
         likes: c.likes || 0
       };
@@ -2786,35 +3311,53 @@ async function saveRodState(personId, rod){
   if(!currentPerson) return;
   const t = currentPerson.timers[rod];
   const n = currentPerson.notes[rod];
+  const payload = {
+    fisherman_id: personId, rod,
+    running: t.running, start_ts: t.startTs, accumulated_ms: t.accumulatedMs,
+    bom: n.bom,
+    identifier: n.identifier, dot_color: n.dotColor, rig: n.rig, hook_count: n.hookCount,
+    rod_item_id: n.rodItemId || null, reel_item_id: n.reelItemId || null
+  };
+  for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = n['hook'+i] || ''; }
+
+  if(!navigator.onLine){
+    await queuePendingRodState(payload);
+    updateOfflineBanner();
+    return;
+  }
   try{
-    const payload = {
-      fisherman_id: personId, rod,
-      running: t.running, start_ts: t.startTs, accumulated_ms: t.accumulatedMs,
-      bom: n.bom,
-      identifier: n.identifier, dot_color: n.dotColor, rig: n.rig, hook_count: n.hookCount,
-      rod_item_id: n.rodItemId || null, reel_item_id: n.reelItemId || null
-    };
-    for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = n['hook'+i] || ''; }
     await sbUpsert('rod_state', payload, 'fisherman_id,rod');
     clearDbError();
-  }catch(e){ console.error(e); showDbError('Could not save to Supabase.'); }
+  }catch(e){
+    console.error(e);
+    // Hold the state locally rather than losing a running timer
+    await queuePendingRodState(payload);
+    updateOfflineBanner();
+  }
 }
 
 async function insertCatch(personId, entry){
+  // No connection? Queue it locally and sync when we're back online.
+  if(!navigator.onLine){
+    const queued = await queuePendingCatch(personId, entry);
+    updateOfflineBanner();
+    if(!queued) showDbError('Could not save this catch — no connection and local storage failed.');
+    return;
+  }
   try{
-    const payload = {
-      id: entry.id, fisherman_id: personId, rod: entry.rod, hook: entry.hook,
-      caught: entry.caught, fish_type: entry.type, weight: entry.weight,
-      time: new Date(entry.time).toISOString(), timer_elapsed_ms: entry.timerElapsed,
-      bom: entry.bom,
-      rig: entry.rig || '',
-      rod_identifier: entry.rodIdentifier || '',
-      photos: JSON.stringify(entry.photos || [])
-    };
-    for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = entry['hook'+i] || ''; }
-    await sbPost('catches', payload);
+    await sbPost('catches', buildCatchPayload(personId, entry));
     clearDbError();
-  }catch(e){ console.error(e); showDbError('Could not save catch to Supabase.'); }
+  }catch(e){
+    console.error(e);
+    // Network write failed — hold onto it locally rather than losing the catch
+    const queued = await queuePendingCatch(personId, entry);
+    updateOfflineBanner();
+    if(queued){
+      showDbError('Saved locally — will sync when the connection is back.');
+    }else{
+      showDbError('Could not save catch: ' + (e.message || 'unknown error'));
+    }
+  }
 }
 async function removeCatch(catchId){
   try{ await sbDelete('catches', 'id=eq.'+catchId); clearDbError(); }
@@ -2844,8 +3387,7 @@ function rodCardHtml(r){
     <section class="card rod-card" id="rodcard-${r}">
       <div class="rod-title-row">
         <input type="color" class="rod-dot" data-rod="${r}" value="#C1440E" title="Rod color">
-        <h3>${RID_LABEL[r]}</h3>
-        <input type="text" class="rod-field rod-id-input" data-rod="${r}" data-key="identifier" placeholder="Add your name...">
+        <input type="text" maxlength="100" class="rod-field rod-name-input" data-rod="${r}" data-key="identifier" placeholder="${RID_LABEL[r]}" title="Tap to rename this rod">
       </div>
       <div class="bobber-row">
         <div class="bobber" id="bobber-${r}"><div class="time mono" id="time-${r}">00:00:00</div></div>
@@ -2904,12 +3446,16 @@ function rodCardHtml(r){
               <option value="Eel">Eel</option>
               <option value="Other">Other</option>
             </select>
-            <input type="text" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;">
+            <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;">
           </div>
           <div class="field">
             <label>Weight (kg)</label>
-            <input type="number" step="0.01" min="0" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4">
+            <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4">
           </div>
+        </div>
+        <div class="field">
+          <label>Date caught (leave blank for now)</label>
+          <input type="datetime-local" class="catch-date" data-rod="${r}">
         </div>
         <div class="field">
           <label>Photos (optional — add as many as you like)</label>
@@ -2998,6 +3544,7 @@ function attachRodCardHandlers(){
         renderPhotoPreview(rod);
       }catch(e){
         console.error('Photo processing failed', e);
+        alert(e.message || 'Could not process that photo.');
       }
       inp.value = ''; // clear so the same or another photo can be added again
     });
@@ -3038,10 +3585,12 @@ function attachRodCardHandlers(){
       const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
       const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
       const photoEl = document.querySelector('.catch-photo[data-rod="'+rod+'"]');
+      const dateEl = document.querySelector('.catch-date[data-rod="'+rod+'"]');
       if(typeEl) typeEl.value = '';
       if(typeOtherEl){ typeOtherEl.value = ''; typeOtherEl.style.display = 'none'; }
       if(weightEl) weightEl.value = '';
       if(photoEl) photoEl.value = '';
+      if(dateEl) dateEl.value = '';
       pendingPhotos[rod] = [];
       renderPhotoPreview(rod);
     });
@@ -3061,6 +3610,233 @@ function attachRodCardHandlers(){
   });
 }
 
+// ---------- Venues & location (private to each angler) ----------
+// Coordinates are captured silently to power venue insights. They are never
+// shown on the leaderboard, feed, or anyone else's profile.
+let lastKnownPosition = null;
+
+function capturePosition(){
+  return new Promise((resolve)=>{
+    if(!navigator.geolocation){ resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        lastKnownPosition = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+        resolve(lastKnownPosition);
+      },
+      ()=> resolve(null),            // permission denied or unavailable — carry on without it
+      {enableHighAccuracy:false, timeout:8000, maximumAge:300000}
+    );
+  });
+}
+
+// Rough distance in metres between two coordinates
+function distanceMeters(a, b){
+  const R = 6371000;
+  const toRad = d=> d*Math.PI/180;
+  const dLat = toRad(b.lat-a.lat);
+  const dLng = toRad(b.lng-a.lng);
+  const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+  const h = Math.sin(dLat/2)**2 + Math.sin(dLng/2)**2 * Math.cos(lat1)*Math.cos(lat2);
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+const VENUE_MATCH_RADIUS = 500; // metres — same water, not same swim
+
+// ---------- Sessions ----------
+let activeSession = null;
+
+async function loadActiveSession(){
+  const myId = getMyFishermanId();
+  if(!myId){ activeSession = null; return null; }
+  // A session started offline lives only in the local queue until it syncs
+  const pendingSessions = await offlineGetAll(OFFLINE_SESSION_STORE);
+  const localActive = pendingSessions.find(s=> s.record.fisherman_id === myId && !s.record.ended_at);
+  if(localActive){ activeSession = localActive.record; return activeSession; }
+  if(!navigator.onLine){ activeSession = null; return null; }
+  try{
+    const rows = await sbGet('sessions?select=*&fisherman_id=eq.'+myId+'&ended_at=is.null&order=started_at.desc&limit=1');
+    activeSession = rows[0] || null;
+  }catch(e){ console.error('loadActiveSession failed', e); activeSession = null; }
+  return activeSession;
+}
+
+async function renderSessionUi(){
+  const setup = document.getElementById('session-setup');
+  const bar = document.getElementById('session-active-bar');
+  const rodCards = document.getElementById('rod-cards');
+  if(!setup || !bar) return;
+
+  if(activeSession){
+    setup.style.display = 'none';
+    bar.style.display = 'flex';
+    rodCards.style.display = 'block';
+    document.getElementById('session-active-venue').textContent = activeSession.venue_name || 'Session in progress';
+    const started = new Date(activeSession.started_at);
+    document.getElementById('session-active-meta').textContent =
+      `started ${started.toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}`;
+    const activeRodsSel = document.getElementById('session-active-rods');
+    if(activeRodsSel){
+      const rods = normalizeRodsCount(activeSession.rods);
+      activeRodsSel.innerHTML = rodsOptionsHtml(rods);
+      activeRodsSel.value = String(rods);
+    }
+  }else{
+    setup.style.display = 'block';
+    bar.style.display = 'none';
+    rodCards.style.display = 'none';
+    const rodsSel = document.getElementById('session-rods');
+    if(rodsSel && !rodsSel.options.length) rodsSel.innerHTML = rodsOptionsHtml(1);
+    const venues = await loadMyVenues();
+    const dl = document.getElementById('session-venue-suggestions');
+    if(dl) dl.innerHTML = venues.map(v=>`<option value="${escapeHtml(v.name)}"></option>`).join('');
+  }
+}
+
+document.getElementById('session-start-btn').addEventListener('click', async ()=>{
+  const st = document.getElementById('session-status');
+  const venueName = document.getElementById('session-venue').value.trim();
+  const rods = normalizeRodsCount(document.getElementById('session-rods').value);
+  const myId = getMyFishermanId();
+  if(!myId){ st.textContent = 'Could not find your angler profile.'; return; }
+  if(!venueName){ st.textContent = 'Enter a venue.'; return; }
+  st.textContent = 'Starting...';
+  try{
+    // Match this venue to a saved one, or create it (with coordinates if available)
+    let venueId = null;
+    const venues = await loadMyVenues();
+    const existing = venues.find(v=>v.name.toLowerCase() === venueName.toLowerCase());
+    if(existing){
+      venueId = existing.id;
+    }else{
+      const coords = await capturePosition();
+      venueId = uid();
+      const venueRecord = {
+        id: venueId, owner_user_id: session.user.id, name: venueName,
+        latitude: coords ? coords.lat : null, longitude: coords ? coords.lng : null
+      };
+      if(navigator.onLine){
+        try{ await sbPost('venues', venueRecord); }
+        catch(e){ console.error(e); await offlinePut(OFFLINE_VENUE_STORE, {id: venueId, record: venueRecord}); }
+      }else{
+        await offlinePut(OFFLINE_VENUE_STORE, {id: venueId, record: venueRecord});
+      }
+    }
+
+    const sessionId = uid();
+    const sessionRecord = {
+      id: sessionId, fisherman_id: myId,
+      venue_id: venueId, venue_name: venueName,
+      rods, started_at: new Date().toISOString(), ended_at: null
+    };
+    if(navigator.onLine){
+      try{ await sbPost('sessions', sessionRecord); }
+      catch(e){ console.error(e); await offlinePut(OFFLINE_SESSION_STORE, {id: sessionId, record: sessionRecord}); }
+    }else{
+      await offlinePut(OFFLINE_SESSION_STORE, {id: sessionId, record: sessionRecord});
+    }
+
+    // Rod count is per-session now, so reflect it on the angler too
+    await updateFishermanRods(myId, rods);
+    if(currentPerson) currentPerson.rods = rods;
+    const p = people.find(x=>x.id===myId);
+    if(p) p.rods = rods;
+
+    document.getElementById('session-venue').value = '';
+    st.textContent = '';
+    activeSession = sessionRecord;
+    await renderSessionUi();
+    renderAll();
+    updateOfflineBanner();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not start session: ' + (e.message || 'unknown error');
+  }
+});
+
+// Change how many rods you're on partway through a session
+document.getElementById('session-active-rods').addEventListener('change', async (e)=>{
+  if(!activeSession) return;
+  const rods = normalizeRodsCount(e.target.value);
+  const myId = getMyFishermanId();
+  activeSession.rods = rods;
+  if(currentPerson) currentPerson.rods = rods;
+  const p = people.find(x=>x.id===myId);
+  if(p) p.rods = rods;
+  renderRodVisibility();
+  try{
+    await updateFishermanRods(myId, rods);
+    if(navigator.onLine){
+      await sbPatch('sessions', 'id=eq.'+activeSession.id, {rods});
+    }else{
+      await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
+      updateOfflineBanner();
+    }
+  }catch(e){
+    console.error(e);
+    await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
+    updateOfflineBanner();
+  }
+});
+
+document.getElementById('session-end-btn').addEventListener('click', async ()=>{
+  if(!activeSession) return;
+  const endedAt = new Date().toISOString();
+  try{
+    if(navigator.onLine){
+      await sbPatch('sessions', 'id=eq.'+activeSession.id, {ended_at: endedAt});
+      await offlineDelete(OFFLINE_SESSION_STORE, activeSession.id);
+    }else{
+      activeSession.ended_at = endedAt;
+      await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
+    }
+    activeSession = null;
+    await renderSessionUi();
+    updateOfflineBanner();
+  }catch(e){
+    console.error(e);
+    activeSession.ended_at = endedAt;
+    await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
+    activeSession = null;
+    await renderSessionUi();
+    updateOfflineBanner();
+  }
+});
+
+async function loadMyVenues(){
+  if(!isSignedIn()) return [];
+  // Venues created offline exist only locally until they sync
+  const pendingVenues = (await offlineGetAll(OFFLINE_VENUE_STORE)).map(v=>v.record);
+  let serverVenues = [];
+  if(navigator.onLine){
+    try{
+      serverVenues = await sbGet('venues?select=*&owner_user_id=eq.'+session.user.id+'&order=name.asc');
+    }catch(e){ console.error('loadMyVenues failed', e); }
+  }
+  const seen = new Set(serverVenues.map(v=>v.id));
+  return serverVenues.concat(pendingVenues.filter(v=>!seen.has(v.id)));
+}
+
+async function findOrPromptVenue(coords){
+  if(!coords || !isSignedIn()) return null;
+  const venues = await loadMyVenues();
+  const match = venues.find(v=>
+    v.latitude != null && v.longitude != null &&
+    distanceMeters(coords, {lat:v.latitude, lng:v.longitude}) <= VENUE_MATCH_RADIUS
+  );
+  if(match) return match.id;
+  // New water — ask once what to call it, then reuse automatically from now on
+  const name = prompt('New water detected. What do you call this venue? (leave blank to skip)');
+  if(!name || !name.trim()) return null;
+  const id = uid();
+  try{
+    await sbPost('venues', {
+      id, owner_user_id: session.user.id, name: name.trim(),
+      latitude: coords.lat, longitude: coords.lng
+    });
+    return id;
+  }catch(e){ console.error('Could not save venue', e); return null; }
+}
+
 function buildCatchEntry(rod){
   const caught = catchToggle[rod];
   const hookEl = document.querySelector('.catch-hook[data-rod="'+rod+'"]');
@@ -3073,6 +3849,9 @@ function buildCatchEntry(rod){
   const rigVal = getRodFieldValue(rod, 'rig');
   const idEl = document.querySelector('.rod-field[data-rod="'+rod+'"][data-key="identifier"]');
   const rodIdentifier = idEl ? idEl.value : '';
+  // Backdating: use the entered date if there is one, otherwise right now
+  const dateEl = document.querySelector('.catch-date[data-rod="'+rod+'"]');
+  const overrideTime = (dateEl && dateEl.value) ? new Date(dateEl.value).getTime() : null;
 
   const entry = {
     id: uid(),
@@ -3081,7 +3860,7 @@ function buildCatchEntry(rod){
     hook: caught ? hookEl.value : '',
     type: caught ? typeValue : '',
     weight: caught ? (parseFloat(weightEl.value) || 0) : 0,
-    time: Date.now(),
+    time: (overrideTime && !isNaN(overrideTime)) ? overrideTime : Date.now(),
     timerElapsed: elapsedMs(currentPerson.timers[rod]),
     bom: bomVal,
     rig: rigVal,
@@ -3105,7 +3884,14 @@ function showConfirmation(entry){
   if(entry.caught){
     html += `<p>${escapeHtml(entry.type||'Fish')} — <b>${entry.weight}kg</b></p>`;
   }
-  html += `<p>Time of day: <b>${timeStr}</b></p>`;
+  // Make it obvious when a catch has been backdated rather than logged now
+  const entryDate = new Date(entry.time);
+  const isToday = entryDate.toDateString() === new Date().toDateString();
+  if(isToday){
+    html += `<p>Time of day: <b>${timeStr}</b></p>`;
+  }else{
+    html += `<p>Caught: <b>${entryDate.toLocaleString([], {weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}</b></p>`;
+  }
   html += `<p>Rod timer: <b>${timerStr}</b></p>`;
   if(entry.rig){
     html += `<p style="font-size:12px;">Rig: ${escapeHtml(entry.rig)}</p>`;
@@ -3150,10 +3936,12 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
   const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
   const photoEl = document.querySelector('.catch-photo[data-rod="'+rod+'"]');
+  const dateEl = document.querySelector('.catch-date[data-rod="'+rod+'"]');
   if(typeEl) typeEl.value='';
   if(typeOtherEl){ typeOtherEl.value=''; typeOtherEl.style.display='none'; }
   if(weightEl) weightEl.value='';
   if(photoEl) photoEl.value='';
+  if(dateEl) dateEl.value='';
   pendingPhotos[rod] = [];
   renderPhotoPreview(rod);
 
@@ -3174,6 +3962,23 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   document.getElementById('confirm-modal').classList.remove('open');
   pendingEntry = null;
   await saveRodState(currentPersonId, rod);
+
+  // Capture where this was caught (private — powers venue insights only)
+  if(entry.caught){
+    if(activeSession) entry.sessionId = activeSession.id;
+    const coords = await capturePosition();
+    if(coords){
+      entry.latitude = coords.lat;
+      entry.longitude = coords.lng;
+    }
+    // A running session already knows the venue — otherwise fall back to GPS matching
+    if(activeSession && activeSession.venue_id){
+      entry.venueId = activeSession.venue_id;
+    }else if(coords){
+      entry.venueId = await findOrPromptVenue(coords);
+    }
+  }
+
   await insertCatch(currentPersonId, entry);
   await checkAndUpdatePersonalBest(entry);
 });
@@ -3239,6 +4044,293 @@ function buildDistinctOptions(values, current){
   return html;
 }
 
+// ---------- Insights (personal analytics from logged catches) ----------
+function fmtDuration(ms){
+  if(!ms || ms < 0) return '—';
+  const mins = Math.round(ms/60000);
+  const h = Math.floor(mins/60);
+  const m = mins%60;
+  if(h === 0) return m+'m';
+  return h+'h'+(m>0 ? ' '+m+'m' : '');
+}
+
+function buildInsightsHtml(catches, venues, sessions){
+  const caught = catches.filter(c=>c.caught);
+  if(caught.length === 0){
+    return '<div class="empty">No catches logged yet — your insights will appear here once you start logging.</div>';
+  }
+
+  let html = '';
+
+  // With only a handful of catches the patterns below are mostly noise —
+  // say so rather than letting people read too much into them.
+  if(caught.length < 10){
+    html += `<div class="empty" style="text-align:left;margin-bottom:14px;">
+      Only ${caught.length} catch${caught.length===1?'':'es'} logged so far. These numbers will start meaning
+      something around 10–20 catches, and get genuinely useful over a full season.
+    </div>`;
+  }
+
+  // Headline numbers
+  const totalWeight = caught.reduce((s,c)=>s+(c.weight||0),0);
+  const biggest = caught.reduce((b,c)=> (c.weight||0) > (b?b.weight:0) ? c : b, null);
+  const withTimer = caught.filter(c=>c.timerElapsed > 0);
+  const avgSoak = withTimer.length ? withTimer.reduce((s,c)=>s+c.timerElapsed,0)/withTimer.length : 0;
+  html += `<div class="profile-summary">
+      <div><b>${caught.length}</b>catches</div>
+      <div><b>${totalWeight.toFixed(1)}kg</b>total</div>
+      <div><b>${biggest ? biggest.weight+'kg' : '—'}</b>biggest</div>
+      <div><b>${fmtDuration(avgSoak)}</b>avg soak</div>
+    </div>`;
+
+  // Helper: group catches by a key, compute count / total weight / avg soak
+  function groupStats(keyFn){
+    const groups = {};
+    caught.forEach(c=>{
+      const keys = keyFn(c);
+      keys.forEach(k=>{
+        if(!k) return;
+        if(!groups[k]) groups[k] = {count:0, weight:0, soakTotal:0, soakCount:0, biggest:0};
+        groups[k].count++;
+        groups[k].weight += (c.weight||0);
+        if(c.timerElapsed > 0){ groups[k].soakTotal += c.timerElapsed; groups[k].soakCount++; }
+        if((c.weight||0) > groups[k].biggest) groups[k].biggest = c.weight||0;
+      });
+    });
+    return Object.keys(groups).map(k=>({
+      key: k,
+      count: groups[k].count,
+      weight: groups[k].weight,
+      biggest: groups[k].biggest,
+      avgSoak: groups[k].soakCount ? groups[k].soakTotal/groups[k].soakCount : 0
+    })).sort((a,b)=> b.count - a.count);
+  }
+
+  function statTable(title, rows, emptyMsg){
+    if(rows.length === 0) return `<p class="sub-heading">${escapeHtml(title)}</p><div class="empty">${escapeHtml(emptyMsg)}</div>`;
+    let t = `<p class="sub-heading">${escapeHtml(title)}</p><ul class="people-list">`;
+    rows.forEach(r=>{
+      t += `<li>
+        <div class="who"><b>${escapeHtml(r.key)}</b></div>
+        <div class="actions">
+          <span class="pill">${r.count} fish</span>
+          <span class="pill">${r.weight.toFixed(1)}kg</span>
+          ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
+        </div>
+      </li>`;
+    });
+    return t + '</ul>';
+  }
+
+  // Which rig performs
+  html += statTable('Which rig lands fish', groupStats(c=>[c.rig]), 'No rigs recorded on your catches yet.');
+
+  // Which bait performs — pull every hook's bait, splitting multi-select values
+  html += statTable('Which bait lands fish', groupStats(c=>{
+    const baits = [];
+    for(let n=1; n<=MAX_HOOKS; n++){
+      (c['hook'+n]||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(b=>baits.push(b));
+    }
+    return [...new Set(baits)];
+  }), 'No baits recorded on your catches yet.');
+
+  // Which bom performs
+  html += statTable('Which bom lands fish', groupStats(c=>{
+    return [...new Set((c.bom||'').split(',').map(s=>s.trim()).filter(Boolean))];
+  }), 'No boms recorded on your catches yet.');
+
+  // Species breakdown
+  html += statTable('By species', groupStats(c=>[c.type]), 'No species recorded yet.');
+
+  // Best time of day
+  const byHour = {};
+  caught.forEach(c=>{
+    const h = new Date(c.time).getHours();
+    const band = h<6 ? 'Night (00:00–06:00)' : h<12 ? 'Morning (06:00–12:00)' : h<18 ? 'Afternoon (12:00–18:00)' : 'Evening (18:00–24:00)';
+    if(!byHour[band]) byHour[band] = 0;
+    byHour[band]++;
+  });
+  const timeRows = Object.keys(byHour).map(k=>({key:k, count:byHour[k], weight:0, avgSoak:0}))
+    .sort((a,b)=>b.count-a.count);
+  html += `<p class="sub-heading">Best time of day</p><ul class="people-list">` +
+    timeRows.map(r=>`<li>
+      <div class="who"><b>${escapeHtml(r.key)}</b></div>
+      <div class="actions"><span class="pill">${r.count} fish</span></div>
+    </li>`).join('') + '</ul>';
+
+  // By venue — private to you, never shown anywhere else in the app
+  const venueMap = {};
+  (venues||[]).forEach(v=>{ venueMap[v.id] = v.name; });
+  const withVenue = caught.filter(c=>c.venueId && venueMap[c.venueId]);
+  if(withVenue.length){
+    const venueRows = groupStats(c=> c.venueId && venueMap[c.venueId] ? [venueMap[c.venueId]] : []);
+    html += `<p class="sub-heading">By venue</p>`;
+    html += `<p class="pc-line muted">Private to you — venues are never shown on the leaderboard or feed.</p>`;
+    html += '<ul class="people-list">';
+    venueRows.forEach(r=>{
+      // Which rig works best at this particular water
+      const atVenue = withVenue.filter(c=> venueMap[c.venueId] === r.key);
+      const rigTally = {};
+      atVenue.forEach(c=>{ if(c.rig){ rigTally[c.rig] = (rigTally[c.rig]||0)+1; } });
+      const bestRig = Object.keys(rigTally).sort((a,b)=>rigTally[b]-rigTally[a])[0];
+      html += `<li>
+        <div class="who">
+          <b>${escapeHtml(r.key)}</b>
+          ${bestRig ? `<span class="pill">Best rig: ${escapeHtml(bestRig)}</span>` : ''}
+        </div>
+        <div class="actions">
+          <span class="pill">${r.count} fish</span>
+          <span class="pill">${r.weight.toFixed(1)}kg</span>
+          ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
+        </div>
+      </li>`;
+    });
+    html += '</ul>';
+  }
+
+  // Session history — how each trip actually went
+  if(sessions && sessions.length){
+    const sessionRows = sessions.map(s=>{
+      const sc = caught.filter(c=>c.sessionId === s.id);
+      const weight = sc.reduce((sum,c)=>sum+(c.weight||0),0);
+      const started = new Date(s.started_at);
+      const ended = s.ended_at ? new Date(s.ended_at) : null;
+      const durationMs = ended ? (ended - started) : (Date.now() - started);
+      return {
+        name: s.venue_name || 'Session',
+        when: started.toLocaleDateString([], {month:'short', day:'numeric', year:'numeric'}),
+        count: sc.length,
+        weight,
+        duration: durationMs,
+        rods: s.rods,
+        ongoing: !s.ended_at
+      };
+    }).sort((a,b)=> b.count - a.count);
+
+    const totalSessions = sessions.length;
+    const withCatches = sessionRows.filter(s=>s.count > 0).length;
+    const avgPerSession = totalSessions ? (caught.length / totalSessions) : 0;
+    html += `<p class="sub-heading">Sessions</p>`;
+    html += `<div class="profile-summary">
+        <div><b>${totalSessions}</b>sessions</div>
+        <div><b>${avgPerSession.toFixed(1)}</b>fish/session</div>
+        <div><b>${withCatches}/${totalSessions}</b>with a fish</div>
+      </div>`;
+    html += '<ul class="people-list">';
+    sessionRows.slice(0, 10).forEach(s=>{
+      html += `<li>
+        <div class="who">
+          <b>${escapeHtml(s.name)}</b>
+          <span class="pill">${escapeHtml(s.when)}</span>
+          ${s.ongoing ? '<span class="pill">Ongoing</span>' : ''}
+        </div>
+        <div class="actions">
+          <span class="pill">${s.count} fish</span>
+          ${s.weight ? `<span class="pill">${s.weight.toFixed(1)}kg</span>` : ''}
+          <span class="pill">${fmtDuration(s.duration)}</span>
+        </div>
+      </li>`;
+    });
+    html += '</ul>';
+  }
+
+  return html;
+}
+
+async function loadMySessions(){
+  const myId = getMyFishermanId();
+  if(!myId) return [];
+  try{
+    return await sbGet('sessions?select=*&fisherman_id=eq.'+myId+'&order=started_at.desc&limit=50');
+  }catch(e){ console.error('loadMySessions failed', e); return []; }
+}
+
+async function openInsights(){
+  const modal = document.getElementById('insights-modal');
+  const body = document.getElementById('insights-body');
+  modal.classList.add('open');
+  body.innerHTML = '<div class="empty">Loading...</div>';
+  const myId = getMyFishermanId();
+  if(!myId){
+    body.innerHTML = '<div class="empty">Could not find your angler profile.</div>';
+    return;
+  }
+  const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
+  body.innerHTML = buildInsightsHtml(rec && rec.catches ? rec.catches : [], venues, sessions);
+}
+
+document.getElementById('delete-account-btn').addEventListener('click', ()=>{
+  document.getElementById('delete-account-confirm').style.display = 'block';
+  document.getElementById('delete-account-btn').style.display = 'none';
+});
+document.getElementById('delete-account-cancel-btn').addEventListener('click', ()=>{
+  document.getElementById('delete-account-confirm').style.display = 'none';
+  document.getElementById('delete-account-btn').style.display = 'inline-block';
+  document.getElementById('delete-account-confirm-input').value = '';
+  document.getElementById('delete-account-status').textContent = '';
+});
+document.getElementById('delete-account-final-btn').addEventListener('click', async ()=>{
+  const st = document.getElementById('delete-account-status');
+  const typed = document.getElementById('delete-account-confirm-input').value.trim();
+  if(typed !== 'DELETE'){ st.textContent = 'Type DELETE exactly to confirm.'; return; }
+  const myId = getMyFishermanId();
+  if(!myId){ st.textContent = 'Could not find your profile.'; return; }
+  st.textContent = 'Deleting...';
+  try{
+    // Tables that don't cascade from fishermen need clearing explicitly
+    try{ await sbDelete('tackle_items', 'owner_user_id=eq.'+session.user.id); }catch(e){ console.error(e); }
+    try{ await sbDelete('venues', 'owner_user_id=eq.'+session.user.id); }catch(e){ console.error(e); }
+    try{ await sbDelete('follows', 'follower_user_id=eq.'+session.user.id); }catch(e){ console.error(e); }
+    try{ await sbDelete('rig_uses', 'user_id=eq.'+session.user.id); }catch(e){ console.error(e); }
+    try{ await sbDelete('notifications', 'recipient_user_id=eq.'+session.user.id); }catch(e){ console.error(e); }
+    // Deleting the angler cascades to catches, rod_state, sessions, and participants
+    await sbDelete('fishermen', 'id=eq.'+myId);
+
+    // Clear anything held locally too
+    try{
+      const db = await openOfflineDb();
+      [OFFLINE_STORE, OFFLINE_ROD_STORE, OFFLINE_SESSION_STORE, OFFLINE_VENUE_STORE].forEach(storeName=>{
+        const tx = db.transaction(storeName, 'readwrite');
+        tx.objectStore(storeName).clear();
+      });
+    }catch(e){ console.error(e); }
+
+    clearSession();
+    st.textContent = 'Deleted. Reloading...';
+    setTimeout(()=> window.location.reload(), 1200);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not delete: ' + (e.message || 'unknown error');
+  }
+});
+
+// ---------- Theme ----------
+function applyTheme(theme){
+  if(theme === 'dark' || theme === 'light'){
+    document.documentElement.setAttribute('data-theme', theme);
+  }else{
+    document.documentElement.removeAttribute('data-theme');
+  }
+  try{ localStorage.setItem('pk_fishing_theme', theme); }catch(e){}
+}
+document.getElementById('theme-select').addEventListener('change', (e)=>{
+  applyTheme(e.target.value);
+});
+
+// ---------- Onboarding ----------
+function showOnboarding(){
+  document.getElementById('onboarding-modal').classList.add('open');
+}
+document.getElementById('onboarding-close').addEventListener('click', ()=>{
+  document.getElementById('onboarding-modal').classList.remove('open');
+});
+document.getElementById('show-onboarding-btn').addEventListener('click', showOnboarding);
+
+document.getElementById('open-insights-btn').addEventListener('click', openInsights);
+document.getElementById('insights-close').addEventListener('click', ()=>{
+  document.getElementById('insights-modal').classList.remove('open');
+});
+
 async function openProfile(personId){
   const p = people.find(x=>x.id===personId);
   const rec = await loadPerson(personId);
@@ -3266,7 +4358,7 @@ async function openProfile(personId){
       <p class="sub-heading">Admin: edit this angler</p>
       <div class="field">
         <label>Display Name</label>
-        <input type="text" id="admin-edit-name" value="${escapeHtml(p.name)}">
+        <input type="text" maxlength="100" id="admin-edit-name" value="${escapeHtml(p.name)}">
       </div>
       <div class="row2">
         <div class="field">
@@ -3275,17 +4367,17 @@ async function openProfile(personId){
         </div>
         <div class="field">
           <label>Email</label>
-          <input type="email" id="admin-edit-email" value="${escapeHtml(p.email||'')}">
+          <input type="email" maxlength="120" id="admin-edit-email" value="${escapeHtml(p.email||'')}">
         </div>
       </div>
       <div class="row2">
         <div class="field">
           <label>Carp PB (kg)</label>
-          <input type="number" step="0.01" min="0" id="admin-edit-pb-carp" value="${p.pb_carp_weight||''}">
+          <input type="number" step="0.01" min="0" max="500" id="admin-edit-pb-carp" value="${p.pb_carp_weight||''}">
         </div>
         <div class="field">
           <label>Catfish (Barbel) PB (kg)</label>
-          <input type="number" step="0.01" min="0" id="admin-edit-pb-barbel" value="${p.pb_barbel_weight||''}">
+          <input type="number" step="0.01" min="0" max="500" id="admin-edit-pb-barbel" value="${p.pb_barbel_weight||''}">
         </div>
       </div>
       <button class="primary-btn" id="admin-edit-save-btn">Save changes</button>
@@ -3305,8 +4397,8 @@ async function openProfile(personId){
       <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
       <div><b>${normalizeRodsCount((rec && rec.rods) || p.rods)}</b>rods</div>
     </div>`;
-  const TROPHY_SPECIES = ['Carp','Mirror Carp','Grass Carp','Barbel','Yellowfish'];
-  const speciesStats = TROPHY_SPECIES.map(species=>{
+  const trophySpecies = getTrophySpeciesFor(p);
+  const speciesStats = trophySpecies.map(species=>{
     const matches = caughtOnly.filter(c=>c.type===species);
     const pb = matches.reduce((best,c)=> (!best || (c.weight||0) > (best.weight||0)) ? c : best, null);
     return {species, count: matches.length, pb};
@@ -3335,7 +4427,7 @@ async function openProfile(personId){
     }
     html += `<div id="profile-photo-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>`;
   }
-  html += catches.length ? catches.map(catchDetailHtml).join('') : '<div class="empty">No entries logged yet.</div>';
+  html += catches.length ? catches.map(catchDetailHtml).join('') : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>';
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
 
@@ -3596,14 +4688,7 @@ async function likeCurrentPhoto(catchId){
     clearDbError();
     showLekkerFlash();
     renderPhotoLike();
-    try{
-      const rows = await sbGet('catches?id=eq.'+catchId+'&select=fisherman_id');
-      const owner = rows[0] ? people.find(p=>p.id===rows[0].fisherman_id) : null;
-      if(owner && owner.user_id && !(isSignedIn() && owner.user_id === session.user.id)){
-        const liker = isSignedIn() ? people.find(p=>p.user_id===session.user.id) : null;
-        createNotification(owner.user_id, 'like', `${liker ? liker.name : 'Someone'} liked your catch photo`, 'catch', catchId);
-      }
-    }catch(e){ console.error('like notification failed', e); }
+    notifyCatchLike(catchId);
   }catch(e){
     console.error(e);
     showDbError('Could not save like.');
@@ -3616,7 +4701,7 @@ async function renderPhotoComments(){
   if(!el || !currentPhotoCatchId) return;
   el.innerHTML = '<div class="empty">Loading...</div>';
   const rows = await loadComments(currentPhotoCatchId);
-  if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet.</div>'; return; }
+  if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet — be the first to say something.</div>'; return; }
   el.innerHTML = rows.map(c=>{
     const time = new Date(c.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     return `<div class="comment-item">
@@ -3744,6 +4829,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     if(btn.dataset.tab==='timers'){
       updateTimersVisibility();
       loadKnownRigs().then(()=>{ if(currentPerson) renderAll(); });
+      loadActiveSession().then(renderSessionUi);
     }
     if(btn.dataset.tab==='leaderboard') renderLeaderboard();
     if(btn.dataset.tab==='feed') renderFeed();
@@ -3819,7 +4905,7 @@ async function postComment(author, message, catchId){
 async function renderLeaderboard(){
   const el = document.getElementById('leaderboard-list');
   el.innerHTML = '<div class="empty">Loading...</div>';
-  if(people.length===0){ el.innerHTML = '<div class="empty">No anglers added yet.</div>'; return; }
+  if(people.length===0){ el.innerHTML = '<div class="empty">No anglers yet — the leaderboard fills up once people sign up and start logging.</div>'; return; }
 
   const followWrap = document.getElementById('lb-following-wrap');
   const followHint = document.getElementById('lb-following-hint');
@@ -4069,14 +5155,7 @@ async function loadChallenges(){
 async function deleteChallenge(id){ await sbDelete('challenges', 'id=eq.'+id); }
 async function addChallengeParticipant(challengeId, fishermanId){
   await sbPost('challenge_participants', {id: uid(), challenge_id: challengeId, fisherman_id: fishermanId});
-  try{
-    const angler = people.find(p=>p.id===fishermanId);
-    if(angler && angler.user_id){
-      const rows = await sbGet('challenges?id=eq.'+challengeId+'&select=name');
-      const chName = rows[0] ? rows[0].name : 'a challenge';
-      createNotification(angler.user_id, 'challenge_add', `You were added to the challenge "${chName}"`, 'challenges', challengeId);
-    }
-  }catch(e){ console.error('challenge add notification failed', e); }
+  notifyChallengeAdd(challengeId, fishermanId);
 }
 async function loadChallengeParticipants(challengeId){
   try{
@@ -4192,7 +5271,7 @@ async function renderChallenges(){
         ${isSignedIn() ? `
           <div class="field" style="margin-top:10px;">
             <label>Add angler — search name or email</label>
-            <input type="text" class="challenge-add-search" data-challenge="${ch.id}" placeholder="Type a name or email...">
+            <input type="text" maxlength="100" class="challenge-add-search" data-challenge="${ch.id}" placeholder="Type a name or email...">
             <div class="challenge-add-results" data-challenge="${ch.id}" style="margin-top:6px;"></div>
           </div>` : ''}
         ${isSuperUser() ? `<button class="mini-btn danger" data-challenge-remove="${ch.id}" style="margin-top:10px;">Delete challenge</button>` : ''}
@@ -4201,6 +5280,8 @@ async function renderChallenges(){
   el.innerHTML = parts.join('');
   el.querySelectorAll('[data-challenge-remove]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
+      const ch = challenges.find(x=>x.id===btn.dataset.challengeRemove);
+      if(!confirmDelete('the challenge "' + (ch ? ch.name : 'this challenge') + '"')) return;
       await deleteChallenge(btn.dataset.challengeRemove);
       renderChallenges();
     });
@@ -4274,14 +5355,7 @@ document.getElementById('challenge-create-btn').addEventListener('click', async 
 async function insertCompetition(item){ await sbPost('competitions', item); }
 async function addCompetitionParticipant(competitionId, fishermanId){
   await sbPost('competition_participants', {id: uid(), competition_id: competitionId, fisherman_id: fishermanId});
-  try{
-    const angler = people.find(p=>p.id===fishermanId);
-    if(angler && angler.user_id){
-      const rows = await sbGet('competitions?id=eq.'+competitionId+'&select=name');
-      const compName = rows[0] ? rows[0].name : 'a competition';
-      createNotification(angler.user_id, 'competition_add', `You were added to the competition "${compName}"`, 'competitions', competitionId);
-    }
-  }catch(e){ console.error('competition add notification failed', e); }
+  notifyCompetitionAdd(competitionId, fishermanId);
 }
 async function loadCompetitions(){
   try{
@@ -4372,14 +5446,14 @@ async function renderCompetitions(){
     const canManage = isSuperUser();
     parts.push(`<section class="card">
         <h2>${escapeHtml(c.name)}</h2>
-        <p class="pc-line muted">${escapeHtml(c.dam||'No dam set')}</p>
+        <p class="pc-line muted">${escapeHtml(c.dam||'No venue set')}</p>
         <div class="who" style="flex-wrap:wrap;">
           ${names.length ? names.map(n=>`<span class="pill">${escapeHtml(n)}</span>`).join('') : '<span class="pc-line muted">No anglers added yet.</span>'}
         </div>
         ${canManage ? `
           <div class="field" style="margin-top:10px;">
             <label>Add angler (admin) — search name or email</label>
-            <input type="text" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email...">
+            <input type="text" maxlength="100" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email...">
             <div class="competition-add-results" data-competition="${c.id}" style="margin-top:6px;"></div>
           </div>` : ''}
         ${canDelete ? `<button class="mini-btn danger" data-competition-remove="${c.id}" style="margin-top:10px;">Delete competition</button>` : ''}
@@ -4388,6 +5462,8 @@ async function renderCompetitions(){
   el.innerHTML = parts.join('');
   el.querySelectorAll('[data-competition-remove]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
+      const comp = comps.find(x=>x.id===btn.dataset.competitionRemove);
+      if(!confirmDelete('the competition "' + (comp ? comp.name : 'this competition') + '"')) return;
       await deleteCompetition(btn.dataset.competitionRemove);
       renderCompetitions();
     });
@@ -4476,8 +5552,10 @@ document.getElementById('admin-competition-select').addEventListener('change', a
   delBtn.style.display = 'inline-block';
 });
 document.getElementById('admin-competition-delete-btn').addEventListener('click', async ()=>{
-  const id = document.getElementById('admin-competition-select').value;
+  const sel = document.getElementById('admin-competition-select');
+  const id = sel.value;
   if(!id) return;
+  if(!confirmDelete('the competition "' + sel.options[sel.selectedIndex].text + '"')) return;
   await deleteCompetition(id);
   renderAdminTab();
 });
@@ -4491,8 +5569,10 @@ document.getElementById('admin-challenge-select').addEventListener('change', (e)
   delBtn.style.display = 'inline-block';
 });
 document.getElementById('admin-challenge-delete-btn').addEventListener('click', async ()=>{
-  const id = document.getElementById('admin-challenge-select').value;
+  const sel = document.getElementById('admin-challenge-select');
+  const id = sel.value;
   if(!id) return;
+  if(!confirmDelete('the challenge "' + sel.options[sel.selectedIndex].text + '"')) return;
   await deleteChallenge(id);
   renderAdminTab();
 });
@@ -4559,8 +5639,10 @@ document.getElementById('admin-catch-save-btn').addEventListener('click', async 
   }
 });
 document.getElementById('admin-catch-delete-btn').addEventListener('click', async ()=>{
-  const id = document.getElementById('admin-catch-select').value;
+  const sel = document.getElementById('admin-catch-select');
+  const id = sel.value;
   if(!id) return;
+  if(!confirmDelete('this catch')) return;
   try{
     await sbDelete('catches', 'id=eq.'+id);
     document.getElementById('admin-catch-angler-select').dispatchEvent(new Event('change'));
@@ -4622,9 +5704,19 @@ const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') ===
     setInterval(renderLeaderboard, 30000);
     return;
   }
-  loadSessionFromStorage();
+  // A Google sign-in lands back here with tokens in the URL — handle that first
+  const cameFromOAuth = await handleOAuthReturn();
+  if(!cameFromOAuth) loadSessionFromStorage();
+  try{
+    const keepEl = document.getElementById('keep-signed-in');
+    if(keepEl) keepEl.checked = localStorage.getItem('pk_fishing_keep_signed_in') !== 'false';
+    const signupCountryEl = document.getElementById('signup-country');
+    if(signupCountryEl) signupCountryEl.innerHTML = countryOptionsHtml('');
+  }catch(e){}
   renderAccountArea();
   await loadPeople();
+  let oauthProfile = null;
+  if(cameFromOAuth) oauthProfile = await ensureProfileForCurrentUser();
   renderAccountArea();
   await loadKnownRodOptions();
   await loadKnownRigs();
@@ -4632,7 +5724,73 @@ const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') ===
 await loadTackleCategoryOptions();
   await loadFollowedIds();
   populateAnglerSelect();
+  updateOfflineBanner();
+  syncPendingCatches();
+  if(isSignedIn()){ await loadActiveSession(); await renderSessionUi(); }
+  maybeShowInstallBanner();
+  try{
+    const themeSel = document.getElementById('theme-select');
+    if(themeSel) themeSel.value = localStorage.getItem('pk_fishing_theme') || 'system';
+  }catch(e){}
+  // A brand-new Google signup gets the same walkthrough as an email signup
+  if(oauthProfile && oauthProfile.isNew) showOnboarding();
 })();
+
+// ---------- Add to home screen ----------
+// Android/Chrome fire beforeinstallprompt and let us trigger the native dialog.
+// iOS has no such API — it needs manual Share > Add to Home Screen instructions.
+let deferredInstallPrompt = null;
+
+function isRunningStandalone(){
+  return window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+}
+function isIos(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+function installDismissed(){
+  try{ return localStorage.getItem('pk_fishing_install_dismissed') === 'true'; }
+  catch(e){ return false; }
+}
+
+function maybeShowInstallBanner(){
+  const banner = document.getElementById('install-banner');
+  if(!banner) return;
+  // Already installed, already dismissed, or spectator view — say nothing
+  if(isRunningStandalone() || installDismissed() || IS_SPECTATOR) return;
+
+  if(isIos()){
+    document.getElementById('install-banner-text').textContent =
+      'Add PK Fishing to your home screen: tap Share, then "Add to Home Screen".';
+    document.getElementById('install-app-btn').style.display = 'none';
+    banner.style.display = 'flex';
+  }else if(deferredInstallPrompt){
+    banner.style.display = 'flex';
+  }
+}
+
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  maybeShowInstallBanner();
+});
+
+document.getElementById('install-app-btn').addEventListener('click', async ()=>{
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  try{ await deferredInstallPrompt.userChoice; }catch(e){}
+  deferredInstallPrompt = null;
+  document.getElementById('install-banner').style.display = 'none';
+});
+
+document.getElementById('install-dismiss-btn').addEventListener('click', ()=>{
+  try{ localStorage.setItem('pk_fishing_install_dismissed', 'true'); }catch(e){}
+  document.getElementById('install-banner').style.display = 'none';
+});
+
+window.addEventListener('appinstalled', ()=>{
+  document.getElementById('install-banner').style.display = 'none';
+});
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
