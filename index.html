@@ -490,8 +490,7 @@
           <h2>Start a session</h2>
           <div class="field">
             <label>Venue</label>
-            <input type="text" maxlength="100" id="session-venue" list="session-venue-suggestions" placeholder="Where are you fishing?">
-            <datalist id="session-venue-suggestions"></datalist>
+            <input type="text" maxlength="100" id="session-venue" placeholder="Where are you fishing?">
           </div>
           <div class="field">
             <label>How many rods?</label>
@@ -1008,7 +1007,7 @@
           </div>
           <div class="field">
             <label>Brand (optional)</label>
-            <input type="text" maxlength="100" id="rig-brand" placeholder="e.g. Korda, Gardner, ESP...">
+            <input type="text" maxlength="100" id="rig-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Gardner, ESP...">
           </div>
           <div class="row2">
             <div class="field">
@@ -1190,6 +1189,13 @@ RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
 
 // Master species list for the Trophy Room. Each angler picks which of these
 // they want shown — this doesn't limit what you can log a catch as.
+// Bait sub-types, shared by the tackle box forms and the Timers hook picker
+const ALL_BAIT_TYPES = [
+  'Big hard floats','Big soft floats','Boilies','Groundbait','Mielies','Oozer',
+  'Other','Particles/Seeds','Paste','Pellets','Pop-ups','Small hard floats',
+  'Small soft floats','Tiger nuts','Wafters'
+];
+
 const ALL_TROPHY_SPECIES = [
   'Carp','Mirror Carp','Grass Carp','Barbel','Yellowfish',
   'Bass','Tilapia','Koi','Mudfish','Eel'
@@ -1350,9 +1356,16 @@ function joinMultiValue(arr){
 }
 
 function multiPickerFieldHtml(rod, key, label){
+  // Hooks get a bait-type filter; bom (dips) has no sub-types so it doesn't
+  const typeFilter = key === 'bom' ? '' : `
+    <select class="multi-picker-type" data-rod="${rod}" data-key="${key}" style="margin-bottom:6px;">
+      <option value="">All bait types</option>
+      ${ALL_BAIT_TYPES.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}
+    </select>`;
   return `<div class="field">
     <label>${escapeHtml(label)}</label>
-    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search your tackle box...">
+    ${typeFilter}
+    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search, or pick a type above...">
     <div class="multi-picker-results" data-rod="${rod}" data-key="${key}"></div>
     <div class="multi-picker-pills" data-rod="${rod}" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
   </div>`;
@@ -1382,19 +1395,32 @@ function renderMultiPickerPills(rod, key){
 function renderMultiPickerResults(rod, key){
   const searchEl = document.querySelector('.multi-picker-search[data-rod="'+rod+'"][data-key="'+key+'"]');
   const resultsEl = document.querySelector('.multi-picker-results[data-rod="'+rod+'"][data-key="'+key+'"]');
+  const typeEl = document.querySelector('.multi-picker-type[data-rod="'+rod+'"][data-key="'+key+'"]');
   if(!searchEl || !resultsEl || !currentPerson) return;
   const term = searchEl.value.trim().toLowerCase();
-  if(!term){ resultsEl.innerHTML = ''; return; }
+  const typeFilter = typeEl ? typeEl.value : '';
+  // Nothing to go on — wait for a search term or a chosen type
+  if(!term && !typeFilter){ resultsEl.innerHTML = ''; return; }
+
   const current = parseMultiValue(currentPerson.notes[rod][key]);
-  const sourceList = multiPickerSourceList(key);
-  const matches = sourceList.filter(name => name.toLowerCase().includes(term) && !current.includes(name)).slice(0, 6);
+  const matches = multiPickerSourceList(key)
+    .filter(item => !current.includes(item.name))
+    .filter(item => !typeFilter || item.type === typeFilter)
+    .filter(item => !term || item.name.toLowerCase().includes(term))
+    .slice(0, 12);
+
   resultsEl.innerHTML = matches.length
-    ? matches.map(name=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
-          <span style="font-size:14px;">${escapeHtml(name)}</span>
-          <button type="button" class="multi-picker-add" data-rod="${rod}" data-key="${key}" data-value="${escapeHtml(name)}">Add</button>
+    ? matches.map(item=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);gap:8px;">
+          <span style="font-size:14px;">
+            ${escapeHtml(item.name)}
+            ${item.brand ? `<span class="pc-line muted"> · ${escapeHtml(item.brand)}</span>` : ''}
+            ${item.type ? `<span class="pc-line muted"> · ${escapeHtml(item.type)}</span>` : ''}
+          </span>
+          <button type="button" class="multi-picker-add" data-rod="${rod}" data-key="${key}" data-value="${escapeHtml(item.name)}">Add</button>
         </div>`).join('')
-    : '<div class="empty">No matches in your tackle box.</div>';
+    : '<div class="empty">Nothing in your tackle box matches.</div>';
+
   resultsEl.querySelectorAll('.multi-picker-add').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const arr = parseMultiValue(currentPerson.notes[rod][key]);
@@ -1402,7 +1428,7 @@ function renderMultiPickerResults(rod, key){
       currentPerson.notes[rod][key] = joinMultiValue(arr);
       await saveRodState(currentPersonId, rod);
       searchEl.value = '';
-      resultsEl.innerHTML = '';
+      renderMultiPickerResults(rod, key);
       renderMultiPickerPills(rod, key);
     });
   });
@@ -1411,6 +1437,11 @@ function renderMultiPickerResults(rod, key){
 // Live-filter as the person types, works across dynamically rebuilt rod cards via delegation
 document.addEventListener('input', (e)=>{
   if(e.target.matches('.multi-picker-search')){
+    renderMultiPickerResults(e.target.dataset.rod, e.target.dataset.key);
+  }
+});
+document.addEventListener('change', (e)=>{
+  if(e.target.matches('.multi-picker-type')){
     renderMultiPickerResults(e.target.dataset.rod, e.target.dataset.key);
   }
 });
@@ -2569,14 +2600,14 @@ let knownBaitNames = [];
 async function loadTackleCategoryOptions(){
   if(!isSignedIn()){ knownDipNames = []; knownBaitNames = []; return; }
   try{
-    const rows = await sbGet('tackle_items?select=id,name,category,owner_user_id&category=in.(Dips,Bait)&order=name.asc');
+    const rows = await sbGet('tackle_items?select=id,name,category,bait_type,brand,owner_user_id&category=in.(Dips,Bait)&order=name.asc');
     // Same rule as rods/reels — yours, or shared items you've ticked "Use" on
     const inUse = await loadSharedWithMeTackleItemIds();
     const mine = rows.filter(r=>
       r.owner_user_id === session.user.id || inUse.get(r.id) === true
     );
-    knownDipNames = mine.filter(r=>r.category==='Dips').map(r=>r.name);
-    knownBaitNames = mine.filter(r=>r.category==='Bait').map(r=>r.name);
+    knownDipNames = mine.filter(r=>r.category==='Dips').map(r=>({name:r.name, type:null, brand:r.brand}));
+    knownBaitNames = mine.filter(r=>r.category==='Bait').map(r=>({name:r.name, type:r.bait_type, brand:r.brand}));
   }catch(e){ console.error('loadTackleCategoryOptions failed', e); showDbError('Could not load bait/dip options: ' + (e.message || 'unknown error')); }
 }
 
@@ -3788,9 +3819,6 @@ async function renderSessionUi(){
     rodCards.style.display = 'none';
     const rodsSel = document.getElementById('session-rods');
     if(rodsSel && !rodsSel.options.length) rodsSel.innerHTML = rodsOptionsHtml(1);
-    const venues = await loadMyVenues();
-    const dl = document.getElementById('session-venue-suggestions');
-    if(dl) dl.innerHTML = venues.map(v=>`<option value="${escapeHtml(v.name)}"></option>`).join('');
   }
 }
 
