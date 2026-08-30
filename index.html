@@ -2576,6 +2576,18 @@ function isSuperUser(){
 // Notifications are created server-side only. Each function verifies the
 // triggering event actually happened and composes the message itself, so the
 // client can't fabricate notifications or send them to arbitrary people.
+async function notifyCatchComment(catchId, commentId){
+  try{ await sbRpc('notify_catch_comment', {p_catch_id: catchId, p_comment_id: commentId}); }
+  catch(e){ console.error('notify_catch_comment failed', e); }
+}
+async function notifyTackleShare(tackleItemId, sharedWith){
+  try{ await sbRpc('notify_tackle_share', {p_tackle_item_id: tackleItemId, p_shared_with: sharedWith}); }
+  catch(e){ console.error('notify_tackle_share failed', e); }
+}
+async function notifyBoxShare(sharedWith){
+  try{ await sbRpc('notify_box_share', {p_shared_with: sharedWith}); }
+  catch(e){ console.error('notify_box_share failed', e); }
+}
 async function notifyFollow(followedFishermanId){
   try{ await sbRpc('notify_follow', {p_followed_fisherman_id: followedFishermanId}); }
   catch(e){ console.error('notify_follow failed', e); }
@@ -2646,7 +2658,13 @@ function switchToTab(tabName){
 
 async function goToNotificationTarget(n){
   document.getElementById('notif-modal').classList.remove('open');
-  if(!n.target_type || !n.target_id) return;
+  if(!n.target_type) return;
+  if(n.target_type === 'tackle'){
+    // A whole-box share has no specific item, so just open the tab
+    switchToTab('tackle');
+    return;
+  }
+  if(!n.target_id) return;
   if(n.target_type === 'profile'){
     openProfile(n.target_id);
   }else if(n.target_type === 'catch'){
@@ -2793,6 +2811,7 @@ async function shareTackleItemWith(tackleItemId, userIds){
   if(!userIds.length) return;
   const rows = userIds.map(uidVal=>({id: uid(), tackle_item_id: tackleItemId, shared_with_user_id: uidVal}));
   await sbPost('tackle_item_shares', rows);
+  userIds.forEach(u=> notifyTackleShare(tackleItemId, u));
 }
 async function loadTackleItemShareUserIds(tackleItemId){
   try{
@@ -2993,6 +3012,7 @@ async function renderTackleBoxSharePicker(){
           await sbPost('tackle_box_shares', {
             id: uid(), owner_user_id: session.user.id, shared_with_user_id: cb.dataset.user
           });
+          notifyBoxShare(cb.dataset.user);
         }else{
           await sbDelete('tackle_box_shares', 'owner_user_id=eq.'+session.user.id+'&shared_with_user_id=eq.'+cb.dataset.user);
         }
@@ -5032,7 +5052,8 @@ document.getElementById('photo-comment-post-btn').addEventListener('click', asyn
   if(!message){ st.textContent = 'Write something first.'; return; }
   st.textContent = 'Posting...';
   try{
-    await postComment(authorEl.value.trim(), message, currentPhotoCatchId);
+    const commentId = await postComment(authorEl.value.trim(), message, currentPhotoCatchId);
+    notifyCatchComment(currentPhotoCatchId, commentId);
     messageEl.value = '';
     st.textContent = 'Posted.';
     setTimeout(()=> st.textContent='', 1200);
@@ -5208,13 +5229,15 @@ async function loadComments(catchId){
   }catch(e){ console.error(e); return []; }
 }
 async function postComment(author, message, catchId){
+  const commentId = uid();
   await sbPost('comments', {
-    id: uid(),
+    id: commentId,
     author: author || 'Anonymous',
     message,
     created_at: new Date().toISOString(),
     catch_id: catchId || null
   });
+  return commentId;
 }
 async function renderLeaderboard(){
   const el = document.getElementById('leaderboard-list');
