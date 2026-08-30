@@ -4067,8 +4067,30 @@ document.getElementById('session-active-rods').addEventListener('change', async 
   }
 });
 
+// Wipe every rod back to a blank slate — timers stopped, rig/bait/hook
+// selections cleared, catch forms reset. Logged catches are untouched.
+async function clearAllRodState(){
+  if(!currentPerson || !currentPersonId) return;
+  for(const r of RODS){
+    currentPerson.timers[r] = {running:false, startTs:null, accumulatedMs:0};
+    const cleared = {
+      bom:'', rig:'', identifier:'',
+      dotColor: '#C1440E',
+      hookCount: 2,
+      rodItemId: '', reelItemId: ''
+    };
+    for(let n=1; n<=MAX_HOOKS; n++){ cleared['hook'+n] = ''; }
+    currentPerson.notes[r] = cleared;
+    catchToggle[r] = false;
+    pendingPhotos[r] = [];
+    await saveRodState(currentPersonId, r);
+  }
+  renderAll();
+}
+
 document.getElementById('session-end-btn').addEventListener('click', async ()=>{
   if(!activeSession) return;
+  if(!window.confirm('End this session?\n\nYour rods, timers and rig selections will be cleared. Logged catches are kept.')) return;
   const endedAt = new Date().toISOString();
   try{
     if(navigator.onLine){
@@ -4079,6 +4101,7 @@ document.getElementById('session-end-btn').addEventListener('click', async ()=>{
       await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
     }
     activeSession = null;
+    await clearAllRodState();
     await renderSessionUi();
     updateOfflineBanner();
   }catch(e){
@@ -4086,6 +4109,7 @@ document.getElementById('session-end-btn').addEventListener('click', async ()=>{
     activeSession.ended_at = endedAt;
     await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
     activeSession = null;
+    await clearAllRodState();
     await renderSessionUi();
     updateOfflineBanner();
   }
