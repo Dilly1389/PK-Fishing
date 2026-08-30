@@ -498,14 +498,11 @@
           <select id="angler-select" autocomplete="off"></select>
         </div>
 
+        <div id="active-competitions-bar" style="display:none;margin-bottom:14px;font-size:13px;"></div>
+
         <section class="card" id="session-setup">
           <h2>Start a session</h2>
-          <div class="field" id="session-competition-wrap" style="display:none;">
-            <label>Fishing a competition?</label>
-            <select id="session-competition">
-              <option value="">No — just fishing</option>
-            </select>
-          </div>
+          <input type="hidden" id="session-competition" value="">
           <div class="field">
             <label>Venue</label>
             <input type="text" maxlength="100" id="session-venue" placeholder="Where are you fishing?">
@@ -529,8 +526,6 @@
             <button class="mini-btn danger" id="session-end-btn">End session</button>
           </div>
         </div>
-
-        <div id="active-competitions-bar" style="display:none;background:var(--dam);color:#fff;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:13px;"></div>
 
         <div id="rod-cards"></div>
       </div>
@@ -3988,7 +3983,7 @@ async function renderActiveCompetitionsBar(){
   if(!isSignedIn() || !myId || !navigator.onLine){ bar.style.display = 'none'; return; }
   try{
     const today = new Date().toISOString().slice(0,10);
-    const comps = await sbGet('competitions?select=id,name,metric,fish_type_filter,end_date&start_date=lte.'+today+'&end_date=gte.'+today);
+    const comps = await sbGet('competitions?select=id,name,dam,metric,fish_type_filter,end_date&start_date=lte.'+today+'&end_date=gte.'+today);
     if(!comps.length){ bar.style.display = 'none'; return; }
 
     // Only the ones I'm actually in (or that are open to everyone)
@@ -3999,16 +3994,48 @@ async function renderActiveCompetitionsBar(){
     }
     if(!mine.length){ bar.style.display = 'none'; return; }
 
+    // While a session is running the choice is locked, so just show status
+    const locked = !!activeSession;
+    const chosenId = locked
+      ? (activeSession.competition_id || '')
+      : document.getElementById('session-competition').value;
+
     bar.style.display = 'block';
     bar.innerHTML = mine.map(c=>{
       const metricLabel = c.metric==='catch_count' ? 'most catches'
         : (c.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
       const endsIn = Math.ceil((new Date(c.end_date+'T23:59:59') - Date.now()) / 86400000);
-      return `<div style="margin-bottom:4px;">
-        🏆 <b>${escapeHtml(c.name)}</b> is running — ${metricLabel}${c.fish_type_filter ? ', '+escapeHtml(c.fish_type_filter)+' only' : ''}
+      const selected = chosenId === c.id;
+      return `<div class="${locked ? '' : 'comp-banner-pick'}" data-comp-id="${c.id}" data-comp-venue="${escapeHtml(c.dam||'')}"
+        style="background:${selected ? 'var(--catch-green)' : 'var(--dam)'};color:#fff;border-radius:10px;padding:10px 12px;margin-bottom:6px;${locked ? '' : 'cursor:pointer;'}
+        ${selected ? 'box-shadow:0 0 0 2px var(--rust);' : ''}">
+        🏆 <b>${escapeHtml(c.name)}</b> ${selected ? '— you\'re fishing this' : 'is running'} — ${metricLabel}${c.fish_type_filter ? ', '+escapeHtml(c.fish_type_filter)+' only' : ''}
         <span style="opacity:.85;">· ${endsIn <= 1 ? 'ends today' : 'ends in '+endsIn+' days'}</span>
+        ${locked ? '' : `<div style="opacity:.85;margin-top:2px;">${selected ? 'Tap again to fish without it' : 'Tap to fish this competition'}</div>`}
       </div>`;
     }).join('');
+
+    if(!locked){
+      bar.querySelectorAll('.comp-banner-pick').forEach(div=>{
+        div.addEventListener('click', ()=>{
+          const hidden = document.getElementById('session-competition');
+          const venueEl = document.getElementById('session-venue');
+          if(hidden.value === div.dataset.compId){
+            // Tapping the selected one clears it
+            hidden.value = '';
+            venueEl.readOnly = false;
+            venueEl.style.opacity = '1';
+            venueEl.value = '';
+          }else{
+            hidden.value = div.dataset.compId;
+            venueEl.value = div.dataset.compVenue || '';
+            venueEl.readOnly = true;
+            venueEl.style.opacity = '0.6';
+          }
+          renderActiveCompetitionsBar();
+        });
+      });
+    }
   }catch(e){
     console.error('renderActiveCompetitionsBar failed', e);
     bar.style.display = 'none';
@@ -4041,49 +4068,9 @@ async function renderSessionUi(){
     rodCards.style.display = 'none';
     const rodsSel = document.getElementById('session-rods');
     if(rodsSel && !rodsSel.options.length) rodsSel.innerHTML = rodsOptionsHtml(1);
-    await populateSessionCompetitionPicker();
+    await renderActiveCompetitionsBar();
   }
 }
-
-// Competitions running right now that I'm taking part in
-async function populateSessionCompetitionPicker(){
-  const wrap = document.getElementById('session-competition-wrap');
-  const sel = document.getElementById('session-competition');
-  if(!wrap || !sel) return;
-  const myId = getMyFishermanId();
-  if(!isSignedIn() || !myId || !navigator.onLine){ wrap.style.display = 'none'; return; }
-  try{
-    const today = new Date().toISOString().slice(0,10);
-    const comps = await sbGet('competitions?select=id,name,dam&start_date=lte.'+today+'&end_date=gte.'+today);
-    const mine = [];
-    for(const c of comps){
-      const participants = await loadCompetitionParticipants(c.id);
-      if(participants.length === 0 || participants.includes(myId)) mine.push(c);
-    }
-    if(!mine.length){ wrap.style.display = 'none'; return; }
-    wrap.style.display = 'block';
-    sel.innerHTML = '<option value="">No — just fishing</option>' +
-      mine.map(c=>`<option value="${c.id}" data-venue="${escapeHtml(c.dam||'')}">${escapeHtml(c.name)}</option>`).join('');
-  }catch(e){
-    console.error('populateSessionCompetitionPicker failed', e);
-    wrap.style.display = 'none';
-  }
-}
-
-// Picking a competition fixes the venue — no mismatch, no typos
-document.getElementById('session-competition').addEventListener('change', (e)=>{
-  const venueEl = document.getElementById('session-venue');
-  const opt = e.target.options[e.target.selectedIndex];
-  if(e.target.value){
-    venueEl.value = opt.dataset.venue || '';
-    venueEl.readOnly = true;
-    venueEl.style.opacity = '0.6';
-  }else{
-    venueEl.readOnly = false;
-    venueEl.style.opacity = '1';
-    venueEl.value = '';
-  }
-});
 
 document.getElementById('session-start-btn').addEventListener('click', async ()=>{
   const st = document.getElementById('session-status');
@@ -4143,6 +4130,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
     st.textContent = '';
     activeSession = sessionRecord;
     await renderSessionUi();
+    await renderActiveCompetitionsBar();
     renderAll();
     updateOfflineBanner();
   }catch(e){
@@ -4212,6 +4200,7 @@ document.getElementById('session-end-btn').addEventListener('click', async ()=>{
     activeSession = null;
     await clearAllRodState();
     await renderSessionUi();
+    await renderActiveCompetitionsBar();
     updateOfflineBanner();
   }catch(e){
     console.error(e);
@@ -4220,6 +4209,7 @@ document.getElementById('session-end-btn').addEventListener('click', async ()=>{
     activeSession = null;
     await clearAllRodState();
     await renderSessionUi();
+    await renderActiveCompetitionsBar();
     updateOfflineBanner();
   }
 });
@@ -5694,6 +5684,88 @@ function renderCompetitionSelectedPills(){
   });
 }
 
+// Inline edit form for a competition — creator or admin only
+function renderCompetitionEditForm(comp, containerEl){
+  if(!comp) return;
+  containerEl.innerHTML = `
+    <div class="row2">
+      <div class="field">
+        <label>Name</label>
+        <input type="text" maxlength="100" class="comp-edit-name" value="${escapeHtml(comp.name||'')}">
+      </div>
+      <div class="field">
+        <label>Venue</label>
+        <input type="text" maxlength="100" class="comp-edit-venue" value="${escapeHtml(comp.dam||'')}">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Start date</label>
+        <input type="date" class="comp-edit-start" value="${escapeHtml(comp.start_date||'')}">
+      </div>
+      <div class="field">
+        <label>Start time</label>
+        <input type="time" class="comp-edit-start-time" value="${escapeHtml(String(comp.start_time||'00:00').slice(0,5))}">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>End date</label>
+        <input type="date" class="comp-edit-end" value="${escapeHtml(comp.end_date||'')}">
+      </div>
+      <div class="field">
+        <label>End time</label>
+        <input type="time" class="comp-edit-end-time" value="${escapeHtml(String(comp.end_time||'23:59').slice(0,5))}">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Ranked by</label>
+        <select class="comp-edit-metric">
+          <option value="total_weight" ${comp.metric==='total_weight'?'selected':''}>Total weight (biggest bag)</option>
+          <option value="catch_count" ${comp.metric==='catch_count'?'selected':''}>Most catches</option>
+          <option value="biggest_fish" ${comp.metric==='biggest_fish'?'selected':''}>Biggest single fish</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Species (optional)</label>
+        <select class="comp-edit-fishtype">
+          <option value="">Any species</option>
+          ${ALL_TROPHY_SPECIES.map(s=>`<option value="${escapeHtml(s)}" ${comp.fish_type_filter===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <button class="primary-btn comp-edit-save">Save changes</button>
+    <div class="status comp-edit-status"></div>
+  `;
+  containerEl.querySelector('.comp-edit-save').addEventListener('click', async ()=>{
+    const st = containerEl.querySelector('.comp-edit-status');
+    const name = containerEl.querySelector('.comp-edit-name').value.trim();
+    const startDate = containerEl.querySelector('.comp-edit-start').value;
+    const endDate = containerEl.querySelector('.comp-edit-end').value;
+    if(!name){ st.textContent = 'Enter a name.'; return; }
+    if(!startDate || !endDate){ st.textContent = 'Pick a start and end date.'; return; }
+    st.textContent = 'Saving...';
+    try{
+      await sbPatch('competitions', 'id=eq.'+comp.id, {
+        name,
+        dam: containerEl.querySelector('.comp-edit-venue').value.trim(),
+        start_date: startDate,
+        end_date: endDate,
+        start_time: containerEl.querySelector('.comp-edit-start-time').value || '00:00',
+        end_time: containerEl.querySelector('.comp-edit-end-time').value || '23:59',
+        metric: containerEl.querySelector('.comp-edit-metric').value,
+        fish_type_filter: containerEl.querySelector('.comp-edit-fishtype').value || null
+      });
+      st.textContent = 'Saved.';
+      setTimeout(()=>{ renderCompetitions(); }, 700);
+    }catch(e){
+      console.error(e);
+      st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+    }
+  });
+}
+
 async function renderCompetitions(){
   const gate = document.getElementById('competition-signin-required');
   const createCard = document.getElementById('competition-create-card');
@@ -5758,11 +5830,26 @@ async function renderCompetitions(){
           </div>` : ''}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
           <button class="mini-btn" data-competition-share="${c.id}">Share live standings</button>
+          ${canDelete ? `<button class="mini-btn" data-competition-edit="${c.id}">Edit</button>` : ''}
           ${canDelete ? `<button class="mini-btn danger" data-competition-remove="${c.id}">Delete competition</button>` : ''}
         </div>
+        ${canDelete ? `<div class="competition-edit-manager" data-competition="${c.id}" style="display:none;padding-top:10px;"></div>` : ''}
       </section>`);
   }
   el.innerHTML = parts.join('');
+  el.querySelectorAll('[data-competition-edit]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.competitionEdit;
+      const manager = el.querySelector('.competition-edit-manager[data-competition="'+id+'"]');
+      if(!manager) return;
+      if(manager.style.display !== 'none'){
+        manager.style.display = 'none';
+        return;
+      }
+      manager.style.display = 'block';
+      renderCompetitionEditForm(comps.find(x=>x.id===id), manager);
+    });
+  });
   el.querySelectorAll('[data-competition-share]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const url = window.location.origin + window.location.pathname +
