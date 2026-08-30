@@ -1085,7 +1085,10 @@
 <div class="modal-overlay" id="notif-modal">
   <div class="modal-card">
     <h3 style="margin-top:0;">Notifications</h3>
-    <button class="mini-btn" id="notif-mark-all-read" style="margin-bottom:10px;">Mark all as read</button>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="mini-btn" id="notif-mark-all-read">Mark all as read</button>
+      <button class="mini-btn danger" id="notif-clear-all">Clear all</button>
+    </div>
     <div id="notif-list"><div class="empty">No notifications yet — you'll hear when someone follows you, likes a catch, or adds you to a competition.</div></div>
     <button class="primary-btn" id="notif-close" style="margin-top:14px;">Close</button>
   </div>
@@ -2035,6 +2038,10 @@ async function syncPendingCatches(){
   for(const item of pending){
     try{
       await sbPost('catches', buildCatchPayload(item.personId, item.entry));
+      // Catches logged offline still deserve their moment once they land
+      if(item.entry.caught && (item.entry.weight||0) > 0){
+        notifyFriendsOfCatch(item.entry.id);
+      }
       await removePendingCatch(item.id);
       synced++;
     }catch(e){
@@ -2576,6 +2583,10 @@ function isSuperUser(){
 // Notifications are created server-side only. Each function verifies the
 // triggering event actually happened and composes the message itself, so the
 // client can't fabricate notifications or send them to arbitrary people.
+async function notifyFriendsOfCatch(catchId){
+  try{ await sbRpc('notify_friends_of_catch', {p_catch_id: catchId}); }
+  catch(e){ console.error('notify_friends_of_catch failed', e); }
+}
 async function notifyCatchComment(catchId, commentId){
   try{ await sbRpc('notify_catch_comment', {p_catch_id: catchId, p_comment_id: commentId}); }
   catch(e){ console.error('notify_catch_comment failed', e); }
@@ -2633,13 +2644,30 @@ async function renderNotifPanel(){
   const rows = await loadMyNotifications();
   if(rows.length === 0){ el.innerHTML = '<div class="empty">No notifications yet.</div>'; return; }
   el.innerHTML = rows.map(n=>`
-    <div class="profile-catch notif-item" data-notif-id="${n.id}" style="${n.read ? '' : 'border-left:3px solid var(--rust);'}${n.target_type ? 'cursor:pointer;' : ''}">
-      <div class="pc-line">${escapeHtml(n.message)}</div>
-      <div class="pc-line muted">${formatTimeAgo(new Date(n.created_at).getTime())}</div>
+    <div class="profile-catch notif-item" data-notif-id="${n.id}" style="${n.read ? '' : 'border-left:3px solid var(--rust);'}display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+      <div style="flex:1;${n.target_type ? 'cursor:pointer;' : ''}" data-notif-body="${n.id}">
+        <div class="pc-line">${escapeHtml(n.message)}</div>
+        <div class="pc-line muted">${formatTimeAgo(new Date(n.created_at).getTime())}</div>
+      </div>
+      <button type="button" class="notif-dismiss" data-notif-dismiss="${n.id}" title="Dismiss" style="border:none;background:none;cursor:pointer;color:var(--muted);font-weight:700;font-size:18px;padding:0 4px;line-height:1;">×</button>
     </div>`).join('');
-  el.querySelectorAll('.notif-item').forEach(div=>{
-    const n = rows.find(x=>x.id===div.dataset.notifId);
+  el.querySelectorAll('[data-notif-body]').forEach(div=>{
+    const n = rows.find(x=>x.id===div.dataset.notifBody);
     if(n && n.target_type) div.addEventListener('click', ()=> goToNotificationTarget(n));
+  });
+  el.querySelectorAll('[data-notif-dismiss]').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation(); // don't also trigger the navigation
+      const id = btn.dataset.notifDismiss;
+      try{
+        await sbDelete('notifications', 'id=eq.'+id);
+        renderNotifPanel();
+        refreshNotifBadge();
+      }catch(err){
+        console.error(err);
+        alert('Could not dismiss: ' + (err.message || 'unknown error'));
+      }
+    });
   });
   // Viewing the panel marks everything as read
   const unreadIds = rows.filter(n=>!n.read).map(n=>n.id);
@@ -4314,6 +4342,10 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
 
   await insertCatch(currentPersonId, entry);
   await checkAndUpdatePersonalBest(entry);
+  // Let mutual friends know if this was a PB or one of their biggest
+  if(entry.caught && (entry.weight||0) > 0){
+    notifyFriendsOfCatch(entry.id);
+  }
 });
 
 document.getElementById('confirm-edit').addEventListener('click', ()=>{
@@ -5200,6 +5232,19 @@ document.getElementById('notif-bell').addEventListener('click', ()=>{
 document.getElementById('notif-close').addEventListener('click', ()=>{
   document.getElementById('notif-modal').classList.remove('open');
 });
+document.getElementById('notif-clear-all').addEventListener('click', async ()=>{
+  if(!isSignedIn()) return;
+  if(!window.confirm('Clear all notifications?\n\nThis cannot be undone.')) return;
+  try{
+    await sbDelete('notifications', 'recipient_user_id=eq.'+session.user.id);
+    refreshNotifBadge();
+    renderNotifPanel();
+  }catch(e){
+    console.error(e);
+    alert('Could not clear: ' + (e.message || 'unknown error'));
+  }
+});
+
 document.getElementById('notif-mark-all-read').addEventListener('click', async ()=>{
   if(!isSignedIn()) return;
   try{
