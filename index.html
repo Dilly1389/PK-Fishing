@@ -479,7 +479,6 @@
     <button data-tab="schedule" class="active">Profile</button>
     <button data-tab="leaderboard">Leaderboard</button>
     <button data-tab="feed">Friends</button>
-    <button data-tab="challenges">Challenges</button>
     <button data-tab="competitions">Competitions</button>
     <button data-tab="tackle">Tackle Box</button>
     <button data-tab="admin" id="admin-tab-btn" style="display:none;">Admin</button>
@@ -720,66 +719,6 @@
       <button class="primary-btn" id="refresh-feed-btn" style="background:var(--dam);">Refresh</button>
     </div>
 
-    <!-- CHALLENGES -->
-    <div class="panel" id="panel-challenges">
-      <section class="card" id="challenge-create-card">
-        <h2>Create a challenge</h2>
-        <div class="field">
-          <label>Name</label>
-          <input type="text" maxlength="100" id="challenge-name" placeholder="e.g. Biggest bag this month">
-        </div>
-        <div class="row2">
-          <div class="field">
-            <label>Start date</label>
-            <input type="date" id="challenge-start">
-          </div>
-          <div class="field">
-            <label>End date</label>
-            <input type="date" id="challenge-end">
-          </div>
-        </div>
-        <div class="row2">
-          <div class="field">
-            <label>Ranked by</label>
-            <select id="challenge-metric">
-              <option value="total_weight">Total weight (biggest bag)</option>
-              <option value="catch_count">Most catches</option>
-              <option value="biggest_fish">Biggest single fish</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Fish type (optional)</label>
-            <select id="challenge-fishtype">
-              <option value="">Any type</option>
-              <option value="Carp">Carp</option>
-              <option value="Mirror Carp">Mirror Carp</option>
-              <option value="Grass Carp">Grass Carp</option>
-              <option value="Bass">Bass</option>
-              <option value="Barbel">Barbel</option>
-              <option value="Tilapia">Tilapia</option>
-              <option value="Yellowfish">Yellowfish</option>
-              <option value="Mudfish">Mudfish</option>
-              <option value="Koi">Koi</option>
-              <option value="Eel">Eel</option>
-            </select>
-          </div>
-        </div>
-        <p class="sub-heading">Add anglers (optional — leave empty for open to everyone)</p>
-        <div class="field">
-          <label>Search by name or email</label>
-          <input type="text" maxlength="100" id="challenge-angler-search" placeholder="Type a name or email...">
-        </div>
-        <div id="challenge-angler-search-results"></div>
-        <div id="challenge-selected-anglers" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
-        <button class="primary-btn" id="challenge-create-btn">Create challenge</button>
-        <div class="status" id="challenge-create-status"></div>
-      </section>
-      <section class="card">
-        <h2>Challenges</h2>
-        <div id="challenges-list"><div class="empty">No challenges yet — create one above to set a target over a date range.</div></div>
-      </section>
-    </div>
-
     <!-- COMPETITIONS -->
     <div class="panel" id="panel-competitions">
       <section class="card" id="competition-signin-required">
@@ -796,6 +735,42 @@
           <div class="field">
             <label>Venue</label>
             <input type="text" maxlength="100" id="competition-dam" placeholder="Where is it being fished?">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Start date</label>
+            <input type="date" id="competition-start">
+          </div>
+          <div class="field">
+            <label>End date</label>
+            <input type="date" id="competition-end">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Ranked by</label>
+            <select id="competition-metric">
+              <option value="total_weight">Total weight (biggest bag)</option>
+              <option value="catch_count">Most catches</option>
+              <option value="biggest_fish">Biggest single fish</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Species (optional)</label>
+            <select id="competition-fishtype">
+              <option value="">Any species</option>
+              <option value="Carp">Carp</option>
+              <option value="Mirror Carp">Mirror Carp</option>
+              <option value="Grass Carp">Grass Carp</option>
+              <option value="Barbel">Barbel</option>
+              <option value="Yellowfish">Yellowfish</option>
+              <option value="Bass">Bass</option>
+              <option value="Tilapia">Tilapia</option>
+              <option value="Koi">Koi</option>
+              <option value="Mudfish">Mudfish</option>
+              <option value="Eel">Eel</option>
+            </select>
           </div>
         </div>
         <p class="sub-heading">Add anglers</p>
@@ -837,16 +812,7 @@
         <button class="mini-btn danger" id="admin-competition-delete-btn" style="display:none;margin-top:8px;">Delete competition</button>
       </section>
 
-      <section class="card">
-        <h2>Admin: Challenges</h2>
-        <div class="field">
-          <label>Select challenge</label>
-          <select id="admin-challenge-select"><option value="">Choose...</option></select>
-        </div>
-        <div id="admin-challenge-info" class="pc-line muted"></div>
-        <button class="mini-btn danger" id="admin-challenge-delete-btn" style="display:none;margin-top:8px;">Delete challenge</button>
-      </section>
-
+      
       <section class="card">
         <h2>Admin: Catches</h2>
         <div class="field">
@@ -2611,10 +2577,6 @@ async function notifyCompetitionAdd(competitionId, fishermanId){
   try{ await sbRpc('notify_competition_add', {p_competition_id: competitionId, p_fisherman_id: fishermanId}); }
   catch(e){ console.error('notify_competition_add failed', e); }
 }
-async function notifyChallengeAdd(challengeId, fishermanId){
-  try{ await sbRpc('notify_challenge_add', {p_challenge_id: challengeId, p_fisherman_id: fishermanId}); }
-  catch(e){ console.error('notify_challenge_add failed', e); }
-}
 async function loadMyNotifications(){
   if(!isSignedIn()) return [];
   try{
@@ -2710,8 +2672,6 @@ async function goToNotificationTarget(n){
     }catch(e){ console.error(e); }
   }else if(n.target_type === 'competitions'){
     switchToTab('competitions');
-  }else if(n.target_type === 'challenges'){
-    switchToTab('challenges');
   }
 }
 
@@ -5199,7 +5159,6 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     }
     if(btn.dataset.tab==='leaderboard') renderLeaderboard();
     if(btn.dataset.tab==='feed') renderFeed();
-    if(btn.dataset.tab==='challenges') renderChallenges();
     if(btn.dataset.tab==='competitions') renderCompetitions();
     if(btn.dataset.tab==='tackle'){
       updateTackleVisibility();
@@ -5525,214 +5484,6 @@ async function renderFeed(refetch){
 document.getElementById('refresh-feed-btn').addEventListener('click', ()=> renderFeed(true));
 document.getElementById('feed-search-input').addEventListener('input', ()=> renderFeed(false));
 
-// ---------- Challenges ----------
-async function insertChallenge(item){ await sbPost('challenges', item); }
-async function loadChallenges(){
-  try{
-    const rows = await sbGet('challenges?select=*&order=start_date.desc');
-    clearDbError();
-    return rows;
-  }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
-}
-async function deleteChallenge(id){ await sbDelete('challenges', 'id=eq.'+id); }
-async function addChallengeParticipant(challengeId, fishermanId){
-  await sbPost('challenge_participants', {id: uid(), challenge_id: challengeId, fisherman_id: fishermanId});
-  notifyChallengeAdd(challengeId, fishermanId);
-}
-async function loadChallengeParticipants(challengeId){
-  try{
-    const rows = await sbGet('challenge_participants?select=fisherman_id&challenge_id=eq.'+challengeId);
-    return rows.map(r=>r.fisherman_id);
-  }catch(e){ console.error(e); return []; }
-}
-
-async function computeChallengeLeaderboard(challenge){
-  const startIso = new Date(challenge.start_date+'T00:00:00').toISOString();
-  const endIso = new Date(challenge.end_date+'T23:59:59').toISOString();
-  let rows = [];
-  try{
-    rows = await sbGet('catches?select=*&caught=eq.true&time=gte.'+startIso+'&time=lte.'+endIso);
-  }catch(e){ console.error(e); return []; }
-  if(challenge.fish_type_filter) rows = rows.filter(c=>c.fish_type===challenge.fish_type_filter);
-  const participantIds = await loadChallengeParticipants(challenge.id);
-  if(participantIds.length){ rows = rows.filter(c=>participantIds.includes(c.fisherman_id)); }
-  const byFisherman = {};
-  rows.forEach(c=>{
-    if(!byFisherman[c.fisherman_id]) byFisherman[c.fisherman_id] = {totalWeight:0, count:0, biggest:0};
-    byFisherman[c.fisherman_id].totalWeight += (c.weight||0);
-    byFisherman[c.fisherman_id].count += 1;
-    if((c.weight||0) > byFisherman[c.fisherman_id].biggest) byFisherman[c.fisherman_id].biggest = c.weight||0;
-  });
-  const stats = Object.keys(byFisherman).map(fid=>{
-    const p = people.find(x=>x.id===fid);
-    return {id:fid, name: p ? p.name : 'Unknown', ...byFisherman[fid]};
-  });
-  const metricKey = challenge.metric==='catch_count' ? 'count' : (challenge.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
-  stats.sort((a,b)=> b[metricKey]-a[metricKey]);
-  return stats;
-}
-
-let challengeSelectedIds = new Set();
-
-function renderChallengeAnglerSearch(){
-  const input = document.getElementById('challenge-angler-search');
-  const resultsEl = document.getElementById('challenge-angler-search-results');
-  if(!input || !resultsEl) return;
-  const term = input.value.trim().toLowerCase();
-  if(!term){ resultsEl.innerHTML = ''; return; }
-  const matches = people.filter(p =>
-    !p.archived && !challengeSelectedIds.has(p.id) &&
-    (p.name.toLowerCase().includes(term) || (p.email||'').toLowerCase().includes(term))
-  ).slice(0, 8);
-  resultsEl.innerHTML = matches.length
-    ? matches.map(p => `
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
-          <span style="font-size:14px;">${escapeHtml(p.name)}${p.email ? ' <span class="pc-line muted">('+escapeHtml(p.email)+')</span>' : ''}</span>
-          <button type="button" class="mini-btn" data-add-challenge-angler="${p.id}">Add</button>
-        </div>`).join('')
-    : '<div class="empty">No matches.</div>';
-  resultsEl.querySelectorAll('[data-add-challenge-angler]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      challengeSelectedIds.add(btn.dataset.addChallengeAngler);
-      input.value = '';
-      renderChallengeAnglerSearch();
-      renderChallengeSelectedPills();
-    });
-  });
-}
-function renderChallengeSelectedPills(){
-  const el = document.getElementById('challenge-selected-anglers');
-  if(!el) return;
-  const ids = [...challengeSelectedIds];
-  if(ids.length === 0){ el.innerHTML = ''; return; }
-  el.innerHTML = ids.map(id=>{
-    const p = people.find(x=>x.id===id);
-    return p ? `<span class="pill" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(p.name)}<button type="button" data-remove-challenge-angler="${id}" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;">×</button></span>` : '';
-  }).join('');
-  el.querySelectorAll('[data-remove-challenge-angler]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      challengeSelectedIds.delete(btn.dataset.removeChallengeAngler);
-      renderChallengeSelectedPills();
-    });
-  });
-}
-
-async function renderChallenges(){
-  const el = document.getElementById('challenges-list');
-  el.innerHTML = '<div class="empty">Loading...</div>';
-  const createCard = document.getElementById('challenge-create-card');
-  if(createCard) createCard.style.display = isSignedIn() ? 'block' : 'none';
-  if(isSignedIn()){
-    renderChallengeSelectedPills();
-    renderChallengeAnglerSearch();
-  }
-
-  const challenges = await loadChallenges();
-  if(challenges.length===0){ el.innerHTML = '<div class="empty">No challenges yet.</div>'; return; }
-
-  const parts = [];
-  for(const ch of challenges){
-    const stats = await computeChallengeLeaderboard(ch);
-    const participantIds = await loadChallengeParticipants(ch.id);
-    const participantNames = participantIds.map(pid=>{ const p=people.find(x=>x.id===pid); return p?p.name:null; }).filter(Boolean);
-    const metricKey = ch.metric==='catch_count' ? 'count' : (ch.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
-    const metricLabel = ch.metric==='catch_count' ? 'most catches' : (ch.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
-    const rowsHtml = stats.slice(0,5).map((s,i)=>`
-      <div class="lb-item" style="padding:8px 0;">
-        <div class="lb-rank">${i+1}</div>
-        <div style="flex:1;"><b style="font-size:14px;">${escapeHtml(s.name)}</b></div>
-        <div class="lb-stats"><b>${s[metricKey]}${ch.metric==='catch_count' ? '' : 'kg'}</b></div>
-      </div>`).join('');
-    parts.push(`<section class="card">
-        <h2>${escapeHtml(ch.name)}</h2>
-        <p class="pc-line muted">${escapeHtml(ch.start_date)} → ${escapeHtml(ch.end_date)}${ch.fish_type_filter ? ' · '+escapeHtml(ch.fish_type_filter) : ''} · ranked by ${metricLabel}</p>
-        <div class="who" style="flex-wrap:wrap;margin-bottom:8px;">
-          ${participantNames.length ? participantNames.map(n=>`<span class="pill">${escapeHtml(n)}</span>`).join('') : '<span class="pc-line muted">Open to everyone</span>'}
-        </div>
-        ${rowsHtml || '<div class="empty">No catches yet in this challenge.</div>'}
-        ${isSignedIn() ? `
-          <div class="field" style="margin-top:10px;">
-            <label>Add angler — search name or email</label>
-            <input type="text" maxlength="100" class="challenge-add-search" data-challenge="${ch.id}" placeholder="Type a name or email...">
-            <div class="challenge-add-results" data-challenge="${ch.id}" style="margin-top:6px;"></div>
-          </div>` : ''}
-        ${isSuperUser() ? `<button class="mini-btn danger" data-challenge-remove="${ch.id}" style="margin-top:10px;">Delete challenge</button>` : ''}
-      </section>`);
-  }
-  el.innerHTML = parts.join('');
-  el.querySelectorAll('[data-challenge-remove]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const ch = challenges.find(x=>x.id===btn.dataset.challengeRemove);
-      if(!confirmDelete('the challenge "' + (ch ? ch.name : 'this challenge') + '"')) return;
-      await deleteChallenge(btn.dataset.challengeRemove);
-      renderChallenges();
-    });
-  });
-  el.querySelectorAll('.challenge-add-search').forEach(inp=>{
-    inp.addEventListener('input', async ()=>{
-      const chId = inp.dataset.challenge;
-      const term = inp.value.trim().toLowerCase();
-      const resultsEl = el.querySelector('.challenge-add-results[data-challenge="'+chId+'"]');
-      if(!term){ resultsEl.innerHTML = ''; return; }
-      const currentParticipantIds = await loadChallengeParticipants(chId);
-      const matches = people.filter(p =>
-        !p.archived && !currentParticipantIds.includes(p.id) &&
-        (p.name.toLowerCase().includes(term) || (p.email||'').toLowerCase().includes(term))
-      ).slice(0, 8);
-      resultsEl.innerHTML = matches.length
-        ? matches.map(p => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);">
-              <span style="font-size:14px;">${escapeHtml(p.name)}${p.email ? ' <span class="pc-line muted">('+escapeHtml(p.email)+')</span>' : ''}</span>
-              <button type="button" class="mini-btn" data-add-to-challenge="${p.id}" data-challenge="${chId}">Add</button>
-            </div>`).join('')
-        : '<div class="empty">No matches.</div>';
-      resultsEl.querySelectorAll('[data-add-to-challenge]').forEach(btn=>{
-        btn.addEventListener('click', async ()=>{
-          await addChallengeParticipant(btn.dataset.challenge, btn.dataset.addToChallenge);
-          renderChallenges();
-        });
-      });
-    });
-  });
-}
-
-document.getElementById('challenge-angler-search').addEventListener('input', renderChallengeAnglerSearch);
-
-document.getElementById('challenge-create-btn').addEventListener('click', async ()=>{
-  const nameEl = document.getElementById('challenge-name');
-  const startEl = document.getElementById('challenge-start');
-  const endEl = document.getElementById('challenge-end');
-  const metricEl = document.getElementById('challenge-metric');
-  const fishtypeEl = document.getElementById('challenge-fishtype');
-  const st = document.getElementById('challenge-create-status');
-  const name = nameEl.value.trim();
-  if(!name){ st.textContent = 'Enter a name.'; return; }
-  if(!startEl.value || !endEl.value){ st.textContent = 'Pick a start and end date.'; return; }
-  st.textContent = 'Creating...';
-  try{
-    const id = uid();
-    await insertChallenge({
-      id, name,
-      start_date: startEl.value, end_date: endEl.value,
-      metric: metricEl.value, fish_type_filter: fishtypeEl.value || null
-    });
-    for(const fid of challengeSelectedIds){
-      await addChallengeParticipant(id, fid);
-    }
-    nameEl.value = ''; startEl.value = ''; endEl.value = '';
-    challengeSelectedIds = new Set();
-    renderChallengeSelectedPills();
-    document.getElementById('challenge-angler-search').value = '';
-    renderChallengeAnglerSearch();
-    st.textContent = 'Created.';
-    setTimeout(()=> st.textContent='', 1200);
-    renderChallenges();
-  }catch(e){
-    console.error(e);
-    st.textContent = 'Could not create: ' + (e.message || 'unknown error');
-  }
-});
-
 // ---------- Competitions ----------
 async function insertCompetition(item){ await sbPost('competitions', item); }
 async function addCompetitionParticipant(competitionId, fishermanId){
@@ -5746,6 +5497,36 @@ async function loadCompetitions(){
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
 }
+// Standings for a competition, computed from real catches inside its date range
+async function computeCompetitionLeaderboard(comp, participantIds){
+  if(!comp.start_date || !comp.end_date) return [];
+  const startIso = new Date(comp.start_date+'T00:00:00').toISOString();
+  const endIso = new Date(comp.end_date+'T23:59:59').toISOString();
+  let rows = [];
+  try{
+    rows = await sbGet('catches?select=fisherman_id,weight,fish_type&caught=eq.true&time=gte.'+startIso+'&time=lte.'+endIso);
+  }catch(e){ console.error(e); return []; }
+  if(comp.fish_type_filter) rows = rows.filter(c=>c.fish_type===comp.fish_type_filter);
+  // No participants listed means it's open to everyone
+  if(participantIds && participantIds.length){
+    rows = rows.filter(c=>participantIds.includes(c.fisherman_id));
+  }
+  const byFisherman = {};
+  rows.forEach(c=>{
+    if(!byFisherman[c.fisherman_id]) byFisherman[c.fisherman_id] = {totalWeight:0, count:0, biggest:0};
+    byFisherman[c.fisherman_id].totalWeight += (c.weight||0);
+    byFisherman[c.fisherman_id].count += 1;
+    if((c.weight||0) > byFisherman[c.fisherman_id].biggest) byFisherman[c.fisherman_id].biggest = c.weight||0;
+  });
+  const stats = Object.keys(byFisherman).map(fid=>{
+    const p = people.find(x=>x.id===fid);
+    return {id:fid, name: p ? p.name : 'Unknown', ...byFisherman[fid]};
+  });
+  const metricKey = comp.metric==='catch_count' ? 'count' : (comp.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
+  stats.sort((a,b)=> b[metricKey]-a[metricKey]);
+  return stats;
+}
+
 async function loadCompetitionParticipants(competitionId){
   try{
     const rows = await sbGet('competition_participants?select=fisherman_id&competition_id=eq.'+competitionId);
@@ -5826,12 +5607,33 @@ async function renderCompetitions(){
     }).filter(Boolean);
     const canDelete = isSuperUser() || (isSignedIn() && session.user.id === c.creator_user_id);
     const canManage = isSuperUser();
+
+    // Live standings from real catches, if the competition has a date range
+    let standingsHtml = '';
+    let metaHtml = '';
+    if(c.start_date && c.end_date){
+      const stats = await computeCompetitionLeaderboard(c, participantIds);
+      const metricKey = c.metric==='catch_count' ? 'count' : (c.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
+      const metricLabel = c.metric==='catch_count' ? 'most catches' : (c.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
+      metaHtml = `<p class="pc-line muted">${escapeHtml(c.start_date)} → ${escapeHtml(c.end_date)}${c.fish_type_filter ? ' · '+escapeHtml(c.fish_type_filter) : ''} · ranked by ${metricLabel}</p>`;
+      standingsHtml = stats.length
+        ? stats.slice(0,10).map((s,i)=>`
+            <div class="lb-item" style="padding:8px 0;">
+              <div class="lb-rank">${i+1}</div>
+              <div style="flex:1;"><b style="font-size:14px;">${escapeHtml(s.name)}</b></div>
+              <div class="lb-stats"><b>${c.metric==='catch_count' ? s[metricKey] : s[metricKey].toFixed(2)+'kg'}</b></div>
+            </div>`).join('')
+        : '<div class="empty">No catches counted yet.</div>';
+    }
+
     parts.push(`<section class="card">
         <h2>${escapeHtml(c.name)}</h2>
         <p class="pc-line muted">${escapeHtml(c.dam||'No venue set')}</p>
+        ${metaHtml}
         <div class="who" style="flex-wrap:wrap;">
           ${names.length ? names.map(n=>`<span class="pill">${escapeHtml(n)}</span>`).join('') : '<span class="pc-line muted">No anglers added yet.</span>'}
         </div>
+        ${standingsHtml}
         ${canManage ? `
           <div class="field" style="margin-top:10px;">
             <label>Add angler (admin) — search name or email</label>
@@ -5897,14 +5699,6 @@ async function renderAdminTab(){
   document.getElementById('admin-competition-info').textContent = '';
   document.getElementById('admin-competition-delete-btn').style.display = 'none';
 
-  // Challenges
-  const chSel = document.getElementById('admin-challenge-select');
-  const challenges = await loadChallenges();
-  chSel.innerHTML = '<option value="">Choose...</option>' +
-    challenges.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-  document.getElementById('admin-challenge-info').textContent = '';
-  document.getElementById('admin-challenge-delete-btn').style.display = 'none';
-
   // Catches — angler picker (catch picker populates after an angler is chosen)
   const catchAnglerSel = document.getElementById('admin-catch-angler-select');
   catchAnglerSel.innerHTML = '<option value="">Choose...</option>' +
@@ -5939,23 +5733,6 @@ document.getElementById('admin-competition-delete-btn').addEventListener('click'
   if(!id) return;
   if(!confirmDelete('the competition "' + sel.options[sel.selectedIndex].text + '"')) return;
   await deleteCompetition(id);
-  renderAdminTab();
-});
-
-document.getElementById('admin-challenge-select').addEventListener('change', (e)=>{
-  const id = e.target.value;
-  const infoEl = document.getElementById('admin-challenge-info');
-  const delBtn = document.getElementById('admin-challenge-delete-btn');
-  if(!id){ infoEl.textContent=''; delBtn.style.display='none'; return; }
-  infoEl.textContent = 'Selected.';
-  delBtn.style.display = 'inline-block';
-});
-document.getElementById('admin-challenge-delete-btn').addEventListener('click', async ()=>{
-  const sel = document.getElementById('admin-challenge-select');
-  const id = sel.value;
-  if(!id) return;
-  if(!confirmDelete('the challenge "' + sel.options[sel.selectedIndex].text + '"')) return;
-  await deleteChallenge(id);
   renderAdminTab();
 });
 
@@ -6038,21 +5815,29 @@ document.getElementById('admin-catch-delete-btn').addEventListener('click', asyn
 document.getElementById('competition-create-btn').addEventListener('click', async ()=>{
   const nameEl = document.getElementById('competition-name');
   const damEl = document.getElementById('competition-dam');
+  const startEl = document.getElementById('competition-start');
+  const endEl = document.getElementById('competition-end');
+  const metricEl = document.getElementById('competition-metric');
+  const fishtypeEl = document.getElementById('competition-fishtype');
   const st = document.getElementById('competition-create-status');
   const name = nameEl.value.trim();
   if(!name){ st.textContent = 'Enter a name.'; return; }
+  if(!startEl.value || !endEl.value){ st.textContent = 'Pick a start and end date.'; return; }
   const selectedIds = [...competitionSelectedIds];
   st.textContent = 'Creating...';
   try{
     const id = uid();
     await insertCompetition({
       id, name, dam: damEl.value.trim(),
+      start_date: startEl.value, end_date: endEl.value,
+      metric: metricEl.value, fish_type_filter: fishtypeEl.value || null,
       creator_user_id: session.user.id
     });
     for(const fid of selectedIds){
       await addCompetitionParticipant(id, fid);
     }
     nameEl.value = ''; damEl.value = '';
+    startEl.value = ''; endEl.value = '';
     competitionSelectedIds = new Set();
     renderCompetitionSelectedPills();
     document.getElementById('competition-angler-search').value = '';
