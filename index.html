@@ -1021,6 +1021,12 @@
         </section>
 
         <section class="card">
+          <h2>Share my whole tackle box</h2>
+          <p class="pc-line muted">Anyone you tick here sees your entire tackle box, including anything you add later. You can still share individual items separately.</p>
+          <div id="tackle-box-share-picker"><div class="empty">No mutual friends yet — you both need to follow each other.</div></div>
+        </section>
+
+        <section class="card">
           <h2>Build a rig</h2>
           <div class="field">
             <label>Type of rig</label>
@@ -2947,6 +2953,49 @@ async function renderTackleItemShareManager(itemId, containerEl){
     });
   });
 }
+// ---------- Whole tackle box sharing ----------
+async function loadMyBoxShares(){
+  if(!isSignedIn()) return new Set();
+  try{
+    const rows = await sbGet('tackle_box_shares?select=shared_with_user_id&owner_user_id=eq.'+session.user.id);
+    return new Set(rows.map(r=>r.shared_with_user_id));
+  }catch(e){ console.error('loadMyBoxShares failed', e); return new Set(); }
+}
+
+async function renderTackleBoxSharePicker(){
+  const el = document.getElementById('tackle-box-share-picker');
+  if(!el) return;
+  const friends = getMutualFriends();
+  if(friends.length === 0){
+    el.innerHTML = '<div class="empty">No mutual friends yet — you both need to follow each other.</div>';
+    return;
+  }
+  const shared = await loadMyBoxShares();
+  el.innerHTML = friends.map(p=>`
+    <label class="check-row">
+      <input type="checkbox" class="box-share-check" data-user="${p.user_id}" ${shared.has(p.user_id) ? 'checked' : ''}> ${escapeHtml(p.name)}
+    </label>`).join('');
+  el.querySelectorAll('.box-share-check').forEach(cb=>{
+    cb.addEventListener('change', async ()=>{
+      cb.disabled = true;
+      try{
+        if(cb.checked){
+          await sbPost('tackle_box_shares', {
+            id: uid(), owner_user_id: session.user.id, shared_with_user_id: cb.dataset.user
+          });
+        }else{
+          await sbDelete('tackle_box_shares', 'owner_user_id=eq.'+session.user.id+'&shared_with_user_id=eq.'+cb.dataset.user);
+        }
+      }catch(e){
+        console.error(e);
+        cb.checked = !cb.checked;
+        alert('Could not save: ' + (e.message || 'unknown error'));
+      }
+      cb.disabled = false;
+    });
+  });
+}
+
 function renderTackleSharePicker(){
   const el = document.getElementById('tackle-share-picker');
   if(!el) return;
@@ -3195,6 +3244,14 @@ async function renderTackleList(){
   tackleItemsCache = await loadTackleItems();
   renderTackleNameSuggestions();
   const sharedWithMeIds = await loadSharedWithMeTackleItemIds();
+  // Whose whole box is shared with me — affects how items get labelled
+  let boxSharedOwners = new Set();
+  if(isSignedIn()){
+    try{
+      const rows = await sbGet('tackle_box_shares?select=owner_user_id&shared_with_user_id=eq.'+session.user.id);
+      boxSharedOwners = new Set(rows.map(r=>r.owner_user_id));
+    }catch(e){ console.error(e); }
+  }
 
   const catFilter = document.getElementById('tackle-filter-category').value;
   const baitTypeFilter = document.getElementById('tackle-filter-baittype').value;
@@ -3246,7 +3303,7 @@ async function renderTackleList(){
       let useToggleHtml = '';
       if(isMine){
         sharedTag = it.is_shared ? `<span class="pill">Shared with everyone</span>` : `<span class="pill" style="opacity:0.6;">Private</span>`;
-      }else if(it.is_shared || sharedWithMeIds.has(it.id)){
+      }else if(it.is_shared || sharedWithMeIds.has(it.id) || boxSharedOwners.has(it.owner_user_id)){
         const owner = people.find(p=>p.user_id===it.owner_user_id);
         const ownerName = owner ? owner.name : 'a friend';
         sharedTag = it.is_shared
@@ -5062,6 +5119,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
       if(isSignedIn()){
         renderTackleList();
         renderTackleSharePicker();
+        renderTackleBoxSharePicker();
         const hookSel = document.getElementById('rig-hook-count');
         if(hookSel && !hookSel.options.length) hookSel.innerHTML = hookCountOptionsHtml(2);
         renderRigsList();
