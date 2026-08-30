@@ -2551,9 +2551,15 @@ let knownReelGear = [];
 async function loadGearOptions(){
   if(!isSignedIn()){ knownRodGear = []; knownReelGear = []; return; }
   try{
-    const rows = await sbGet('tackle_items?select=id,name,category&category=in.(Rods,Reels)&order=name.asc');
-    knownRodGear = rows.filter(r=>r.category==='Rods').map(r=>({id:r.id,name:r.name}));
-    knownReelGear = rows.filter(r=>r.category==='Reels').map(r=>({id:r.id,name:r.name}));
+    const rows = await sbGet('tackle_items?select=id,name,category,owner_user_id&category=in.(Rods,Reels)&order=name.asc');
+    // Only gear that's actually yours: your own items, plus shared ones
+    // you've ticked "Use" on. Everything else stays out of the picker.
+    const inUse = await loadSharedWithMeTackleItemIds();
+    const mine = rows.filter(r=>
+      r.owner_user_id === session.user.id || inUse.get(r.id) === true
+    );
+    knownRodGear = mine.filter(r=>r.category==='Rods').map(r=>({id:r.id,name:r.name}));
+    knownReelGear = mine.filter(r=>r.category==='Reels').map(r=>({id:r.id,name:r.name}));
   }catch(e){ console.error('loadGearOptions failed', e); showDbError('Could not load rod/reel gear: ' + (e.message || 'unknown error')); }
 }
 
@@ -2563,9 +2569,14 @@ let knownBaitNames = [];
 async function loadTackleCategoryOptions(){
   if(!isSignedIn()){ knownDipNames = []; knownBaitNames = []; return; }
   try{
-    const rows = await sbGet('tackle_items?select=name,category&category=in.(Dips,Bait)&order=name.asc');
-    knownDipNames = rows.filter(r=>r.category==='Dips').map(r=>r.name);
-    knownBaitNames = rows.filter(r=>r.category==='Bait').map(r=>r.name);
+    const rows = await sbGet('tackle_items?select=id,name,category,owner_user_id&category=in.(Dips,Bait)&order=name.asc');
+    // Same rule as rods/reels — yours, or shared items you've ticked "Use" on
+    const inUse = await loadSharedWithMeTackleItemIds();
+    const mine = rows.filter(r=>
+      r.owner_user_id === session.user.id || inUse.get(r.id) === true
+    );
+    knownDipNames = mine.filter(r=>r.category==='Dips').map(r=>r.name);
+    knownBaitNames = mine.filter(r=>r.category==='Bait').map(r=>r.name);
   }catch(e){ console.error('loadTackleCategoryOptions failed', e); showDbError('Could not load bait/dip options: ' + (e.message || 'unknown error')); }
 }
 
@@ -3247,6 +3258,10 @@ await loadTackleCategoryOptions();
             shared_with_user_id: session.user.id, in_use: cb.checked
           });
         }
+        // The Timers pickers depend on what's ticked, so refresh them
+        await loadGearOptions();
+        await loadTackleCategoryOptions();
+        if(currentPerson) renderAll();
       }catch(e){
         console.error(e);
         cb.checked = !cb.checked;
