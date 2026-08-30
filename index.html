@@ -243,6 +243,19 @@
     display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
     font-weight:700;color:var(--muted);margin-bottom:5px;
   }
+  /* Checkbox rows inside a .field — the rules above are meant for form labels
+     above an input, not for a label wrapping a checkbox */
+  .field label.check-row{
+    display:flex;align-items:center;gap:10px;
+    text-transform:none;letter-spacing:normal;
+    font-size:14px;font-weight:500;color:var(--ink);
+    padding:8px 0;margin-bottom:0;cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  .field label.check-row:last-child{border-bottom:none;}
+  .field label.check-row input[type="checkbox"]{
+    width:18px;height:18px;flex-shrink:0;margin:0;padding:0;accent-color:var(--dam);
+  }
   .field textarea,.field input,.field select{
     width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;
     font-family:inherit;font-size:16px;resize:vertical;background:var(--card-bg);color:var(--ink);
@@ -922,6 +935,14 @@
               <option value="Tiger nuts">Tiger nuts</option>
               <option value="Wafters">Wafters</option>
             </select>
+          </div>
+          <div class="field" id="tackle-fill-wrap" style="display:none;">
+            <label>How full is it?</label>
+            <div class="fill-level-wrap">
+              <div class="fill-level-bar"><span id="tackle-fill-bar" style="height:100%;"></span></div>
+              <input type="range" class="fill-level-slider" id="tackle-fill-slider" min="0" max="100" step="5" value="100">
+              <span class="fill-level-readout" id="tackle-fill-readout">100% left</span>
+            </div>
           </div>
           <div class="field">
             <label>Notes (optional)</label>
@@ -2284,7 +2305,7 @@ function populateMyDetails(){
   const speciesEl = document.getElementById('details-trophy-species');
   if(speciesEl){
     speciesEl.innerHTML = ALL_TROPHY_SPECIES.map(s=>`
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);">
+      <label class="check-row" style="flex-basis:calc(50% - 5px);">
         <input type="checkbox" class="trophy-species-check" value="${escapeHtml(s)}" ${selected.includes(s) ? 'checked' : ''}> ${escapeHtml(s)}
       </label>`).join('');
   }
@@ -2830,7 +2851,7 @@ async function renderTackleItemShareManager(itemId, containerEl){
       const rows = await sbGet('tackle_items?id=eq.'+itemId+'&select=is_shared');
       isCurrentlyShared = !!(rows[0] && rows[0].is_shared);
     }catch(e){ console.error(e); }
-    everyoneHtml = `<label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;border-bottom:1px solid var(--line);margin-bottom:6px;">
+    everyoneHtml = `<label class="check-row">
       <input type="checkbox" id="tackle-manage-everyone-${itemId}" data-item="${itemId}" ${isCurrentlyShared ? 'checked' : ''}> Share with everyone (admin only)
     </label>`;
   }
@@ -2838,7 +2859,7 @@ async function renderTackleItemShareManager(itemId, containerEl){
   const friendsHtml = friends.length === 0
     ? '<div class="empty">No mutual friends yet — you both need to follow each other.</div>'
     : friends.map(p=>`
-        <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;">
+        <label class="check-row">
           <input type="checkbox" class="tackle-manage-share-check" data-item="${itemId}" data-user="${p.user_id}" ${currentShares.has(p.user_id) ? 'checked' : ''}> ${escapeHtml(p.name)}
         </label>`).join('');
 
@@ -2880,7 +2901,7 @@ function renderTackleSharePicker(){
     return;
   }
   el.innerHTML = friends.map(p=>`
-    <label style="display:flex;align-items:center;gap:8px;font-size:14px;padding:6px 0;">
+    <label class="check-row">
       <input type="checkbox" class="tackle-share-check" value="${p.user_id}"> ${escapeHtml(p.name)}
     </label>`).join('');
 }
@@ -3077,6 +3098,14 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
 
 document.getElementById('tackle-category').addEventListener('change', (e)=>{
   document.getElementById('tackle-baittype-wrap').style.display = e.target.value === 'Bait' ? 'block' : 'none';
+  // Fill level only applies to consumables
+  const isConsumable = e.target.value === 'Bait' || e.target.value === 'Dips';
+  document.getElementById('tackle-fill-wrap').style.display = isConsumable ? 'block' : 'none';
+});
+document.getElementById('tackle-fill-slider').addEventListener('input', (e)=>{
+  const v = parseInt(e.target.value, 10);
+  document.getElementById('tackle-fill-bar').style.height = v + '%';
+  document.getElementById('tackle-fill-readout').textContent = v === 0 ? 'Empty' : v + '% left';
 });
 document.getElementById('tackle-filter-category').addEventListener('change', (e)=>{
   document.getElementById('tackle-filter-baittype-wrap').style.display = e.target.value === 'Bait' ? 'block' : 'none';
@@ -3307,6 +3336,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   const nameEl = document.getElementById('tackle-name');
   const catEl = document.getElementById('tackle-category');
   const brandEl = document.getElementById('tackle-brand');
+  const fillEl = document.getElementById('tackle-fill-slider');
   const baitTypeEl = document.getElementById('tackle-baittype');
   const notesEl = document.getElementById('tackle-notes');
   const photoEl = document.getElementById('tackle-photo');
@@ -3330,6 +3360,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
       name,
       brand: brandEl.value.trim() || null,
       category: categoryValue,
+      fill_level: (categoryValue === 'Bait' || categoryValue === 'Dips') ? parseInt(fillEl.value, 10) : null,
       bait_type: categoryValue === 'Bait' ? (baitTypeEl.value || null) : null,
       notes: notesEl.value.trim(),
       photo,
@@ -3348,6 +3379,10 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
     if(everyoneEl) everyoneEl.checked = false;
     document.querySelectorAll('.tackle-share-check').forEach(cb=> cb.checked = false);
     document.getElementById('tackle-baittype-wrap').style.display = 'none';
+    document.getElementById('tackle-fill-wrap').style.display = 'none';
+    fillEl.value = 100;
+    document.getElementById('tackle-fill-bar').style.height = '100%';
+    document.getElementById('tackle-fill-readout').textContent = '100% left';
     st.textContent = 'Added.';
     setTimeout(()=> st.textContent='', 1200);
     renderTackleList();
