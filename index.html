@@ -500,6 +500,12 @@
 
         <section class="card" id="session-setup">
           <h2>Start a session</h2>
+          <div class="field" id="session-competition-wrap" style="display:none;">
+            <label>Fishing a competition?</label>
+            <select id="session-competition">
+              <option value="">No — just fishing</option>
+            </select>
+          </div>
           <div class="field">
             <label>Venue</label>
             <input type="text" maxlength="100" id="session-venue" placeholder="Where are you fishing?">
@@ -745,8 +751,18 @@
             <input type="date" id="competition-start">
           </div>
           <div class="field">
+            <label>Start time</label>
+            <input type="time" id="competition-start-time" value="00:00">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
             <label>End date</label>
             <input type="date" id="competition-end">
+          </div>
+          <div class="field">
+            <label>End time</label>
+            <input type="time" id="competition-end-time" value="23:59">
           </div>
         </div>
         <div class="row2">
@@ -1967,7 +1983,8 @@ function buildCatchPayload(personId, entry){
     latitude: entry.latitude != null ? entry.latitude : null,
     longitude: entry.longitude != null ? entry.longitude : null,
     venue_id: entry.venueId || null,
-    session_id: entry.sessionId || null
+    session_id: entry.sessionId || null,
+    competition_id: entry.competitionId || null
   };
   for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = entry['hook'+i] || ''; }
   return payload;
@@ -4024,12 +4041,54 @@ async function renderSessionUi(){
     rodCards.style.display = 'none';
     const rodsSel = document.getElementById('session-rods');
     if(rodsSel && !rodsSel.options.length) rodsSel.innerHTML = rodsOptionsHtml(1);
+    await populateSessionCompetitionPicker();
   }
 }
+
+// Competitions running right now that I'm taking part in
+async function populateSessionCompetitionPicker(){
+  const wrap = document.getElementById('session-competition-wrap');
+  const sel = document.getElementById('session-competition');
+  if(!wrap || !sel) return;
+  const myId = getMyFishermanId();
+  if(!isSignedIn() || !myId || !navigator.onLine){ wrap.style.display = 'none'; return; }
+  try{
+    const today = new Date().toISOString().slice(0,10);
+    const comps = await sbGet('competitions?select=id,name,dam&start_date=lte.'+today+'&end_date=gte.'+today);
+    const mine = [];
+    for(const c of comps){
+      const participants = await loadCompetitionParticipants(c.id);
+      if(participants.length === 0 || participants.includes(myId)) mine.push(c);
+    }
+    if(!mine.length){ wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    sel.innerHTML = '<option value="">No — just fishing</option>' +
+      mine.map(c=>`<option value="${c.id}" data-venue="${escapeHtml(c.dam||'')}">${escapeHtml(c.name)}</option>`).join('');
+  }catch(e){
+    console.error('populateSessionCompetitionPicker failed', e);
+    wrap.style.display = 'none';
+  }
+}
+
+// Picking a competition fixes the venue — no mismatch, no typos
+document.getElementById('session-competition').addEventListener('change', (e)=>{
+  const venueEl = document.getElementById('session-venue');
+  const opt = e.target.options[e.target.selectedIndex];
+  if(e.target.value){
+    venueEl.value = opt.dataset.venue || '';
+    venueEl.readOnly = true;
+    venueEl.style.opacity = '0.6';
+  }else{
+    venueEl.readOnly = false;
+    venueEl.style.opacity = '1';
+    venueEl.value = '';
+  }
+});
 
 document.getElementById('session-start-btn').addEventListener('click', async ()=>{
   const st = document.getElementById('session-status');
   const venueName = document.getElementById('session-venue').value.trim();
+  const competitionId = document.getElementById('session-competition').value || null;
   const rods = normalizeRodsCount(document.getElementById('session-rods').value);
   const myId = getMyFishermanId();
   if(!myId){ st.textContent = 'Could not find your angler profile.'; return; }
@@ -4060,7 +4119,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
     const sessionId = uid();
     const sessionRecord = {
       id: sessionId, fisherman_id: myId,
-      venue_id: venueId, venue_name: venueName,
+      venue_id: venueId, venue_name: venueName, competition_id: competitionId,
       rods, started_at: new Date().toISOString(), ended_at: null
     };
     if(navigator.onLine){
@@ -4076,7 +4135,11 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
     const p = people.find(x=>x.id===myId);
     if(p) p.rods = rods;
 
-    document.getElementById('session-venue').value = '';
+    const venueEl = document.getElementById('session-venue');
+    venueEl.value = '';
+    venueEl.readOnly = false;
+    venueEl.style.opacity = '1';
+    document.getElementById('session-competition').value = '';
     st.textContent = '';
     activeSession = sessionRecord;
     await renderSessionUi();
@@ -4324,7 +4387,10 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
 
   // Capture where this was caught (private — powers venue insights only)
   if(entry.caught){
-    if(activeSession) entry.sessionId = activeSession.id;
+    if(activeSession){
+      entry.sessionId = activeSession.id;
+      entry.competitionId = activeSession.competition_id || null;
+    }
     const coords = await capturePosition();
     if(coords){
       entry.latitude = coords.lat;
@@ -5551,20 +5617,14 @@ async function loadCompetitions(){
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
 }
-// Standings for a competition, computed from real catches inside its date range
+// Standings for a competition. Only catches logged during a session started
+// for this competition count — so a catch at another water can't sneak in.
 async function computeCompetitionLeaderboard(comp, participantIds){
-  if(!comp.start_date || !comp.end_date) return [];
-  const startIso = new Date(comp.start_date+'T00:00:00').toISOString();
-  const endIso = new Date(comp.end_date+'T23:59:59').toISOString();
   let rows = [];
   try{
-    rows = await sbGet('catches?select=fisherman_id,weight,fish_type&caught=eq.true&time=gte.'+startIso+'&time=lte.'+endIso);
+    rows = await sbGet('catches?select=fisherman_id,weight,fish_type&caught=eq.true&competition_id=eq.'+comp.id);
   }catch(e){ console.error(e); return []; }
   if(comp.fish_type_filter) rows = rows.filter(c=>c.fish_type===comp.fish_type_filter);
-  // No participants listed means it's open to everyone
-  if(participantIds && participantIds.length){
-    rows = rows.filter(c=>participantIds.includes(c.fisherman_id));
-  }
   const byFisherman = {};
   rows.forEach(c=>{
     if(!byFisherman[c.fisherman_id]) byFisherman[c.fisherman_id] = {totalWeight:0, count:0, biggest:0};
@@ -5669,7 +5729,9 @@ async function renderCompetitions(){
       const stats = await computeCompetitionLeaderboard(c, participantIds);
       const metricKey = c.metric==='catch_count' ? 'count' : (c.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
       const metricLabel = c.metric==='catch_count' ? 'most catches' : (c.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
-      metaHtml = `<p class="pc-line muted">${escapeHtml(c.start_date)} → ${escapeHtml(c.end_date)}${c.fish_type_filter ? ' · '+escapeHtml(c.fish_type_filter) : ''} · ranked by ${metricLabel}</p>`;
+      const startStr = escapeHtml(c.start_date) + (c.start_time ? ' ' + escapeHtml(String(c.start_time).slice(0,5)) : '');
+      const endStr = escapeHtml(c.end_date) + (c.end_time ? ' ' + escapeHtml(String(c.end_time).slice(0,5)) : '');
+      metaHtml = `<p class="pc-line muted">${startStr} → ${endStr}${c.fish_type_filter ? ' · '+escapeHtml(c.fish_type_filter) : ''} · ranked by ${metricLabel}</p>`;
       standingsHtml = stats.length
         ? stats.slice(0,10).map((s,i)=>`
             <div class="lb-item" style="padding:8px 0;">
@@ -5694,10 +5756,31 @@ async function renderCompetitions(){
             <input type="text" maxlength="100" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email...">
             <div class="competition-add-results" data-competition="${c.id}" style="margin-top:6px;"></div>
           </div>` : ''}
-        ${canDelete ? `<button class="mini-btn danger" data-competition-remove="${c.id}" style="margin-top:10px;">Delete competition</button>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button class="mini-btn" data-competition-share="${c.id}">Share live standings</button>
+          ${canDelete ? `<button class="mini-btn danger" data-competition-remove="${c.id}">Delete competition</button>` : ''}
+        </div>
       </section>`);
   }
   el.innerHTML = parts.join('');
+  el.querySelectorAll('[data-competition-share]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const url = window.location.origin + window.location.pathname +
+                  '?view=spectator&comp=' + btn.dataset.competitionShare;
+      try{
+        if(navigator.share){
+          await navigator.share({title: 'Live standings', url});
+        }else{
+          await navigator.clipboard.writeText(url);
+          btn.textContent = 'Link copied!';
+          setTimeout(()=>{ btn.textContent = 'Share live standings'; }, 1600);
+        }
+      }catch(e){
+        // Sharing cancelled, or clipboard blocked — show the link to copy manually
+        if(e && e.name !== 'AbortError') window.prompt('Copy this link:', url);
+      }
+    });
+  });
   el.querySelectorAll('[data-competition-remove]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const comp = comps.find(x=>x.id===btn.dataset.competitionRemove);
@@ -5871,6 +5954,8 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
   const damEl = document.getElementById('competition-dam');
   const startEl = document.getElementById('competition-start');
   const endEl = document.getElementById('competition-end');
+  const startTimeEl = document.getElementById('competition-start-time');
+  const endTimeEl = document.getElementById('competition-end-time');
   const metricEl = document.getElementById('competition-metric');
   const fishtypeEl = document.getElementById('competition-fishtype');
   const st = document.getElementById('competition-create-status');
@@ -5884,6 +5969,7 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
     await insertCompetition({
       id, name, dam: damEl.value.trim(),
       start_date: startEl.value, end_date: endEl.value,
+      start_time: startTimeEl.value || '00:00', end_time: endTimeEl.value || '23:59',
       metric: metricEl.value, fish_type_filter: fishtypeEl.value || null,
       creator_user_id: session.user.id
     });
@@ -5911,18 +5997,73 @@ document.getElementById('lb-filter-type').addEventListener('change', renderLeade
 
 // Init
 const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') === 'spectator';
+const SPECTATOR_COMP_ID = new URLSearchParams(window.location.search).get('comp');
+
+// Live standings for one competition, rendered for anyone with the link
+async function renderSpectatorCompetition(compId){
+  const el = document.getElementById('leaderboard-list');
+  try{
+    const comps = await sbGet('competitions?select=*&id=eq.'+compId);
+    const comp = comps[0];
+    if(!comp){
+      el.innerHTML = '<div class="empty">Competition not found.</div>';
+      return;
+    }
+    const participantIds = await loadCompetitionParticipants(compId);
+    const stats = await computeCompetitionLeaderboard(comp, participantIds);
+    const metricKey = comp.metric==='catch_count' ? 'count' : (comp.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
+    const metricLabel = comp.metric==='catch_count' ? 'most catches'
+      : (comp.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
+
+    const today = new Date().toISOString().slice(0,10);
+    const status = (comp.end_date && comp.end_date < today) ? 'Finished'
+      : ((comp.start_date && comp.start_date > today) ? 'Not started yet' : 'Live');
+
+    const heading = document.querySelector('#panel-leaderboard h2');
+    if(heading) heading.textContent = comp.name;
+
+    el.innerHTML = `
+      <p class="pc-line muted" style="margin-bottom:10px;">
+        ${escapeHtml(comp.dam || 'No venue set')}
+        ${comp.start_date ? ' · ' + escapeHtml(comp.start_date) + ' → ' + escapeHtml(comp.end_date) : ''}
+        · ranked by ${metricLabel}${comp.fish_type_filter ? ' · '+escapeHtml(comp.fish_type_filter)+' only' : ''}
+        · <b>${status}</b>
+      </p>
+      ${stats.length
+        ? stats.map((s,i)=>`
+            <div class="lb-item">
+              <div class="lb-rank">${i+1}</div>
+              <div style="flex:1;"><b class="lb-name">${escapeHtml(s.name)}</b></div>
+              <div class="lb-stats"><b>${comp.metric==='catch_count' ? s[metricKey] : s[metricKey].toFixed(2)+'kg'}</b></div>
+            </div>`).join('')
+        : '<div class="empty">No catches counted yet.</div>'}
+    `;
+  }catch(e){
+    console.error('Spectator competition failed', e);
+    el.innerHTML = '<div class="empty">Could not load this competition.</div>';
+  }
+}
 
 (async function init(){
   if(IS_SPECTATOR){
     document.body.classList.add('spectator-mode');
     const subtitle = document.querySelector('header.top p');
-    if(subtitle) subtitle.textContent = 'Leaderboard — spectator view';
     document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     document.getElementById('panel-leaderboard').classList.add('active');
     await loadPeople();
-    await renderLeaderboard();
-    setInterval(renderLeaderboard, 30000);
+    if(SPECTATOR_COMP_ID){
+      // Watching one competition rather than the all-time board
+      if(subtitle) subtitle.textContent = 'Competition — live standings';
+      document.querySelectorAll('#panel-leaderboard .field, #lb-following-wrap, #lb-following-hint, #refresh-lb-btn')
+        .forEach(elm=> elm.style.display = 'none');
+      await renderSpectatorCompetition(SPECTATOR_COMP_ID);
+      setInterval(()=> renderSpectatorCompetition(SPECTATOR_COMP_ID), 30000);
+    }else{
+      if(subtitle) subtitle.textContent = 'Leaderboard — spectator view';
+      await renderLeaderboard();
+      setInterval(renderLeaderboard, 30000);
+    }
     return;
   }
   // A Google sign-in lands back here with tokens in the URL — handle that first
