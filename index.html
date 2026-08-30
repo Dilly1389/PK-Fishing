@@ -4006,12 +4006,16 @@ async function renderActiveCompetitionsBar(){
         : (c.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
       const endsIn = Math.ceil((new Date(c.end_date+'T23:59:59') - Date.now()) / 86400000);
       const selected = chosenId === c.id;
+      // Selected inverts to the card colour with red text — reads clearly in
+      // both light and dark mode, since --card-bg follows the theme
+      const styles = selected
+        ? 'background:var(--card-bg);color:var(--rust);border:2px solid var(--rust);'
+        : 'background:var(--dam);color:#fff;border:2px solid var(--dam);';
       return `<div class="${locked ? '' : 'comp-banner-pick'}" data-comp-id="${c.id}" data-comp-venue="${escapeHtml(c.dam||'')}"
-        style="background:${selected ? 'var(--catch-green)' : 'var(--dam)'};color:#fff;border-radius:10px;padding:10px 12px;margin-bottom:6px;${locked ? '' : 'cursor:pointer;'}
-        ${selected ? 'box-shadow:0 0 0 2px var(--rust);' : ''}">
+        style="${styles}border-radius:10px;padding:10px 12px;margin-bottom:6px;${locked ? '' : 'cursor:pointer;'}">
         🏆 <b>${escapeHtml(c.name)}</b> ${selected ? '— you\'re fishing this' : 'is running'} — ${metricLabel}${c.fish_type_filter ? ', '+escapeHtml(c.fish_type_filter)+' only' : ''}
-        <span style="opacity:.85;">· ${endsIn <= 1 ? 'ends today' : 'ends in '+endsIn+' days'}</span>
-        ${locked ? '' : `<div style="opacity:.85;margin-top:2px;">${selected ? 'Tap again to fish without it' : 'Tap to fish this competition'}</div>`}
+        <span style="opacity:.8;">· ${endsIn <= 1 ? 'ends today' : 'ends in '+endsIn+' days'}</span>
+        ${locked ? '' : `<div style="opacity:.8;margin-top:2px;">${selected ? '✓ Tap again to fish without it' : 'Tap to fish this competition'}</div>`}
       </div>`;
     }).join('');
 
