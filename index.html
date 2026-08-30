@@ -524,6 +524,8 @@
           </div>
         </div>
 
+        <div id="active-competitions-bar" style="display:none;background:var(--dam);color:#fff;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:13px;"></div>
+
         <div id="rod-cards"></div>
       </div>
     </div>
@@ -3960,6 +3962,42 @@ async function loadActiveSession(){
   return activeSession;
 }
 
+// Which competitions am I in that are running right now? Shown on Timers so
+// you know a session counts toward something while you're actually fishing.
+async function renderActiveCompetitionsBar(){
+  const bar = document.getElementById('active-competitions-bar');
+  if(!bar) return;
+  const myId = getMyFishermanId();
+  if(!isSignedIn() || !myId || !navigator.onLine){ bar.style.display = 'none'; return; }
+  try{
+    const today = new Date().toISOString().slice(0,10);
+    const comps = await sbGet('competitions?select=id,name,metric,fish_type_filter,end_date&start_date=lte.'+today+'&end_date=gte.'+today);
+    if(!comps.length){ bar.style.display = 'none'; return; }
+
+    // Only the ones I'm actually in (or that are open to everyone)
+    const mine = [];
+    for(const c of comps){
+      const participants = await loadCompetitionParticipants(c.id);
+      if(participants.length === 0 || participants.includes(myId)) mine.push(c);
+    }
+    if(!mine.length){ bar.style.display = 'none'; return; }
+
+    bar.style.display = 'block';
+    bar.innerHTML = mine.map(c=>{
+      const metricLabel = c.metric==='catch_count' ? 'most catches'
+        : (c.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
+      const endsIn = Math.ceil((new Date(c.end_date+'T23:59:59') - Date.now()) / 86400000);
+      return `<div style="margin-bottom:4px;">
+        🏆 <b>${escapeHtml(c.name)}</b> is running — ${metricLabel}${c.fish_type_filter ? ', '+escapeHtml(c.fish_type_filter)+' only' : ''}
+        <span style="opacity:.85;">· ${endsIn <= 1 ? 'ends today' : 'ends in '+endsIn+' days'}</span>
+      </div>`;
+    }).join('');
+  }catch(e){
+    console.error('renderActiveCompetitionsBar failed', e);
+    bar.style.display = 'none';
+  }
+}
+
 async function renderSessionUi(){
   const setup = document.getElementById('session-setup');
   const bar = document.getElementById('session-active-bar');
@@ -5156,6 +5194,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
       updateTimersVisibility();
       loadKnownRigs().then(()=>{ if(currentPerson) renderAll(); });
       loadActiveSession().then(renderSessionUi);
+      renderActiveCompetitionsBar();
     }
     if(btn.dataset.tab==='leaderboard') renderLeaderboard();
     if(btn.dataset.tab==='feed') renderFeed();
@@ -5490,6 +5529,21 @@ async function addCompetitionParticipant(competitionId, fishermanId){
   await sbPost('competition_participants', {id: uid(), competition_id: competitionId, fisherman_id: fishermanId});
   notifyCompetitionAdd(competitionId, fishermanId);
 }
+// Any competition that's finished but hasn't announced its winner yet.
+// Safe to call repeatedly — the results_sent flag stops duplicates.
+async function announceFinishedCompetitions(){
+  if(!isSignedIn() || !navigator.onLine) return;
+  try{
+    const today = new Date().toISOString().slice(0,10);
+    const done = await sbGet('competitions?select=id&end_date=lt.'+today+'&results_sent=is.false');
+    for(const c of done){
+      try{ await sbRpc('notify_competition_results', {p_competition_id: c.id}); }
+      catch(e){ console.error('results notify failed', c.id, e); }
+    }
+    if(done.length) refreshNotifBadge();
+  }catch(e){ console.error('announceFinishedCompetitions failed', e); }
+}
+
 async function loadCompetitions(){
   try{
     const rows = await sbGet('competitions?select=*&order=created_at.desc');
@@ -5893,6 +5947,7 @@ await loadTackleCategoryOptions();
   populateAnglerSelect();
   updateOfflineBanner();
   syncPendingCatches();
+  announceFinishedCompetitions();
   if(isSignedIn()){ await loadActiveSession(); await renderSessionUi(); }
   maybeShowInstallBanner();
   try{
