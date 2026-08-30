@@ -1517,6 +1517,63 @@ function hookFieldHtml(r, n){
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15MB — generous for a phone photo, blocks absurd files
 
+// Resize to a Blob rather than a base64 string — Storage takes binary, and
+// this avoids the ~33% size penalty base64 adds.
+function resizeImageToBlob(file, maxDim, quality){
+  maxDim = maxDim || 1600;
+  quality = quality || 0.85;
+  return new Promise((resolve, reject)=>{
+    if(!file){ reject(new Error('No file selected')); return; }
+    if(!file.type || !file.type.startsWith('image/')){
+      reject(new Error('That file is not an image')); return;
+    }
+    if(file.size > MAX_UPLOAD_BYTES){
+      reject(new Error('That image is too large (max ' + Math.round(MAX_UPLOAD_BYTES/1024/1024) + 'MB)'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w = img.width, h = img.height;
+        if(w > h){ if(w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; } }
+        else { if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(b=> b ? resolve(b) : reject(new Error('Could not process image')), 'image/jpeg', quality);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Upload to Supabase Storage and return the public URL
+async function uploadPhoto(file, opts){
+  opts = opts || {};
+  const maxDim = opts.maxDim || 1600;
+  const quality = opts.quality || 0.85;
+  const blob = await resizeImageToBlob(file, maxDim, quality);
+  const path = (isSignedIn() ? session.user.id : 'anon') + '/' + uid() + '.jpg';
+  const res = await fetch(SUPABASE_URL + '/storage/v1/object/photos/' + path, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + ((session && session.access_token) ? session.access_token : SUPABASE_ANON_KEY),
+      'Content-Type': 'image/jpeg'
+    },
+    body: blob
+  });
+  if(!res.ok){
+    const txt = await res.text();
+    throw new Error('Upload failed: ' + res.status + ' ' + txt);
+  }
+  return SUPABASE_URL + '/storage/v1/object/public/photos/' + path;
+}
+
 function resizeImageFile(file, maxDim, quality){
   maxDim = maxDim || 800;
   quality = quality || 0.7;
@@ -1649,8 +1706,8 @@ document.getElementById('edit-catch-photo-input').addEventListener('change', asy
   const file = inp.files[0];
   if(!file) return;
   try{
-    const dataUrl = await resizeImageFile(file);
-    editPhotos.push(dataUrl);
+    const url = await uploadPhoto(file);
+    editPhotos.push(url);
     renderEditPhotoPreview();
   }catch(e){
     console.error('Photo processing failed', e);
@@ -2822,7 +2879,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
       };
       const photoInput = document.getElementById('tackle-edit-photo-'+itemId);
       if(photoInput && photoInput.files[0]){
-        patch.photo = await resizeImageFile(photoInput.files[0], 240, 0.6);
+        patch.photo = await uploadPhoto(photoInput.files[0], {maxDim: 600, quality: 0.8});
         patch.has_photo = true;
       }
       await sbPatch('tackle_items', 'id=eq.'+itemId, patch);
@@ -3062,7 +3119,7 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
   try{
     let photo = null;
     if(photoEl.files[0]){
-      photo = await resizeImageFile(photoEl.files[0], 480, 0.7);
+      photo = await uploadPhoto(photoEl.files[0], {maxDim: 1200, quality: 0.85});
     }
     const newRigId = uid();
     await insertRig({
@@ -3351,7 +3408,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
     let photo = null;
     if(photoEl.files[0]){
       // Small thumbnail only — this is reference data, not a showcase photo
-      photo = await resizeImageFile(photoEl.files[0], 240, 0.6);
+      photo = await uploadPhoto(photoEl.files[0], {maxDim: 600, quality: 0.8});
     }
     const newItemId = uid();
     const categoryValue = catEl.value;
@@ -3706,9 +3763,9 @@ function attachRodCardHandlers(){
       const file = inp.files[0];
       if(!file){ return; }
       try{
-        const dataUrl = await resizeImageFile(file);
+        const url = await uploadPhoto(file);
         if(!pendingPhotos[rod]) pendingPhotos[rod] = [];
-        pendingPhotos[rod].push(dataUrl);
+        pendingPhotos[rod].push(url);
         renderPhotoPreview(rod);
       }catch(e){
         console.error('Photo processing failed', e);
