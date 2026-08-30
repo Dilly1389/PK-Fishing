@@ -594,6 +594,7 @@
 
         <div id="account-signed-in" style="display:none;">
           <p class="pc-line" id="signed-in-as" style="margin-bottom:12px;"></p>
+          <button class="mini-btn" id="view-my-profile-btn">View my profile</button>
           <button class="mini-btn danger" id="sign-out-btn">Sign out</button>
         </div>
       </section>
@@ -624,8 +625,8 @@
           <input type="email" maxlength="120" id="details-email" placeholder="you@example.com">
         </div>
         <hr class="divider">
-        <p class="sub-heading">Trophy Room species</p>
-        <p class="pc-line muted" style="margin-bottom:8px;">Pick which species show in your Trophy Room. You can still log a catch as any species.</p>
+        <p class="sub-heading">My Logbook species</p>
+        <p class="pc-line muted" style="margin-bottom:8px;">Pick which species show in My Logbook on your profile. You can still log a catch as any species.</p>
         <div id="details-trophy-species" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;"></div>
         <button class="primary-btn" id="details-save-btn">Save details</button>
         <div class="status" id="details-save-status"></div>
@@ -887,6 +888,12 @@
 
       <div id="tackle-content" style="display:none;">
         <section class="card">
+          <h2>Share my whole tackle box</h2>
+          <p class="pc-line muted">Anyone you tick here sees your entire tackle box, including anything you add later. You can still share individual items separately.</p>
+          <div id="tackle-box-share-picker"><div class="empty">No mutual friends yet — you both need to follow each other.</div></div>
+        </section>
+
+        <section class="card">
           <h2>Add tackle item</h2>
           <div class="row2">
             <div class="field">
@@ -1018,12 +1025,6 @@
             </select>
           </div>
           <div id="tackle-list"><div class="empty">No tackle added yet — add your rods, reels, bait and dips above.</div></div>
-        </section>
-
-        <section class="card">
-          <h2>Share my whole tackle box</h2>
-          <p class="pc-line muted">Anyone you tick here sees your entire tackle box, including anything you add later. You can still share individual items separately.</p>
-          <div id="tackle-box-share-picker"><div class="empty">No mutual friends yet — you both need to follow each other.</div></div>
         </section>
 
         <section class="card">
@@ -1214,7 +1215,7 @@ const RODS = Array.from({length: MAX_RODS}, (_, i) => 'rod' + (i+1));
 const RID_LABEL = {};
 RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
 
-// Master species list for the Trophy Room. Each angler picks which of these
+// Master species list for My Logbook. Each angler picks which of these
 // they want shown — this doesn't limit what you can log a catch as.
 // Bait sub-types, shared by the tackle box forms and the Timers hook picker
 const ALL_BAIT_TYPES = [
@@ -2530,6 +2531,15 @@ await loadTackleCategoryOptions();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not sign in.';
+  }
+});
+
+document.getElementById('view-my-profile-btn').addEventListener('click', ()=>{
+  const myId = getMyFishermanId();
+  if(myId){
+    openProfile(myId);
+  }else{
+    alert('Could not find your angler profile — try signing out and back in.');
   }
 });
 
