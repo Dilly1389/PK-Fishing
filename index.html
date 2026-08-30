@@ -5243,6 +5243,8 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+    // Remember where you were, so a refresh doesn't bounce you to Profile
+    try{ localStorage.setItem('pk_fishing_active_tab', btn.dataset.tab); }catch(e){}
     document.getElementById('nav-tabs').classList.remove('open');
     document.getElementById('nav-hamburger').setAttribute('aria-expanded', 'false');
     window.scrollTo({top: 0, behavior: 'smooth'});
@@ -6184,6 +6186,17 @@ await loadTackleCategoryOptions();
   }catch(e){}
   // A brand-new Google signup gets the same walkthrough as an email signup
   if(oauthProfile && oauthProfile.isNew) showOnboarding();
+
+  // Return to whichever tab you were last on. Done last, so tabs hidden by
+  // sign-in state (Timers, Admin) have already been resolved.
+  try{
+    const lastTab = localStorage.getItem('pk_fishing_active_tab');
+    if(lastTab){
+      const btn = document.querySelector('nav.tabs button[data-tab="'+lastTab+'"]');
+      // Only if that tab is actually available to this person right now
+      if(btn && btn.style.display !== 'none') btn.click();
+    }
+  }catch(e){}
 })();
 
 // ---------- Add to home screen ----------
