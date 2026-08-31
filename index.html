@@ -992,9 +992,9 @@
           <div class="field">
             <label>Show</label>
             <select id="tackle-filter-visibility">
-              <option value="">Everything I can see</option>
+              <option value="private" selected>My list (mine + items I'm using)</option>
               <option value="shared-with-me">Shared with me</option>
-              <option value="private">My list (private + items I'm using)</option>
+              <option value="">Everything I can see</option>
             </select>
           </div>
           <div class="field" id="tackle-filter-sharedby-wrap" style="display:none;">
@@ -3313,8 +3313,10 @@ async function renderTackleList(){
     sharedByWrap.style.display = 'none';
   }
   if(visFilter === 'private'){
+    // Everything that's mine — including items I've shared — plus anything
+    // shared with me that I've ticked "Use"
     items = items.filter(it=>
-      (isSignedIn() && it.owner_user_id === session.user.id && !it.is_shared)
+      (isSignedIn() && it.owner_user_id === session.user.id)
       || (sharedWithMeIds.get(it.id) === true)
     );
   }
