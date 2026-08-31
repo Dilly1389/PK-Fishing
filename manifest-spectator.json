@@ -1,0 +1,25 @@
+{
+  "name": "PK Fishing Leaderboard",
+  "short_name": "PK Leaderboard",
+  "description": "Spectator leaderboard for PK Fishing",
+  "start_url": "./index.html?view=spectator",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAFAFA",
+  "theme_color": "#B3121F",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
