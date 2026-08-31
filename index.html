@@ -627,8 +627,8 @@
           <input type="email" maxlength="120" id="details-email" placeholder="you@example.com">
         </div>
         <hr class="divider">
-        <p class="sub-heading">My Logbook species</p>
-        <p class="pc-line muted" style="margin-bottom:8px;">Pick which species show in My Logbook on your profile. You can still log a catch as any species.</p>
+        <p class="sub-heading">Reel Records species</p>
+        <p class="pc-line muted" style="margin-bottom:8px;">Pick which species show in your Reel Records. You can still log a catch as any species.</p>
         <div id="details-trophy-species" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;"></div>
         <button class="primary-btn" id="details-save-btn">Save details</button>
         <div class="status" id="details-save-status"></div>
@@ -1197,7 +1197,7 @@ const RODS = Array.from({length: MAX_RODS}, (_, i) => 'rod' + (i+1));
 const RID_LABEL = {};
 RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
 
-// Master species list for My Logbook. Each angler picks which of these
+// Master species list for Reel Records. Each angler picks which of these
 // they want shown — this doesn't limit what you can log a catch as.
 // Bait sub-types, shared by the tackle box forms and the Timers hook picker
 const ALL_BAIT_TYPES = [
@@ -4829,7 +4829,7 @@ async function openProfile(personId){
     return {species, count: matches.length, pb};
   }).filter(s=> s.count > 0); // only species actually caught
 
-  html += `<p class="sub-heading">My Logbook</p>`;
+  html += `<p class="sub-heading">Reel Records</p>`;
   if(speciesStats.length === 0){
     html += `<div class="empty" style="margin-bottom:14px;">No catches logged yet — species will appear here as they're caught.</div>`;
   }else{
