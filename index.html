@@ -505,7 +505,7 @@
           <input type="hidden" id="session-competition" value="">
           <div class="field">
             <label>Venue</label>
-            <input type="text" maxlength="100" id="session-venue" placeholder="Where are you fishing?">
+            <input type="text" maxlength="100" id="session-venue" placeholder="Where are you fishing?" autocomplete="off" name="venue-search">
           </div>
           <div class="field">
             <label>How many rods?</label>
@@ -715,7 +715,7 @@
         <h2>Friends</h2>
         <div class="field">
           <label>Search by name</label>
-          <input type="text" maxlength="100" id="feed-search-input" placeholder="Type an angler's name...">
+          <input type="text" maxlength="100" id="feed-search-input" placeholder="Type an angler's name..." autocomplete="off" name="friend-search">
         </div>
         <div id="feed-list"><div class="empty">No catches yet — this is where recent catches from you and your friends will appear.</div></div>
       </section>
@@ -789,7 +789,7 @@
         <p class="sub-heading">Add anglers</p>
         <div class="field">
           <label>Search by name or email</label>
-          <input type="text" maxlength="100" id="competition-angler-search" placeholder="Type a name or email...">
+          <input type="text" maxlength="100" id="competition-angler-search" placeholder="Type a name or email..." autocomplete="off" name="angler-search">
         </div>
         <div id="competition-angler-search-results"></div>
         <div id="competition-selected-anglers" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
@@ -1375,7 +1375,7 @@ function multiPickerFieldHtml(rod, key, label){
   return `<div class="field">
     <label>${escapeHtml(label)}</label>
     ${typeFilter}
-    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search, or pick a type above...">
+    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search, or pick a type above..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="search-${rod}-${key}">
     <div class="multi-picker-results" data-rod="${rod}" data-key="${key}"></div>
     <div class="multi-picker-pills" data-rod="${rod}" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
   </div>`;
@@ -5831,7 +5831,7 @@ async function renderCompetitions(){
         ${canManage ? `
           <div class="field" style="margin-top:10px;">
             <label>Add angler (admin) — search name or email</label>
-            <input type="text" maxlength="100" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email...">
+            <input type="text" maxlength="100" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email..." autocomplete="off" name="comp-add-${c.id}">
             <div class="competition-add-results" data-competition="${c.id}" style="margin-top:6px;"></div>
           </div>` : ''}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
