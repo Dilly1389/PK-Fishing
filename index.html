@@ -214,6 +214,8 @@
   .rod-name-input::placeholder{color:var(--ink);opacity:1;font-weight:700;}
 
   .bobber-row{display:flex;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap;}
+  .bobber-row-running{justify-content:center;}
+  .bobber-row-running .bobber{margin:0 auto;}
   .bobber{
     width:108px;height:108px;flex-shrink:0;border-radius:50%;
     background:var(--dam-deep);
@@ -1164,7 +1166,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Running a timer</div>
-      <div class="pc-line muted">Start, pause and reset per rod. It keeps counting even if you close the app or lose signal — everything syncs once you're back online.</div>
+      <div class="pc-line muted">Start it when a rod goes out, Reset it when you're done. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Logging a catch</div>
@@ -3916,10 +3918,11 @@ function rodCardHtml(r){
         <input type="color" class="rod-dot" data-rod="${r}" value="#C1440E" title="Rod color">
         <input type="text" maxlength="100" class="rod-field rod-name-input" data-rod="${r}" data-key="identifier" placeholder="${RID_LABEL[r]}" title="Tap to rename this rod">
       </div>
-      <div class="bobber-row">
+      <div class="bobber-row" id="bobber-row-${r}">
         <div class="bobber" id="bobber-${r}"><div class="time mono" id="time-${r}">00:00:00</div></div>
         <div class="bobber-controls">
           <button class="btn btn-start" data-rod="${r}" data-action="start">Start</button>
+          <button class="btn btn-reset" data-rod="${r}" data-action="reset">Reset</button>
           <span class="start-time-label" id="start-time-${r}"></span>
         </div>
       </div>
@@ -5611,8 +5614,13 @@ function renderTimers(){
     const el = document.getElementById('time-'+r);
     if(!el) return;
     const t = currentPerson ? currentPerson.timers[r] : null;
+    const running = !!(t && t.running);
     el.textContent = fmt(elapsedMs(t));
-    document.getElementById('bobber-'+r).classList.toggle('running', !!(t && t.running));
+    document.getElementById('bobber-'+r).classList.toggle('running', running);
+    const row = document.getElementById('bobber-row-'+r);
+    if(row) row.classList.toggle('bobber-row-running', running);
+    const startBtn = document.querySelector('.btn-start[data-rod="'+r+'"]');
+    if(startBtn) startBtn.style.display = running ? 'none' : 'inline-block';
     const label = document.getElementById('start-time-'+r);
     if(label){
       label.textContent = (t && t.running && t.startTs)
