@@ -243,17 +243,17 @@
     display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
     font-weight:700;color:var(--muted);margin-bottom:5px;
   }
-  /* Checkbox rows inside a .field — the rules above are meant for form labels
-     above an input, not for a label wrapping a checkbox */
-  .field label.check-row{
+  /* Checkbox rows — used both inside a .field and as standalone pickers
+     like the whole-box share list, so this isn't scoped to .field */
+  label.check-row{
     display:flex;align-items:center;gap:10px;
     text-transform:none;letter-spacing:normal;
     font-size:14px;font-weight:500;color:var(--ink);
     padding:8px 0;margin-bottom:0;cursor:pointer;
     border-bottom:1px solid var(--line);
   }
-  .field label.check-row:last-child{border-bottom:none;}
-  .field label.check-row input[type="checkbox"]{
+  label.check-row:last-child{border-bottom:none;}
+  label.check-row input[type="checkbox"]{
     width:18px;height:18px;flex-shrink:0;margin:0;padding:0;accent-color:var(--dam);
   }
   .field textarea,.field input,.field select{
