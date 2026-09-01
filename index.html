@@ -902,6 +902,8 @@
       </section>
 
       <div id="tackle-content" style="display:none;">
+        <button type="button" class="mini-btn" id="tackle-help-btn" style="margin-bottom:14px;">❓ How the Tackle Box works</button>
+
         <section class="card">
           <h2>Share my whole tackle box</h2>
           <p class="pc-line muted">Anyone you tick here sees your entire tackle box, including anything you add later. You can still share individual items separately.</p>
@@ -1134,6 +1136,37 @@
       <div class="pc-line muted">Over time, My Insights on the Profile tab shows which rigs and baits actually land fish for you.</div>
     </div>
     <button class="primary-btn" id="onboarding-close" style="margin-top:14px;">Got it</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="tackle-help-modal">
+  <div class="modal-card">
+    <h3 style="margin-top:0;">🎣 How the Tackle Box works</h3>
+    <div class="profile-catch">
+      <div class="pc-head">Private by default</div>
+      <div class="pc-line muted">Everything you add is only visible to you unless you choose to share it. Nobody sees your gear just by being in the app.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Share one item at a time</div>
+      <div class="pc-line muted">Hit "Share" on any item to give a specific mutual friend access — someone you follow who also follows you back.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Or share your whole box</div>
+      <div class="pc-line muted">The "Share my whole tackle box" card lets you give a friend standing access to everything — including anything you add later. No need to re-share item by item.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">"Use" ticks what's actually yours</div>
+      <div class="pc-line muted">Something shared with you doesn't show up on Timers until you tick "Use" on it. That keeps your Rig, Bom and Hook pickers to just the gear you actually fish with — not everything anyone's ever shared.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Build rigs from your gear</div>
+      <div class="pc-line muted">Once you've added bait, dips and hooks, use them to build a rig further down. Tick "Use" on the rig too, so it shows up when you're logging on Timers.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Fill level for bait and dips</div>
+      <div class="pc-line muted">Bait and dip items get a slider showing how much you've got left — a quick way to see what's running low before your next trip.</div>
+    </div>
+    <button class="primary-btn" id="tackle-help-close" style="margin-top:14px;">Got it</button>
   </div>
 </div>
 
@@ -4799,6 +4832,12 @@ document.getElementById('onboarding-close').addEventListener('click', ()=>{
   document.getElementById('onboarding-modal').classList.remove('open');
 });
 document.getElementById('show-onboarding-btn').addEventListener('click', showOnboarding);
+document.getElementById('tackle-help-btn').addEventListener('click', ()=>{
+  document.getElementById('tackle-help-modal').classList.add('open');
+});
+document.getElementById('tackle-help-close').addEventListener('click', ()=>{
+  document.getElementById('tackle-help-modal').classList.remove('open');
+});
 
 // ---------- Log a past catch ----------
 // A stripped-down catch form for fish landed before the app existed —
