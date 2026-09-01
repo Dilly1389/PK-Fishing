@@ -533,6 +533,8 @@
 
     <!-- PROFILE -->
     <div class="panel active" id="panel-schedule">
+      <button type="button" class="mini-btn" id="profile-help-btn" style="margin-bottom:14px;">❓ How the Profile works</button>
+
       <section class="card" id="account-card">
         <h2>Account</h2>
 
@@ -642,23 +644,7 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2>How it works</h2>
-        <p class="pc-line muted">A quick walkthrough of rigs, sessions, timers and insights.</p>
-        <button class="mini-btn" id="show-onboarding-btn">Show me again</button>
-      </section>
-
-      <section class="card">
-        <h2>Appearance</h2>
-        <div class="field">
-          <label>Theme</label>
-          <select id="theme-select">
-            <option value="system">Match my device</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </div>
-      </section>
+      <button type="button" class="mini-btn" id="show-onboarding-btn" style="margin-bottom:14px;">❓ How it works</button>
 
       <section class="card" id="past-catch-card" style="display:none;">
         <h2>Log a past catch</h2>
@@ -702,6 +688,20 @@
         <h2>My insights</h2>
         <p class="pc-line muted">See what's actually working — which rigs land fish, which baits perform, and how long your rods really soak.</p>
         <button class="primary-btn" id="open-insights-btn">View my insights</button>
+      </section>
+
+      <section class="card" id="appearance-card">
+        <h2>Appearance</h2>
+        <div id="appearance-body">
+          <div class="field">
+            <label>Theme</label>
+            <select id="theme-select">
+              <option value="system">Match my device</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+        </div>
       </section>
 
       <section class="card" id="danger-zone-card" style="display:none;">
@@ -1147,6 +1147,37 @@
       <div class="pc-line muted">Over time, My Insights on the Profile tab shows which rigs and baits actually land fish for you.</div>
     </div>
     <button class="primary-btn" id="onboarding-close" style="margin-top:14px;">Got it</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="profile-help-modal">
+  <div class="modal-card">
+    <h3 style="margin-top:0;">👤 How the Profile works</h3>
+    <div class="profile-catch">
+      <div class="pc-head">My details</div>
+      <div class="pc-line muted">Your display name, real name, country and email. Name, surname and country stay private to you — only your display name is ever shown to others.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Reel Records</div>
+      <div class="pc-line muted">Choose which species show up when someone views your profile. Your personal bests are worked out automatically from your logged catches — nothing to enter manually. You can still log a catch as any species, whether or not it's ticked here.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Log a past catch</div>
+      <div class="pc-line muted">For fish you caught before you had the app. No rod or timer needed — just species, weight, date, and optionally a venue and photo. It counts toward your Reel Records and insights exactly like any other catch.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">My insights</div>
+      <div class="pc-line muted">Which rigs and baits actually land fish for you, average soak times, your best venues, and how your sessions have gone — all calculated from your own catch history.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Appearance</div>
+      <div class="pc-line muted">Switch between light, dark, or match your device automatically.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Delete my data</div>
+      <div class="pc-line muted">Permanently removes your profile, catches, timers, sessions, venues and tackle box. This can't be undone.</div>
+    </div>
+    <button class="primary-btn" id="profile-help-close" style="margin-top:14px;">Got it</button>
   </div>
 </div>
 
@@ -4950,6 +4981,12 @@ document.getElementById('tackle-help-btn').addEventListener('click', ()=>{
 document.getElementById('tackle-help-close').addEventListener('click', ()=>{
   document.getElementById('tackle-help-modal').classList.remove('open');
 });
+document.getElementById('profile-help-btn').addEventListener('click', ()=>{
+  document.getElementById('profile-help-modal').classList.add('open');
+});
+document.getElementById('profile-help-close').addEventListener('click', ()=>{
+  document.getElementById('profile-help-modal').classList.remove('open');
+});
 
 // ---------- Log a past catch ----------
 // A stripped-down catch form for fish landed before the app existed —
@@ -6554,6 +6591,7 @@ await loadTackleCategoryOptions();
     const themeSel = document.getElementById('theme-select');
     if(themeSel) themeSel.value = localStorage.getItem('pk_fishing_theme') || 'system';
   }catch(e){}
+  makeCardCollapsible('appearance-card', 'appearance-body', 'pk_fishing_collapse_appearance');
 
   // Return to whichever tab you were last on. Done last, so tabs hidden by
   // sign-in state (Timers, Admin) have already been resolved.
