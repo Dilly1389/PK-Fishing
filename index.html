@@ -2612,8 +2612,6 @@ await loadTackleCategoryOptions();
     await loadFollowedIds();
     populateAnglerSelect();
     await setActivePerson(id);
-    // New account — walk them through how the app works
-    showOnboarding();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not create account.';
@@ -4586,8 +4584,9 @@ function renderProfilePhotoGrid(entries, filterType){
 function catchDetailHtml(c){
   const timeStr = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(c.timerElapsed||0);
+  const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
   let html = `<div class="profile-catch">
-    <div class="pc-head">${RID_LABEL[c.rod] || c.rod}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}${c.rodIdentifier ? ' · '+escapeHtml(c.rodIdentifier) : ''}</div>`;
+    <div class="pc-head">${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</div>`;
   if(c.caught){
     html += `<div class="pc-line">${escapeHtml(c.type||'Fish')} — ${c.weight}kg</div>`;
   }
@@ -5848,6 +5847,7 @@ async function loadFeedItems(fishermanIds){
         fishermanName: p ? p.name : 'Unknown',
         dam: p ? p.dam : '',
         rod: c.rod,
+        rodIdentifier: c.rod_identifier || '',
         type: c.fish_type,
         weight: c.weight,
         time: new Date(c.time).getTime(),
@@ -5878,6 +5878,16 @@ function renderMyFriendsList(){
   listEl.querySelectorAll('.feed-angler-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> openProfile(btn.dataset.id));
   });
+}
+
+// What to show next to an angler's name for which rod caught it.
+// Prefers the name they'd given that rod; falls back to "Rod 1" style
+// only if it's a slot the app still recognizes; otherwise says nothing
+// rather than leaking an old internal value like a bare letter.
+function feedRodLabel(it){
+  if(it.rodIdentifier) return ' · ' + escapeHtml(it.rodIdentifier);
+  if(RID_LABEL[it.rod]) return ' · ' + RID_LABEL[it.rod];
+  return '';
 }
 
 async function renderFeed(refetch){
@@ -5927,7 +5937,7 @@ async function renderFeed(refetch){
         `</div>`
       : '';
     return `<div class="profile-catch">
-      <div class="pc-head">${escapeHtml(it.fishermanName)} · ${RID_LABEL[it.rod] || it.rod}</div>
+      <div class="pc-head">${escapeHtml(it.fishermanName)}${feedRodLabel(it)}</div>
       <div class="pc-line">${escapeHtml(it.type||'Fish')} — <b>${it.weight}kg</b></div>
       <div class="pc-line muted">${escapeHtml(it.dam||'')} · ${formatTimeAgo(it.time)}${it.likes ? ' · 👌'+it.likes : ''}</div>
       ${photoHtml}
@@ -6544,8 +6554,6 @@ await loadTackleCategoryOptions();
     const themeSel = document.getElementById('theme-select');
     if(themeSel) themeSel.value = localStorage.getItem('pk_fishing_theme') || 'system';
   }catch(e){}
-  // A brand-new Google signup gets the same walkthrough as an email signup
-  if(oauthProfile && oauthProfile.isNew) showOnboarding();
 
   // Return to whichever tab you were last on. Done last, so tabs hidden by
   // sign-in state (Timers, Admin) have already been resolved.
