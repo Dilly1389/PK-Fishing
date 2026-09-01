@@ -652,6 +652,42 @@
         </div>
       </section>
 
+      <section class="card" id="past-catch-card" style="display:none;">
+        <h2>Log a past catch</h2>
+        <p class="pc-line muted">For fish you caught before using the app. These count toward your Reel Records, personal bests and insights.</p>
+        <div class="row2">
+          <div class="field">
+            <label>Species</label>
+            <select id="past-catch-species"></select>
+          </div>
+          <div class="field">
+            <label>Weight (kg)</label>
+            <input type="number" step="0.01" min="0" max="500" id="past-catch-weight" placeholder="e.g. 12.4">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>When</label>
+            <input type="date" id="past-catch-date">
+          </div>
+          <div class="field">
+            <label>Venue (optional)</label>
+            <input type="text" maxlength="100" id="past-catch-venue" placeholder="Where was it caught?" autocomplete="off" name="past-venue">
+          </div>
+        </div>
+        <div class="field">
+          <label>Photo (optional)</label>
+          <div style="display:flex;gap:8px;margin-bottom:6px;">
+            <button type="button" class="mini-btn photo-camera-btn" data-target="past-catch-photo">📷 Take Photo</button>
+            <button type="button" class="mini-btn photo-gallery-btn" data-target="past-catch-photo">🖼️ Gallery</button>
+          </div>
+          <div class="photo-filename" data-target="past-catch-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div>
+          <input type="file" accept="image/*" id="past-catch-photo" style="display:none;">
+        </div>
+        <button class="primary-btn" id="past-catch-save-btn">Add to my records</button>
+        <div class="status" id="past-catch-status"></div>
+      </section>
+
       <section class="card" id="my-insights-card" style="display:none;">
         <h2>My insights</h2>
         <p class="pc-line muted">See what's actually working — which rigs land fish, which baits perform, and how long your rods really soak.</p>
@@ -2291,6 +2327,7 @@ function renderAccountArea(){
   const detailsCard = document.getElementById('my-details-card');
   const insightsCard = document.getElementById('my-insights-card');
   const dangerCard = document.getElementById('danger-zone-card');
+  const pastCatchCard = document.getElementById('past-catch-card');
   if(session && session.user){
     if(authForms) authForms.style.display = 'none';
     if(signedInArea) signedInArea.style.display = 'block';
@@ -2298,6 +2335,17 @@ function renderAccountArea(){
     if(label) label.textContent = 'Signed in as ' + session.user.email;
     if(detailsCard) detailsCard.style.display = 'block';
     if(insightsCard) insightsCard.style.display = 'block';
+    if(pastCatchCard){
+      pastCatchCard.style.display = 'block';
+      // Offer the same species this angler has chosen for Reel Records
+      const speciesSel = document.getElementById('past-catch-species');
+      if(speciesSel && !speciesSel.options.length){
+        const me = people.find(x=>x.user_id === session.user.id);
+        const list = getTrophySpeciesFor(me);
+        speciesSel.innerHTML = '<option value="">Select species</option>' +
+          list.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+      }
+    }
     if(dangerCard) dangerCard.style.display = 'block';
     populateMyDetails();
   }else{
@@ -2305,6 +2353,7 @@ function renderAccountArea(){
     if(signedInArea) signedInArea.style.display = 'none';
     if(detailsCard) detailsCard.style.display = 'none';
     if(insightsCard) insightsCard.style.display = 'none';
+    if(pastCatchCard) pastCatchCard.style.display = 'none';
     if(dangerCard) dangerCard.style.display = 'none';
   }
   updateTackleVisibility();
@@ -4750,6 +4799,81 @@ document.getElementById('onboarding-close').addEventListener('click', ()=>{
   document.getElementById('onboarding-modal').classList.remove('open');
 });
 document.getElementById('show-onboarding-btn').addEventListener('click', showOnboarding);
+
+// ---------- Log a past catch ----------
+// A stripped-down catch form for fish landed before the app existed —
+// no rod, no timer, no session. Everything else treats it as a normal catch.
+document.getElementById('past-catch-save-btn').addEventListener('click', async ()=>{
+  const st = document.getElementById('past-catch-status');
+  const species = document.getElementById('past-catch-species').value;
+  const weightRaw = document.getElementById('past-catch-weight').value;
+  const dateVal = document.getElementById('past-catch-date').value;
+  const venueName = document.getElementById('past-catch-venue').value.trim();
+  const photoEl = document.getElementById('past-catch-photo');
+
+  const myId = getMyFishermanId();
+  if(!myId){ st.textContent = 'Could not find your angler profile.'; return; }
+  if(!species){ st.textContent = 'Pick a species.'; return; }
+  if(!weightRaw || parseFloat(weightRaw) <= 0){ st.textContent = 'Enter a weight.'; return; }
+  if(!dateVal){ st.textContent = 'Pick a date.'; return; }
+  if(new Date(dateVal) > new Date()){ st.textContent = 'That date is in the future.'; return; }
+
+  st.textContent = 'Saving...';
+  try{
+    let photoUrl = null;
+    if(photoEl.files[0]){
+      photoUrl = await uploadPhoto(photoEl.files[0]);
+    }
+
+    // Match or create the venue, so it still feeds venue insights
+    let venueId = null;
+    if(venueName){
+      const venues = await loadMyVenues();
+      const existing = venues.find(v=>v.name.toLowerCase() === venueName.toLowerCase());
+      if(existing){
+        venueId = existing.id;
+      }else{
+        venueId = uid();
+        await sbPost('venues', {
+          id: venueId, owner_user_id: session.user.id, name: venueName,
+          latitude: null, longitude: null
+        });
+      }
+    }
+
+    const catchId = uid();
+    // Midday, so timezone shifts can't nudge it to the wrong day
+    const when = new Date(dateVal + 'T12:00:00');
+    const payload = {
+      id: catchId, fisherman_id: myId, rod: 'A', hook: '',
+      caught: true, fish_type: species, weight: parseFloat(weightRaw),
+      time: when.toISOString(), timer_elapsed_ms: 0,
+      bom: '', rig: '', rod_identifier: '',
+      photos: JSON.stringify(photoUrl ? [photoUrl] : []),
+      latitude: null, longitude: null,
+      venue_id: venueId, session_id: null, competition_id: null
+    };
+    for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = ''; }
+    await sbPost('catches', payload);
+
+    document.getElementById('past-catch-weight').value = '';
+    document.getElementById('past-catch-date').value = '';
+    document.getElementById('past-catch-venue').value = '';
+    photoEl.value = '';
+    const label = document.querySelector('.photo-filename[data-target="past-catch-photo"]');
+    if(label) label.textContent = '';
+
+    st.textContent = 'Added to your records.';
+    setTimeout(()=> st.textContent='', 2000);
+    if(currentPersonId === myId){
+      currentPerson = await loadPerson(myId);
+      renderAll();
+    }
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+  }
+});
 
 document.getElementById('open-insights-btn').addEventListener('click', openInsights);
 document.getElementById('insights-close').addEventListener('click', ()=>{
