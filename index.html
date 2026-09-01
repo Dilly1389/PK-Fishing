@@ -1289,6 +1289,22 @@ function getTrophySpeciesFor(person){
   }catch(e){ return DEFAULT_TROPHY_SPECIES; }
 }
 
+// Someone caught something outside the standard list (typed via "Other") —
+// give it its own Reel Records tile automatically, rather than it silently
+// having nowhere to show up.
+async function ensureSpeciesInRecords(fishermanId, species){
+  if(!species || ALL_TROPHY_SPECIES.includes(species)) return;
+  const p = people.find(x=>x.id===fishermanId);
+  if(!p) return;
+  const current = getTrophySpeciesFor(p);
+  if(current.includes(species)) return;
+  const updated = [...current, species];
+  try{
+    await sbPatch('fishermen', 'id=eq.'+fishermanId, {trophy_species: JSON.stringify(updated)});
+    p.trophy_species = JSON.stringify(updated);
+  }catch(e){ console.error('ensureSpeciesInRecords failed', e); }
+}
+
 const COUNTRY_LIST = [
   "South Africa","Afghanistan","Albania","Algeria","Andorra","Angola","Argentina","Armenia","Australia",
   "Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh","Barbados","Belarus","Belgium","Belize","Benin",
@@ -4484,6 +4500,9 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
 
   await insertCatch(currentPersonId, entry);
   await checkAndUpdatePersonalBest(entry);
+  if(entry.caught && entry.type){
+    await ensureSpeciesInRecords(currentPersonId, entry.type);
+  }
   // Let mutual friends know if this was a PB or one of their biggest
   if(entry.caught && (entry.weight||0) > 0){
     notifyFriendsOfCatch(entry.id);
