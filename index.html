@@ -603,35 +603,43 @@
 
       <section class="card" id="my-details-card" style="display:none;">
         <h2>My details</h2>
-        <div class="field">
-          <label>Display Name / Nickname</label>
-          <input type="text" maxlength="100" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
-        </div>
-        <div class="row2">
+        <div id="my-details-body">
           <div class="field">
-            <label>Name</label>
-            <input type="text" maxlength="100" id="details-first-name" placeholder="First name">
+            <label>Display Name / Nickname</label>
+            <input type="text" maxlength="100" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label>Name</label>
+              <input type="text" maxlength="100" id="details-first-name" placeholder="First name">
+            </div>
+            <div class="field">
+              <label>Surname</label>
+              <input type="text" maxlength="100" id="details-last-name" placeholder="Surname">
+            </div>
           </div>
           <div class="field">
-            <label>Surname</label>
-            <input type="text" maxlength="100" id="details-last-name" placeholder="Surname">
+            <label>Country</label>
+            <select id="details-country"></select>
           </div>
+          <p class="pc-line muted" style="margin-top:-6px;margin-bottom:12px;">Name, surname, and country are private — only you can see them here, never shown publicly.</p>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" maxlength="120" id="details-email" placeholder="you@example.com">
+          </div>
+          <button class="primary-btn" id="details-save-btn">Save details</button>
+          <div class="status" id="details-save-status"></div>
         </div>
-        <div class="field">
-          <label>Country</label>
-          <select id="details-country"></select>
+      </section>
+
+      <section class="card" id="reel-records-settings-card" style="display:none;">
+        <h2>Reel Records</h2>
+        <div id="reel-records-settings-body">
+          <p class="pc-line muted" style="margin-bottom:8px;">Pick which species show in your Reel Records. You can still log a catch as any species.</p>
+          <div id="details-trophy-species" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;"></div>
+          <button class="primary-btn" id="reel-records-save-btn">Save</button>
+          <div class="status" id="reel-records-save-status"></div>
         </div>
-        <p class="pc-line muted" style="margin-top:-6px;margin-bottom:12px;">Name, surname, and country are private — only you can see them here, never shown publicly.</p>
-        <div class="field">
-          <label>Email</label>
-          <input type="email" maxlength="120" id="details-email" placeholder="you@example.com">
-        </div>
-        <hr class="divider">
-        <p class="sub-heading">Reel Records species</p>
-        <p class="pc-line muted" style="margin-bottom:8px;">Pick which species show in your Reel Records. You can still log a catch as any species.</p>
-        <div id="details-trophy-species" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;"></div>
-        <button class="primary-btn" id="details-save-btn">Save details</button>
-        <div class="status" id="details-save-status"></div>
       </section>
 
       <section class="card">
@@ -654,6 +662,7 @@
 
       <section class="card" id="past-catch-card" style="display:none;">
         <h2>Log a past catch</h2>
+        <div id="past-catch-body">
         <p class="pc-line muted">For fish you caught before using the app. These count toward your Reel Records, personal bests and insights.</p>
         <div class="row2">
           <div class="field">
@@ -686,6 +695,7 @@
         </div>
         <button class="primary-btn" id="past-catch-save-btn">Add to my records</button>
         <div class="status" id="past-catch-status"></div>
+        </div>
       </section>
 
       <section class="card" id="my-insights-card" style="display:none;">
@@ -1844,6 +1854,39 @@ function elapsedMs(t){
 }
 // Guard for destructive actions — a single mis-tap shouldn't delete
 // something other people are relying on.
+// Makes a card's body collapsible via a toggle next to its heading.
+// Remembers the person's choice per card, so it stays how they left it.
+function makeCardCollapsible(cardId, bodyId, storageKey){
+  const card = document.getElementById(cardId);
+  const body = document.getElementById(bodyId);
+  if(!card || !body || card.dataset.collapsibleReady) return;
+  card.dataset.collapsibleReady = 'true';
+  const h2 = card.querySelector('h2');
+  if(!h2) return;
+
+  h2.style.display = 'flex';
+  h2.style.justifyContent = 'space-between';
+  h2.style.alignItems = 'center';
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);padding:0;font-weight:700;text-transform:none;letter-spacing:normal;';
+  h2.appendChild(toggleBtn);
+
+  let collapsed = false;
+  try{ collapsed = localStorage.getItem(storageKey) === 'true'; }catch(e){}
+  function apply(){
+    body.style.display = collapsed ? 'none' : 'block';
+    toggleBtn.textContent = collapsed ? '▸ Show' : '▾ Hide';
+  }
+  apply();
+
+  toggleBtn.addEventListener('click', ()=>{
+    collapsed = !collapsed;
+    try{ localStorage.setItem(storageKey, collapsed ? 'true' : 'false'); }catch(e){}
+    apply();
+  });
+}
+
 function confirmDelete(what){
   return window.confirm('Delete ' + what + '?\n\nThis cannot be undone.');
 }
@@ -2368,6 +2411,7 @@ function renderAccountArea(){
   const detailsCard = document.getElementById('my-details-card');
   const insightsCard = document.getElementById('my-insights-card');
   const dangerCard = document.getElementById('danger-zone-card');
+  const reelRecordsCard = document.getElementById('reel-records-settings-card');
   const pastCatchCard = document.getElementById('past-catch-card');
   if(session && session.user){
     if(authForms) authForms.style.display = 'none';
@@ -2388,7 +2432,11 @@ function renderAccountArea(){
       }
     }
     if(dangerCard) dangerCard.style.display = 'block';
+    if(reelRecordsCard) reelRecordsCard.style.display = 'block';
     populateMyDetails();
+    makeCardCollapsible('my-details-card', 'my-details-body', 'pk_fishing_collapse_details');
+    makeCardCollapsible('reel-records-settings-card', 'reel-records-settings-body', 'pk_fishing_collapse_reelrecords');
+    makeCardCollapsible('past-catch-card', 'past-catch-body', 'pk_fishing_collapse_pastcatch');
   }else{
     if(authForms) authForms.style.display = 'block';
     if(signedInArea) signedInArea.style.display = 'none';
@@ -2396,6 +2444,7 @@ function renderAccountArea(){
     if(insightsCard) insightsCard.style.display = 'none';
     if(pastCatchCard) pastCatchCard.style.display = 'none';
     if(dangerCard) dangerCard.style.display = 'none';
+    if(reelRecordsCard) reelRecordsCard.style.display = 'none';
   }
   updateTackleVisibility();
   updateTimersVisibility();
@@ -2470,12 +2519,27 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
       name, email: email || null,
       first_name: firstName || null, last_name: lastName || null, country: country || null
     };
-    const chosenSpecies = Array.from(document.querySelectorAll('.trophy-species-check:checked')).map(cb=>cb.value);
-    patch.trophy_species = chosenSpecies.length ? JSON.stringify(chosenSpecies) : null;
-
     await sbPatch('fishermen', 'id=eq.'+p.id, patch);
     Object.assign(p, patch);
     populateAnglerSelect();
+    st.textContent = 'Saved.';
+    setTimeout(()=> st.textContent='', 1500);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+  }
+});
+
+document.getElementById('reel-records-save-btn').addEventListener('click', async ()=>{
+  const p = people.find(x=>x.user_id === session.user.id);
+  const st = document.getElementById('reel-records-save-status');
+  if(!p){ st.textContent = 'Could not find your profile.'; return; }
+  st.textContent = 'Saving...';
+  try{
+    const chosenSpecies = Array.from(document.querySelectorAll('.trophy-species-check:checked')).map(cb=>cb.value);
+    const patch = { trophy_species: chosenSpecies.length ? JSON.stringify(chosenSpecies) : null };
+    await sbPatch('fishermen', 'id=eq.'+p.id, patch);
+    Object.assign(p, patch);
     st.textContent = 'Saved.';
     setTimeout(()=> st.textContent='', 1500);
   }catch(e){
@@ -5261,20 +5325,17 @@ async function renderPhotoLike(errorMsg){
   const myName = isSignedIn() ? (people.find(p=>p.user_id===session.user.id)||{}).name : null;
   const alreadyLiked = myName ? likers.includes(myName) : false;
 
-  let likersLine = '';
-  if(likers.length){
-    likersLine = `<div class="pc-line muted" style="margin-top:4px;">Liked by ${escapeHtml(likers.join(', '))}</div>`;
-  }
-
-  wrap.innerHTML = `<button class="lb-like-btn ${alreadyLiked?'liked':''}" id="photo-like-btn" ${alreadyLiked?'disabled':''}>👌 <span class="lb-like-count">${likers.length}</span></button>` +
-    likersLine +
+  wrap.innerHTML = `<button class="lb-like-btn ${alreadyLiked?'liked':''}" id="photo-like-btn" title="${alreadyLiked ? 'Tap to remove your Lekker' : 'Tap to give this a Lekker'}">👌 <span class="lb-like-count">${likers.length}</span></button>` +
     (errorMsg ? `<div class="status" style="margin-top:6px;color:#c04;">${escapeHtml(errorMsg)}</div>` : '');
   const btn = document.getElementById('photo-like-btn');
   if(btn){
     btn.addEventListener('click', async ()=>{
-      if(btn.disabled) return;
       btn.disabled = true;
-      await likeCurrentPhoto(catchId);
+      if(alreadyLiked){
+        await unlikeCurrentPhoto(catchId);
+      }else{
+        await likeCurrentPhoto(catchId);
+      }
     });
   }
 }
@@ -5350,6 +5411,21 @@ async function likeCurrentPhoto(catchId){
     }
     showDbError('Could not save like.');
     renderPhotoLike('Could not save this like: ' + (e.message || 'unknown error'));
+  }
+}
+
+async function unlikeCurrentPhoto(catchId){
+  if(!isSignedIn()) return;
+  try{
+    await sbDelete('catch_likes', 'catch_id=eq.'+catchId+'&user_id=eq.'+session.user.id);
+    try{ await sbRpc('decrement_catch_likes', {p_catch_id: catchId}); }
+    catch(e){ console.error('like counter decrement failed', e); }
+    clearDbError();
+    renderPhotoLike();
+  }catch(e){
+    console.error(e);
+    showDbError('Could not remove like.');
+    renderPhotoLike('Could not remove this like: ' + (e.message || 'unknown error'));
   }
 }
 
