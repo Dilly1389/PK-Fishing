@@ -493,6 +493,8 @@
         <p class="pc-line muted">Sign in from the Profile tab to use rod timers.</p>
       </section>
       <div id="timers-content" style="display:none;">
+        <button type="button" class="mini-btn" id="timers-help-btn" style="margin-bottom:14px;">❓ How Timers works</button>
+
         <div class="angler-bar" style="display:none;">
           <label>Angler</label>
           <select id="angler-select" autocomplete="off"></select>
@@ -533,6 +535,7 @@
 
     <!-- PROFILE -->
     <div class="panel active" id="panel-schedule">
+      <button type="button" class="mini-btn" id="show-onboarding-btn" style="margin-bottom:14px;">❓ How it works</button>
       <button type="button" class="mini-btn" id="profile-help-btn" style="margin-bottom:14px;">❓ How the Profile works</button>
 
       <section class="card" id="account-card">
@@ -643,8 +646,6 @@
           <div class="status" id="reel-records-save-status"></div>
         </div>
       </section>
-
-      <button type="button" class="mini-btn" id="show-onboarding-btn" style="margin-bottom:14px;">❓ How it works</button>
 
       <section class="card" id="past-catch-card" style="display:none;">
         <h2>Log a past catch</h2>
@@ -1147,6 +1148,33 @@
       <div class="pc-line muted">Over time, My Insights on the Profile tab shows which rigs and baits actually land fish for you.</div>
     </div>
     <button class="primary-btn" id="onboarding-close" style="margin-top:14px;">Got it</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="timers-help-modal">
+  <div class="modal-card">
+    <h3 style="margin-top:0;">⏱️ How Timers works</h3>
+    <div class="profile-catch">
+      <div class="pc-head">Start a session</div>
+      <div class="pc-line muted">Set your venue and how many rods you're on before your rods appear. If you're taking part in a competition that's running today, a banner shows above — tap it to fish that competition, which locks in the venue and tags every catch to it.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Your rods</div>
+      <div class="pc-line muted">Tap a rod's name to rename it. Pick a colour, a rig, a bom, and baits for each hook — all pulled from your tackle box, so tick "Use" on gear back there if it's missing here.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Running a timer</div>
+      <div class="pc-line muted">Start, pause and reset per rod. It keeps counting even if you close the app or lose signal — everything syncs once you're back online.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Logging a catch</div>
+      <div class="pc-line muted">Tap "Caught a fish" for the full form, or "No catch" to log a blank instantly. Your soak time is recorded automatically from the timer.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Ending a session</div>
+      <div class="pc-line muted">Clears every rod back to blank — timers, rigs, baits, names — ready for next time. Your logged catches are never affected.</div>
+    </div>
+    <button class="primary-btn" id="timers-help-close" style="margin-top:14px;">Got it</button>
   </div>
 </div>
 
@@ -4986,6 +5014,12 @@ document.getElementById('profile-help-btn').addEventListener('click', ()=>{
 });
 document.getElementById('profile-help-close').addEventListener('click', ()=>{
   document.getElementById('profile-help-modal').classList.remove('open');
+});
+document.getElementById('timers-help-btn').addEventListener('click', ()=>{
+  document.getElementById('timers-help-modal').classList.add('open');
+});
+document.getElementById('timers-help-close').addEventListener('click', ()=>{
+  document.getElementById('timers-help-modal').classList.remove('open');
 });
 
 // ---------- Log a past catch ----------
