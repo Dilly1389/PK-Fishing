@@ -452,6 +452,7 @@
     .bobber-controls{justify-content:stretch;}
   }
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body>
 <div class="app">
@@ -477,7 +478,6 @@
   <nav class="tabs" id="nav-tabs">
     <button data-tab="timers" id="timers-tab-btn" style="display:none;">Timers</button>
     <button data-tab="schedule" class="active">Profile</button>
-    <button data-tab="leaderboard">Leaderboard</button>
     <button data-tab="feed">Friends</button>
     <button data-tab="competitions">Competitions</button>
     <button data-tab="tackle">Tackle Box</button>
@@ -748,10 +748,11 @@
         <div id="my-friends-list"><div class="empty">You're not following anyone yet.</div></div>
       </section>
       <section class="card">
-        <h2>Friends</h2>
+        <h2>Recent catches</h2>
+        <p class="pc-line muted" style="margin-bottom:10px;">The latest catches from you and everyone you follow, newest first.</p>
         <div class="field">
-          <label>Search by name</label>
-          <input type="text" maxlength="100" id="feed-search-input" placeholder="Type an angler's name..." autocomplete="off" name="friend-search">
+          <label>Search by name (optional)</label>
+          <input type="text" maxlength="100" id="feed-search-input" placeholder="Narrow down to one angler..." autocomplete="off" name="friend-search">
         </div>
         <div id="feed-list"><div class="empty">No catches yet — this is where recent catches from you and your friends will appear.</div></div>
       </section>
@@ -1189,7 +1190,7 @@
     <div id="photo-like-wrap" style="margin-top:12px;"></div>
     <div id="photo-comment-section" style="text-align:left;margin-top:14px;display:none;">
       <p class="sub-heading" style="margin-bottom:8px;">Comments on this catch</p>
-      <div class="field">
+      <div class="field" id="photo-comment-author-wrap">
         <input type="text" maxlength="100" id="photo-comment-author" placeholder="Your name (optional)">
       </div>
       <div class="field">
@@ -1256,6 +1257,7 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const SUPABASE_URL = 'https://quptwbxzstepwfeffljq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_nnO3ZffPD-r08e4E1rjcPQ_47mGq7Xu';
@@ -1872,18 +1874,8 @@ document.addEventListener('change', (e)=>{
   }
 });
 
-// Photo likes — one 👌 per photo per browser/device, stored locally (not tied to any account)
-function getLikedCatches(){
-  try{ return JSON.parse(localStorage.getItem('pk_fishing_liked_catches') || '[]'); }
-  catch(e){ return []; }
-}
-function addLikedCatch(id){
-  try{
-    const arr = getLikedCatches();
-    if(!arr.includes(id)) arr.push(id);
-    localStorage.setItem('pk_fishing_liked_catches', JSON.stringify(arr));
-  }catch(e){}
-}
+// Likes are now tracked per-account via the catch_likes table, so this
+// localStorage approach is no longer needed.
 
 function showDbError(msg){
   const el = document.getElementById('db-status');
@@ -4758,6 +4750,12 @@ function buildInsightsHtml(catches, venues, sessions){
       </li>`;
     });
     html += '</ul>';
+    // A private map of your own venues — only shows waters with real
+    // coordinates (some may be name-only if GPS was denied or unavailable)
+    const mappable = (venues||[]).filter(v=> v.latitude != null && v.longitude != null);
+    if(mappable.length){
+      html += `<div id="venue-map" style="height:260px;border-radius:10px;overflow:hidden;margin-top:6px;border:1px solid var(--line);"></div>`;
+    }
   }
 
   return html;
@@ -4783,6 +4781,38 @@ async function openInsights(){
   }
   const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
   body.innerHTML = buildInsightsHtml(rec && rec.catches ? rec.catches : [], venues, sessions);
+  renderVenueMap(venues);
+}
+
+let venueMapInstance = null;
+function renderVenueMap(venues){
+  const container = document.getElementById('venue-map');
+  if(!container || typeof L === 'undefined') return;
+  const mappable = (venues||[]).filter(v=> v.latitude != null && v.longitude != null);
+  if(!mappable.length) return;
+
+  // Tear down any previous map — this modal can reopen multiple times
+  if(venueMapInstance){ venueMapInstance.remove(); venueMapInstance = null; }
+
+  venueMapInstance = L.map('venue-map', {scrollWheelZoom: false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 18
+  }).addTo(venueMapInstance);
+
+  const markers = mappable.map(v=>
+    L.marker([v.latitude, v.longitude]).bindPopup(escapeHtml(v.name))
+  );
+  markers.forEach(m=> m.addTo(venueMapInstance));
+
+  if(markers.length === 1){
+    venueMapInstance.setView([mappable[0].latitude, mappable[0].longitude], 13);
+  }else{
+    venueMapInstance.fitBounds(L.featureGroup(markers).getBounds().pad(0.2));
+  }
+  // The modal was just made visible, so the container had no size a moment
+  // ago — this makes Leaflet re-measure it now that it actually does
+  setTimeout(()=>{ if(venueMapInstance) venueMapInstance.invalidateSize(); }, 100);
 }
 
 document.getElementById('delete-account-btn').addEventListener('click', ()=>{
@@ -4993,7 +5023,12 @@ async function openProfile(personId){
   const speciesStats = trophySpecies.map(species=>{
     const matches = caughtOnly.filter(c=>c.type===species);
     const pb = matches.reduce((best,c)=> (!best || (c.weight||0) > (best.weight||0)) ? c : best, null);
-    return {species, count: matches.length, pb};
+    const speciesTotal = matches.reduce((sum,c)=>sum+(c.weight||0), 0);
+    return {
+      species, count: matches.length, pb,
+      totalWeight: speciesTotal,
+      avgWeight: matches.length ? speciesTotal/matches.length : 0
+    };
   }).filter(s=> s.count > 0); // only species actually caught
 
   html += `<p class="sub-heading">Reel Records</p>`;
@@ -5001,13 +5036,20 @@ async function openProfile(personId){
     html += `<div class="empty" style="margin-bottom:14px;">No catches logged yet — species will appear here as they're caught.</div>`;
   }else{
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">` +
-      speciesStats.map(s=>`
-        <div class="profile-catch" style="flex:1;min-width:105px;text-align:center;">
+      speciesStats.map(s=>{
+        const pbDate = s.pb ? new Date(s.pb.time).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}) : '';
+        const pbPhoto = (s.pb && s.pb.photos && s.pb.photos.length) ? s.pb.photos[0] : null;
+        return `
+        <div class="profile-catch" style="flex:1;min-width:130px;text-align:center;">
+          ${pbPhoto ? `<img src="${escapeHtml(pbPhoto)}" alt="${escapeHtml(s.species)} PB" class="pb-thumb" data-pb-photo="${escapeHtml(pbPhoto)}" style="width:100%;height:90px;object-fit:cover;border-radius:8px;margin-bottom:6px;cursor:pointer;">` : ''}
           <div class="pc-head">${escapeHtml(s.species)}</div>
           <div class="pc-line"><b>${s.count}</b> caught</div>
-          ${s.pb ? `<button type="button" class="mini-btn pb-toggle-btn" data-pb-catch="${s.pb.id}" style="margin-top:6px;">PB: ${s.pb.weight}kg</button>` : ''}
+          <div class="pc-line muted">${s.totalWeight.toFixed(1)}kg total · ${s.avgWeight.toFixed(1)}kg avg</div>
+          ${s.pb ? `<button type="button" class="mini-btn pb-toggle-btn" data-pb-catch="${s.pb.id}" style="margin-top:6px;">PB: ${s.pb.weight}kg</button>
+          <div class="pc-line muted" style="margin-top:2px;">${escapeHtml(pbDate)}</div>` : ''}
         </div>
-      `).join('') +
+      `;
+      }).join('') +
       `</div>`;
   }
   html += `<div id="pb-detail-area" style="margin-bottom:14px;"></div>`;
@@ -5028,6 +5070,9 @@ async function openProfile(personId){
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
 
+  document.querySelectorAll('.pb-thumb').forEach(img=>{
+    img.addEventListener('click', ()=> openPhotoModal(img.dataset.pbPhoto, null));
+  });
   document.querySelectorAll('.pb-toggle-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const catchId = btn.dataset.pbCatch;
@@ -5171,6 +5216,8 @@ function openPhotoModal(src, catchId, index){
   renderPhotoModalImage();
   const section = document.getElementById('photo-comment-section');
   if(section) section.style.display = currentPhotoCatchId ? 'block' : 'none';
+  const authorWrap = document.getElementById('photo-comment-author-wrap');
+  if(authorWrap) authorWrap.style.display = isSignedIn() ? 'none' : 'block';
   const likeWrap = document.getElementById('photo-like-wrap');
   if(currentPhotoCatchId){
     renderPhotoComments();
@@ -5196,20 +5243,31 @@ document.addEventListener('click', (e)=>{
   }
 });
 
-async function fetchCatchLikes(catchId){
+async function fetchCatchLikers(catchId){
   try{
-    const rows = await sbGet('catches?id=eq.'+catchId+'&select=likes');
-    return (rows[0] && rows[0].likes) || 0;
-  }catch(e){ console.error(e); return 0; }
+    const rows = await sbGet('catch_likes?catch_id=eq.'+catchId+'&select=user_id');
+    return rows.map(r=>{
+      const p = people.find(x=>x.user_id===r.user_id);
+      return p ? p.name : 'Someone';
+    });
+  }catch(e){ console.error(e); return []; }
 }
 
 async function renderPhotoLike(errorMsg){
   const wrap = document.getElementById('photo-like-wrap');
   if(!wrap || !currentPhotoCatchId) return;
   const catchId = currentPhotoCatchId;
-  const likes = await fetchCatchLikes(catchId);
-  const alreadyLiked = getLikedCatches().includes(catchId);
-  wrap.innerHTML = `<button class="lb-like-btn ${alreadyLiked?'liked':''}" id="photo-like-btn" ${alreadyLiked?'disabled':''}>👌 <span class="lb-like-count">${likes}</span></button>` +
+  const likers = await fetchCatchLikers(catchId);
+  const myName = isSignedIn() ? (people.find(p=>p.user_id===session.user.id)||{}).name : null;
+  const alreadyLiked = myName ? likers.includes(myName) : false;
+
+  let likersLine = '';
+  if(likers.length){
+    likersLine = `<div class="pc-line muted" style="margin-top:4px;">Liked by ${escapeHtml(likers.join(', '))}</div>`;
+  }
+
+  wrap.innerHTML = `<button class="lb-like-btn ${alreadyLiked?'liked':''}" id="photo-like-btn" ${alreadyLiked?'disabled':''}>👌 <span class="lb-like-count">${likers.length}</span></button>` +
+    likersLine +
     (errorMsg ? `<div class="status" style="margin-top:6px;color:#c04;">${escapeHtml(errorMsg)}</div>` : '');
   const btn = document.getElementById('photo-like-btn');
   if(btn){
@@ -5268,15 +5326,28 @@ async function checkAndUpdatePersonalBest(entry){
 }
 
 async function likeCurrentPhoto(catchId){
+  // Spectators get the fun of it, but nothing is recorded — no account to
+  // attach a like to, and the app deliberately doesn't fake one.
+  if(!isSignedIn()){
+    showLekkerFlash();
+    renderPhotoLike();
+    return;
+  }
   try{
-    await sbRpc('increment_catch_likes', {p_catch_id: catchId});
-    addLikedCatch(catchId);
+    await sbPost('catch_likes', {id: uid(), catch_id: catchId, user_id: session.user.id});
+    try{ await sbRpc('increment_catch_likes', {p_catch_id: catchId}); }
+    catch(e){ console.error('like counter increment failed', e); }
     clearDbError();
     showLekkerFlash();
     renderPhotoLike();
     notifyCatchLike(catchId);
   }catch(e){
     console.error(e);
+    // Already liked (unique constraint) isn't a real error — just refresh
+    if(String(e.message||'').includes('duplicate')){
+      renderPhotoLike();
+      return;
+    }
     showDbError('Could not save like.');
     renderPhotoLike('Could not save this like: ' + (e.message || 'unknown error'));
   }
@@ -5288,13 +5359,60 @@ async function renderPhotoComments(){
   el.innerHTML = '<div class="empty">Loading...</div>';
   const rows = await loadComments(currentPhotoCatchId);
   if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet — be the first to say something.</div>'; return; }
+  const myUserId = isSignedIn() ? session.user.id : null;
   el.innerHTML = rows.map(c=>{
     const time = new Date(c.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-    return `<div class="comment-item">
+    const isMine = myUserId && c.author_user_id === myUserId;
+    const canManage = isMine || isSuperUser();
+    return `<div class="comment-item" data-comment-id="${c.id}">
       <div class="comment-head"><b>${escapeHtml(c.author || 'Anonymous')}</b><span class="comment-time">${time}</span></div>
-      <div class="comment-msg">${escapeHtml(c.message)}</div>
+      <div class="comment-msg" data-comment-msg="${c.id}">${escapeHtml(c.message)}</div>
+      ${canManage ? `<div style="display:flex;gap:10px;margin-top:4px;">
+        ${isMine ? `<button type="button" class="comment-edit-link" data-comment-edit="${c.id}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">Edit</button>` : ''}
+        <button type="button" class="comment-delete-link" data-comment-delete="${c.id}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">Delete</button>
+      </div>` : ''}
     </div>`;
   }).join('');
+
+  el.querySelectorAll('[data-comment-delete]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirmDelete('this comment')) return;
+      try{
+        await sbDelete('comments', 'id=eq.'+btn.dataset.commentDelete);
+        renderPhotoComments();
+      }catch(e){
+        console.error(e);
+        alert('Could not delete: ' + (e.message || 'unknown error'));
+      }
+    });
+  });
+
+  el.querySelectorAll('[data-comment-edit]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.commentEdit;
+      const msgEl = el.querySelector('[data-comment-msg="'+id+'"]');
+      if(!msgEl || msgEl.dataset.editing === 'true') return;
+      const original = rows.find(r=>r.id===id).message;
+      msgEl.dataset.editing = 'true';
+      msgEl.innerHTML = `
+        <textarea maxlength="500" class="comment-edit-input" style="width:100%;margin-bottom:6px;">${escapeHtml(original)}</textarea>
+        <button type="button" class="mini-btn comment-edit-save" data-comment-save="${id}">Save</button>
+        <button type="button" class="mini-btn comment-edit-cancel" data-comment-cancel="${id}">Cancel</button>
+      `;
+      msgEl.querySelector('.comment-edit-cancel').addEventListener('click', ()=> renderPhotoComments());
+      msgEl.querySelector('.comment-edit-save').addEventListener('click', async ()=>{
+        const newMsg = msgEl.querySelector('.comment-edit-input').value.trim();
+        if(!newMsg) return;
+        try{
+          await sbPatch('comments', 'id=eq.'+id, {message: newMsg});
+          renderPhotoComments();
+        }catch(e){
+          console.error(e);
+          alert('Could not save: ' + (e.message || 'unknown error'));
+        }
+      });
+    });
+  });
 }
 document.getElementById('photo-comment-post-btn').addEventListener('click', async ()=>{
   if(!currentPhotoCatchId) return;
@@ -5421,7 +5539,6 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
       loadActiveSession().then(renderSessionUi);
       renderActiveCompetitionsBar();
     }
-    if(btn.dataset.tab==='leaderboard') renderLeaderboard();
     if(btn.dataset.tab==='feed') renderFeed();
     if(btn.dataset.tab==='competitions') renderCompetitions();
     if(btn.dataset.tab==='tackle'){
@@ -5719,7 +5836,7 @@ async function renderFeed(refetch){
   }
 
   if(items.length===0){
-    html += `<div class="empty">${searchTerm ? 'No catches for that angler yet.' : 'No catches yet.'}</div>`;
+    html += `<div class="empty">${searchTerm ? 'No catches for that angler yet.' : 'No catches yet — recent catches from you and your friends will show up here.'}</div>`;
     el.innerHTML = html;
     el.querySelectorAll('.feed-angler-btn').forEach(btn=>{
       btn.addEventListener('click', ()=> openProfile(btn.dataset.id));
