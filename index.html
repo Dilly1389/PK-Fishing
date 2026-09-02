@@ -4960,6 +4960,37 @@ function buildInsightsHtml(catches, venues, sessions){
       <div><b>${fmtDuration(avgSoak)}</b>avg soak</div>
     </div>`;
 
+  // Soak time distribution — the average alone hides the shape. Knowing
+  // most runs come in the first two hours is more useful than one number.
+  if(withTimer.length){
+    const buckets = [
+      {label:'Under 30 min', max: 30*60000},
+      {label:'30 min – 1 hr', max: 60*60000},
+      {label:'1 – 2 hrs', max: 2*60*60000},
+      {label:'2 – 4 hrs', max: 4*60*60000},
+      {label:'4 – 8 hrs', max: 8*60*60000},
+      {label:'8 hrs+', max: Infinity}
+    ];
+    const counts = buckets.map(()=>0);
+    withTimer.forEach(c=>{
+      const idx = buckets.findIndex(b=>c.timerElapsed <= b.max);
+      counts[idx >= 0 ? idx : buckets.length-1]++;
+    });
+    const maxCount = Math.max(...counts, 1);
+    html += `<p class="sub-heading">Soak time distribution</p>`;
+    html += `<ul class="people-list">` + buckets.map((b,i)=>{
+      if(counts[i] === 0) return '';
+      const pct = Math.round(counts[i]/withTimer.length*100);
+      const barPct = Math.round(counts[i]/maxCount*100);
+      return `<li style="display:block;">
+        <div class="who" style="margin-bottom:4px;"><b>${escapeHtml(b.label)}</b><span class="pill">${counts[i]} (${pct}%)</span></div>
+        <div style="background:var(--line);border-radius:6px;height:8px;overflow:hidden;">
+          <div style="background:var(--dam);height:100%;width:${barPct}%;"></div>
+        </div>
+      </li>`;
+    }).join('') + `</ul>`;
+  }
+
   // Helper: group catches by a key, compute count / total weight / avg soak
   function groupStats(keyFn){
     const groups = {};
@@ -4999,22 +5030,32 @@ function buildInsightsHtml(catches, venues, sessions){
     return t + '</ul>';
   }
 
-  // Which rig performs
-  html += statTable('Which rig lands fish', groupStats(c=>[c.rig]), 'No rigs recorded on your catches yet.');
-
-  // Which bait performs — only the hook that actually caught the fish counts,
-  // not everything that happened to be on the other hooks at the time
-  html += statTable('Which bait lands fish', groupStats(c=>{
+  // Which bait was on the hook that actually caught the fish — not
+  // everything that happened to be on the other hooks at the time
+  function catchingBaits(c){
     const hookMatch = /Hook (\d+)/.exec(c.hook||'');
     if(!hookMatch) return [];
     const hookField = c['hook'+hookMatch[1]] || '';
     return [...new Set(hookField.split(',').map(s=>s.trim()).filter(Boolean))];
-  }), 'No baits recorded on your catches yet.');
+  }
+
+  // Which rig performs
+  html += statTable('Which rig lands fish', groupStats(c=>[c.rig]), 'No rigs recorded on your catches yet.');
+
+  // Which bait performs
+  html += statTable('Which bait lands fish', groupStats(catchingBaits), 'No baits recorded on your catches yet.');
 
   // Which bom performs
   html += statTable('Which bom lands fish', groupStats(c=>{
     return [...new Set((c.bom||'').split(',').map(s=>s.trim()).filter(Boolean))];
   }), 'No boms recorded on your catches yet.');
+
+  // Rig + bait combinations — which pairing actually works, not just which
+  // rig or which bait performs on its own
+  html += statTable('Rig + bait combinations', groupStats(c=>{
+    if(!c.rig) return [];
+    return catchingBaits(c).map(b=> c.rig + ' + ' + b);
+  }), 'Need both a rig and a bait on the same catch to show combinations.');
 
   // Species breakdown
   html += statTable('By species', groupStats(c=>[c.type]), 'No species recorded yet.');
