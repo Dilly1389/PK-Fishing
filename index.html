@@ -258,6 +258,10 @@
   label.check-row input[type="checkbox"]{
     width:18px;height:18px;flex-shrink:0;margin:0;padding:0;accent-color:var(--dam);
   }
+  .auth-header{text-align:center;margin-bottom:18px;}
+  .auth-header .auth-icon{font-size:38px;line-height:1;}
+  .auth-header h2{color:var(--dam);font-size:22px;}
+  .field .auth-input{background:var(--paper);border-color:var(--line);}
   .field textarea,.field input,.field select{
     width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;
     font-family:inherit;font-size:16px;resize:vertical;background:var(--card-bg);color:var(--ink);
@@ -541,10 +545,13 @@
       <button type="button" class="mini-btn" id="profile-help-btn" style="margin-bottom:14px;">❓ How the Profile works</button>
 
       <section class="card" id="account-card">
-        <h2>Account</h2>
-
         <div id="auth-forms">
           <div id="signup-form" style="display:none;">
+            <div class="auth-header">
+              <div class="auth-icon">👌</div>
+              <h2 style="margin:6px 0 2px;">PK Fishing</h2>
+              <p class="pc-line muted" style="margin:0;">Create your account</p>
+            </div>
             <div class="field">
               <label>Display Name / Nickname</label>
               <input type="text" maxlength="100" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
@@ -553,15 +560,13 @@
               <label>Country</label>
               <select id="signup-country"></select>
             </div>
-            <div class="row2">
-              <div class="field">
-                <label>Email</label>
-                <input type="email" maxlength="120" id="signup-email" placeholder="you@example.com">
-              </div>
-              <div class="field">
-                <label>Password</label>
-                <input type="password" maxlength="200" id="signup-password" placeholder="At least 6 characters">
-              </div>
+            <div class="field">
+              <label>Email</label>
+              <input type="email" maxlength="120" class="auth-input" id="signup-email" placeholder="you@example.com">
+            </div>
+            <div class="field">
+              <label>Password</label>
+              <input type="password" maxlength="200" class="auth-input" id="signup-password" placeholder="At least 6 characters">
             </div>
             <button class="primary-btn" id="signup-btn">Create account</button>
             <div class="status" id="signup-status"></div>
@@ -571,18 +576,23 @@
           </div>
 
           <div id="signin-form">
+            <div class="auth-header">
+              <div class="auth-icon">👌</div>
+              <h2 style="margin:6px 0 2px;">PK Fishing</h2>
+              <p class="pc-line muted" style="margin:0;">Sign in to your account</p>
+            </div>
             <div class="field">
               <label>Email</label>
-              <input type="email" maxlength="120" id="signin-email" placeholder="you@example.com">
+              <input type="email" maxlength="120" class="auth-input" id="signin-email" placeholder="you@example.com">
             </div>
             <div class="field">
               <label>Password</label>
-              <input type="password" maxlength="200" id="signin-password" placeholder="Password">
+              <input type="password" maxlength="200" class="auth-input" id="signin-password" placeholder="Password">
             </div>
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:12px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:14px;">
               <input type="checkbox" id="keep-signed-in" checked> Keep me signed in on this device
             </label>
-            <button class="primary-btn" id="signin-btn">Sign in</button>
+            <button class="primary-btn" id="signin-btn">Sign In</button>
             <div class="status" id="signin-status"></div>
 
             <div style="display:flex;align-items:center;gap:10px;margin:16px 0;">
@@ -595,9 +605,20 @@
             </button>
             <div class="status" id="google-signin-status"></div>
 
-            <p class="pc-line muted" style="margin-top:14px;text-align:center;">
-              New here? <button type="button" id="show-signup-link" style="background:none;border:none;color:var(--dam);font-weight:700;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;text-decoration:underline;">Create an account</button>
+            <p class="pc-line muted" style="margin-top:16px;text-align:center;">
+              Don't have an account? <button type="button" id="show-signup-link" style="background:none;border:none;color:var(--dam);font-weight:700;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;">Sign Up</button>
             </p>
+            <p class="pc-line muted" style="margin-top:6px;text-align:center;">
+              <button type="button" id="forgot-password-link" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;font-family:inherit;padding:0;text-decoration:underline;">Forgot password?</button>
+            </p>
+            <div id="forgot-password-form" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
+              <p class="pc-line muted" style="margin-bottom:8px;">We'll email you a link to reset your password.</p>
+              <div class="field">
+                <input type="email" maxlength="120" class="auth-input" id="forgot-password-email" placeholder="you@example.com">
+              </div>
+              <button class="mini-btn" id="forgot-password-send-btn">Send reset link</button>
+              <div class="status" id="forgot-password-status"></div>
+            </div>
           </div>
         </div>
 
@@ -611,6 +632,16 @@
       <section class="card" id="my-details-card" style="display:none;">
         <h2>My details</h2>
         <div id="my-details-body">
+          <div class="field" style="text-align:center;">
+            <label>Profile picture</label>
+            <img id="details-avatar-preview" src="" alt="Your profile picture" style="display:none;width:88px;height:88px;border-radius:50%;object-fit:cover;margin:4px auto 10px;border:2px solid var(--line);">
+            <div style="display:flex;gap:8px;justify-content:center;margin-bottom:6px;">
+              <button type="button" class="mini-btn photo-camera-btn" data-target="details-avatar-input">📷 Take Photo</button>
+              <button type="button" class="mini-btn photo-gallery-btn" data-target="details-avatar-input">🖼️ Gallery</button>
+            </div>
+            <div class="photo-filename" data-target="details-avatar-input" style="font-size:12px;color:var(--muted);"></div>
+            <input type="file" accept="image/*" id="details-avatar-input" style="display:none;">
+          </div>
           <div class="field">
             <label>Display Name / Nickname</label>
             <input type="text" maxlength="100" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
@@ -877,6 +908,20 @@
 
       
       <section class="card">
+        <h2>Admin: Tackle Box</h2>
+        <div class="field">
+          <label>Filter by angler (optional)</label>
+          <select id="admin-tackle-angler-filter"><option value="">Everyone</option></select>
+        </div>
+        <div id="admin-tackle-list"><div class="empty">Loading...</div></div>
+      </section>
+
+      <section class="card">
+        <h2>Admin: Rigs</h2>
+        <div id="admin-rigs-list"><div class="empty">Loading...</div></div>
+      </section>
+
+      <section class="card">
         <h2>Admin: Catches</h2>
         <div class="field">
           <label>Angler</label>
@@ -924,8 +969,9 @@
           <div id="tackle-box-share-picker"><div class="empty">No mutual friends yet — you both need to follow each other.</div></div>
         </section>
 
-        <section class="card">
+        <section class="card" id="add-tackle-card">
           <h2>Add tackle item</h2>
+          <div id="add-tackle-body">
           <div class="row2">
             <div class="field">
               <label>Name</label>
@@ -999,6 +1045,7 @@
           </label>
           <button class="primary-btn" id="tackle-add-btn">Add to tackle box</button>
           <div class="status" id="tackle-status"></div>
+          </div>
         </section>
 
         <section class="card">
@@ -1153,6 +1200,25 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="reset-password-modal">
+  <div class="modal-card">
+    <div class="auth-header">
+      <div class="auth-icon">👌</div>
+      <h3 style="margin:6px 0 2px;">Set a new password</h3>
+    </div>
+    <div class="field">
+      <label>New password</label>
+      <input type="password" maxlength="200" class="auth-input" id="reset-password-input" placeholder="At least 6 characters">
+    </div>
+    <div class="field">
+      <label>Confirm password</label>
+      <input type="password" maxlength="200" class="auth-input" id="reset-password-confirm" placeholder="Type it again">
+    </div>
+    <button class="primary-btn" id="reset-password-save-btn">Save new password</button>
+    <div class="status" id="reset-password-status"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="timers-help-modal">
   <div class="modal-card">
     <h3 style="margin-top:0;">⏱️ How Timers works</h3>
@@ -1166,7 +1232,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Running a timer</div>
-      <div class="pc-line muted">Start it when a rod goes out, Reset it when you're done. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
+      <div class="pc-line muted">Start it when a rod goes out. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. It resets automatically once you log a catch or a blank, ready for the next run. Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Logging a catch</div>
@@ -1952,6 +2018,19 @@ function confirmDelete(what){
   return window.confirm('Delete ' + what + '?\n\nThis cannot be undone.');
 }
 
+// A small circular avatar for an angler — their photo if they've set one,
+// otherwise their initial on a coloured circle so every name still has a
+// consistent visual anchor next to it.
+function avatarHtml(person, size){
+  size = size || 32;
+  const name = (person && person.name) ? person.name : '?';
+  const initial = name.trim().charAt(0).toUpperCase() || '?';
+  if(person && person.avatar_url){
+    return `<img src="${escapeHtml(person.avatar_url)}" alt="${escapeHtml(name)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;vertical-align:middle;">`;
+  }
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:var(--dam);color:#fff;font-weight:700;font-size:${Math.round(size*0.45)}px;flex-shrink:0;vertical-align:middle;">${escapeHtml(initial)}</span>`;
+}
+
 function escapeHtml(s){
   return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -1975,6 +2054,14 @@ document.addEventListener('change', (e)=>{
   if(e.target.matches('input[type="file"][id]')){
     const label = document.querySelector('.photo-filename[data-target="'+e.target.id+'"]');
     if(label) label.textContent = e.target.files[0] ? e.target.files[0].name : '';
+    // The avatar field also gets an actual image preview, not just a filename
+    if(e.target.id === 'details-avatar-input' && e.target.files[0]){
+      const preview = document.getElementById('details-avatar-preview');
+      if(preview){
+        preview.src = URL.createObjectURL(e.target.files[0]);
+        preview.style.display = 'inline-block';
+      }
+    }
   }
 });
 
@@ -2409,11 +2496,14 @@ function startGoogleSignIn(){
   window.location.href = AUTH_URL + '/authorize?provider=google&redirect_to=' + redirectTo;
 }
 
+let pendingRecovery = null; // {accessToken, refreshToken} while someone is mid password-reset
+
 async function handleOAuthReturn(){
   if(!window.location.hash || window.location.hash.indexOf('access_token') === -1) return false;
   const params = new URLSearchParams(window.location.hash.substring(1));
   const accessToken = params.get('access_token');
   const refreshToken = params.get('refresh_token');
+  const type = params.get('type');
   if(!accessToken) return false;
   try{
     // Fetch the user record that goes with this token
@@ -2421,10 +2511,18 @@ async function handleOAuthReturn(){
       headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + accessToken }
     });
     const user = await res.json();
-    if(!res.ok || !user.id) throw new Error('Could not verify Google sign-in');
-    saveSession({access_token: accessToken, refresh_token: refreshToken, user});
-    // Clear the tokens out of the address bar
+    if(!res.ok || !user.id) throw new Error('Could not verify sign-in');
+
     history.replaceState(null, '', window.location.pathname + window.location.search);
+
+    if(type === 'recovery'){
+      // A password-reset link — don't sign them in silently. Hold onto the
+      // token only long enough to let them set a new password.
+      pendingRecovery = {accessToken, refreshToken};
+      return 'recovery';
+    }
+
+    saveSession({access_token: accessToken, refresh_token: refreshToken, user});
     return true;
   }catch(e){
     console.error('OAuth return failed', e);
@@ -2552,6 +2650,11 @@ function populateMyDetails(){
   document.getElementById('details-last-name').value = p.last_name || '';
   document.getElementById('details-country').innerHTML = countryOptionsHtml(p.country || '');
   document.getElementById('details-email').value = p.email || '';
+  const avatarPreview = document.getElementById('details-avatar-preview');
+  if(avatarPreview){
+    if(p.avatar_url){ avatarPreview.src = p.avatar_url; avatarPreview.style.display = 'inline-block'; }
+    else{ avatarPreview.style.display = 'none'; }
+  }
   const selected = getTrophySpeciesFor(p);
   const speciesEl = document.getElementById('details-trophy-species');
   if(speciesEl){
@@ -2572,6 +2675,7 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
   const lastName = document.getElementById('details-last-name').value.trim();
   const country = document.getElementById('details-country').value;
   const email = document.getElementById('details-email').value.trim();
+  const avatarInput = document.getElementById('details-avatar-input');
 
   if(!name){ st.textContent = 'Enter a display name.'; return; }
   st.textContent = 'Saving...';
@@ -2580,8 +2684,12 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
       name, email: email || null,
       first_name: firstName || null, last_name: lastName || null, country: country || null
     };
+    if(avatarInput && avatarInput.files[0]){
+      patch.avatar_url = await uploadPhoto(avatarInput.files[0], {maxDim: 400, quality: 0.85});
+    }
     await sbPatch('fishermen', 'id=eq.'+p.id, patch);
     Object.assign(p, patch);
+    avatarInput.value = '';
     populateAnglerSelect();
     st.textContent = 'Saved.';
     setTimeout(()=> st.textContent='', 1500);
@@ -2616,6 +2724,85 @@ document.getElementById('show-signup-link').addEventListener('click', ()=>{
 document.getElementById('show-signin-link').addEventListener('click', ()=>{
   document.getElementById('signup-form').style.display = 'none';
   document.getElementById('signin-form').style.display = 'block';
+});
+
+document.getElementById('forgot-password-link').addEventListener('click', ()=>{
+  const form = document.getElementById('forgot-password-form');
+  const open = form.style.display !== 'none';
+  form.style.display = open ? 'none' : 'block';
+  if(!open){
+    const emailEl = document.getElementById('forgot-password-email');
+    const prefill = document.getElementById('signin-email').value.trim();
+    if(prefill) emailEl.value = prefill;
+    emailEl.focus();
+  }
+});
+document.getElementById('forgot-password-send-btn').addEventListener('click', async ()=>{
+  const emailEl = document.getElementById('forgot-password-email');
+  const st = document.getElementById('forgot-password-status');
+  const email = emailEl.value.trim();
+  if(!email){ st.textContent = 'Enter your email.'; return; }
+  st.textContent = 'Sending...';
+  try{
+    const res = await fetch(AUTH_URL + '/recover', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, redirect_to: window.location.origin + window.location.pathname })
+    });
+    // Supabase intentionally doesn't reveal whether the email exists, to
+    // avoid leaking who has an account — so this message is always the same
+    if(res.ok){
+      st.textContent = 'If that email has an account, a reset link is on its way.';
+    }else{
+      const data = await res.json().catch(()=>({}));
+      st.textContent = data.msg || data.error_description || 'Could not send reset email right now — try again shortly.';
+    }
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not send reset email: ' + (e.message || 'unknown error');
+  }
+});
+
+document.getElementById('reset-password-save-btn').addEventListener('click', async ()=>{
+  const st = document.getElementById('reset-password-status');
+  const pw = document.getElementById('reset-password-input').value;
+  const confirm = document.getElementById('reset-password-confirm').value;
+  if(!pendingRecovery){ st.textContent = 'This reset link has expired — request a new one.'; return; }
+  if(pw.length < 6){ st.textContent = 'Password must be at least 6 characters.'; return; }
+  if(pw !== confirm){ st.textContent = 'Passwords don\'t match.'; return; }
+  st.textContent = 'Saving...';
+  try{
+    const res = await fetch(AUTH_URL + '/user', {
+      method: 'PUT',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + pendingRecovery.accessToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ password: pw })
+    });
+    const user = await res.json();
+    if(!res.ok) throw new Error(user.msg || user.error_description || 'Could not update password');
+
+    // Password's set — sign them straight in with the same token
+    setKeepSignedIn(true);
+    saveSession({access_token: pendingRecovery.accessToken, refresh_token: pendingRecovery.refreshToken, user});
+    pendingRecovery = null;
+    document.getElementById('reset-password-modal').classList.remove('open');
+    st.textContent = '';
+
+    await loadPeople();
+    renderAccountArea();
+    await loadGearOptions();
+    await loadTackleCategoryOptions();
+    await loadFollowedIds();
+    populateAnglerSelect();
+    const myId = getMyFishermanId();
+    if(myId) await setActivePerson(myId);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+  }
 });
 
 document.getElementById('signup-btn').addEventListener('click', async ()=>{
@@ -2756,7 +2943,7 @@ document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,trophy_species,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,trophy_species,avatar_url,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -3922,7 +4109,6 @@ function rodCardHtml(r){
         <div class="bobber" id="bobber-${r}"><div class="time mono" id="time-${r}">00:00:00</div></div>
         <div class="bobber-controls">
           <button class="btn btn-start" data-rod="${r}" data-action="start">Start</button>
-          <button class="btn btn-reset" data-rod="${r}" data-action="reset">Reset</button>
           <span class="start-time-label" id="start-time-${r}"></span>
         </div>
       </div>
@@ -4840,6 +5026,7 @@ function buildInsightsHtml(catches, venues, sessions){
       const ended = s.ended_at ? new Date(s.ended_at) : null;
       const durationMs = ended ? (ended - started) : (Date.now() - started);
       return {
+        id: s.id,
         name: s.venue_name || 'Session',
         when: started.toLocaleDateString([], {month:'short', day:'numeric', year:'numeric'}),
         count: sc.length,
@@ -4871,6 +5058,7 @@ function buildInsightsHtml(catches, venues, sessions){
           <span class="pill">${s.count} fish</span>
           ${s.weight ? `<span class="pill">${s.weight.toFixed(1)}kg</span>` : ''}
           <span class="pill">${fmtDuration(s.duration)}</span>
+          <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Delete</button>
         </div>
       </li>`;
     });
@@ -4907,6 +5095,26 @@ async function openInsights(){
   const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
   body.innerHTML = buildInsightsHtml(rec && rec.catches ? rec.catches : [], venues, sessions);
   renderVenueMap(venues);
+
+  body.querySelectorAll('[data-delete-session]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.deleteSession;
+      if(!confirmDelete('this session (the catches logged in it are kept)')) return;
+      try{
+        await sbDelete('sessions', 'id=eq.'+id);
+        // If that was the session currently showing on Timers, clear it too
+        if(activeSession && activeSession.id === id){
+          activeSession = null;
+          await renderSessionUi();
+          renderActiveCompetitionsBar();
+        }
+        await openInsights();
+      }catch(e){
+        console.error(e);
+        alert('Could not delete: ' + (e.message || 'unknown error'));
+      }
+    });
+  });
 }
 
 let venueMapInstance = null;
@@ -5122,7 +5330,7 @@ async function openProfile(personId){
   });
   const photoTypes = [...new Set(photoEntries.map(e=>e.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 
-  let html = `<h3>${escapeHtml(p.name)}</h3>`;
+  let html = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">${avatarHtml(p, 56)}<h3 style="margin:0;">${escapeHtml(p.name)}</h3></div>`;
   const myFishermanId = getMyFishermanId();
   if(isSignedIn() && myFishermanId && myFishermanId !== p.id){
     html += `<button class="mini-btn" id="profile-follow-btn" data-id="${p.id}" style="margin-bottom:10px;">Follow</button>`;
@@ -5704,6 +5912,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn=>{
         const hookSel = document.getElementById('rig-hook-count');
         if(hookSel && !hookSel.options.length) hookSel.innerHTML = hookCountOptionsHtml(2);
         renderRigsList();
+        makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
       }
     }
     if(btn.dataset.tab==='admin') renderAdminTab();
@@ -5847,7 +6056,7 @@ async function renderLeaderboard(){
           c.photos.forEach((src,idx)=> bagPhotos.push({src, catchId:c.id, index:idx}));
         }
       });
-      return {id:p.id, name:p.name, dam:p.dam, count:catches.length, totalWeight, biggest, likes:p.likes||0, bagPhotos};
+      return {id:p.id, name:p.name, dam:p.dam, avatar_url:p.avatar_url, count:catches.length, totalWeight, biggest, likes:p.likes||0, bagPhotos};
     });
 
   const sortMode = document.getElementById('lb-sort-mode').value;
@@ -5873,6 +6082,7 @@ async function renderLeaderboard(){
     return `
     <div class="lb-item">
       <div class="lb-rank">${i+1}</div>
+      ${avatarHtml(s, 32)}
       ${photoStrip}
       <div>
         ${IS_SPECTATOR
@@ -5924,6 +6134,7 @@ async function loadFeedItems(fishermanIds){
         id: c.id,
         fishermanId: c.fisherman_id,
         fishermanName: p ? p.name : 'Unknown',
+        fishermanAvatar: p ? p.avatar_url : null,
         dam: p ? p.dam : '',
         rod: c.rod,
         rodIdentifier: c.rod_identifier || '',
@@ -5952,7 +6163,7 @@ function renderMyFriendsList(){
     return;
   }
   listEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;">` +
-    friends.map(p => `<button type="button" class="mini-btn feed-angler-btn" data-id="${p.id}">${escapeHtml(p.name)}</button>`).join('') +
+    friends.map(p => `<button type="button" class="mini-btn feed-angler-btn" data-id="${p.id}" style="display:inline-flex;align-items:center;gap:6px;">${avatarHtml(p, 20)}${escapeHtml(p.name)}</button>`).join('') +
     `</div>`;
   listEl.querySelectorAll('.feed-angler-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> openProfile(btn.dataset.id));
@@ -6016,7 +6227,7 @@ async function renderFeed(refetch){
         `</div>`
       : '';
     return `<div class="profile-catch">
-      <div class="pc-head">${escapeHtml(it.fishermanName)}${feedRodLabel(it)}</div>
+      <div class="pc-head" style="display:flex;align-items:center;gap:8px;">${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 24)}${escapeHtml(it.fishermanName)}${feedRodLabel(it)}</div>
       <div class="pc-line">${escapeHtml(it.type||'Fish')} — <b>${it.weight}kg</b></div>
       <div class="pc-line muted">${escapeHtml(it.dam||'')} · ${formatTimeAgo(it.time)}${it.likes ? ' · 👌'+it.likes : ''}</div>
       ${photoHtml}
@@ -6382,8 +6593,104 @@ async function renderAdminTab(){
   document.getElementById('admin-catch-select').innerHTML = '<option value="">Choose an angler first...</option>';
   document.getElementById('admin-catch-select').disabled = true;
   document.getElementById('admin-catch-editor').style.display = 'none';
+
+  // Tackle Box — every item across every angler, admin sees it all via RLS
+  const tackleFilterSel = document.getElementById('admin-tackle-angler-filter');
+  const currentTackleFilter = tackleFilterSel.value;
+  tackleFilterSel.innerHTML = '<option value="">Everyone</option>' +
+    people.slice().sort((a,b)=>a.name.localeCompare(b.name))
+      .map(p=>`<option value="${p.user_id||''}">${escapeHtml(p.name)}</option>`).join('');
+  if([...tackleFilterSel.options].some(o=>o.value===currentTackleFilter)) tackleFilterSel.value = currentTackleFilter;
+  await renderAdminTackleList();
+
+  // Rigs — same idea, every rig regardless of who's ticked "Use" on it
+  await renderAdminRigsList();
 }
 
+async function renderAdminTackleList(){
+  const el = document.getElementById('admin-tackle-list');
+  if(!el) return;
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  const filterUser = document.getElementById('admin-tackle-angler-filter').value;
+  try{
+    let query = 'tackle_items?select=id,name,brand,category,bait_type,owner_user_id,is_shared,has_photo&order=category.asc,name.asc';
+    if(filterUser) query += '&owner_user_id=eq.'+filterUser;
+    const items = await sbGet(query);
+    if(items.length === 0){ el.innerHTML = '<div class="empty">No tackle items match this filter.</div>'; return; }
+    el.innerHTML = '<ul class="people-list">' + items.map(it=>{
+      const owner = people.find(p=>p.user_id===it.owner_user_id);
+      return `<li>
+        <div class="who">
+          <b>${escapeHtml(it.name)}</b>
+          <span class="pill">${escapeHtml(it.category||'Other')}</span>
+          ${it.brand ? `<span class="pill">${escapeHtml(it.brand)}</span>` : ''}
+          ${it.is_shared ? `<span class="pill">Shared with everyone</span>` : ''}
+        </div>
+        <div class="actions">
+          <span class="pc-line muted" style="margin-right:6px;">${escapeHtml(owner ? owner.name : 'Unknown owner')}</span>
+          <button type="button" class="mini-btn danger" data-admin-tackle-remove="${it.id}">Remove</button>
+        </div>
+      </li>`;
+    }).join('') + '</ul>';
+    el.querySelectorAll('[data-admin-tackle-remove]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if(!confirmDelete('this tackle item')) return;
+        try{
+          await sbDelete('tackle_items', 'id=eq.'+btn.dataset.adminTackleRemove);
+          renderAdminTackleList();
+        }catch(e){
+          console.error(e);
+          alert('Could not delete: ' + (e.message || 'unknown error'));
+        }
+      });
+    });
+  }catch(e){
+    console.error(e);
+    el.innerHTML = '<div class="empty">Could not load tackle items.</div>';
+  }
+}
+
+async function renderAdminRigsList(){
+  const el = document.getElementById('admin-rigs-list');
+  if(!el) return;
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  try{
+    const rigs = await sbGet('rigs?select=id,name,brand,uses_bom,hook_count,creator_user_id,has_photo&order=name.asc');
+    if(rigs.length === 0){ el.innerHTML = '<div class="empty">No rigs built yet.</div>'; return; }
+    el.innerHTML = '<ul class="people-list">' + rigs.map(r=>{
+      const creator = people.find(p=>p.user_id===r.creator_user_id);
+      return `<li>
+        <div class="who">
+          <b>${escapeHtml(r.name)}</b>
+          ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
+          <span class="pill">Bom: ${r.uses_bom ? 'Yes' : 'No'}</span>
+          <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
+        </div>
+        <div class="actions">
+          <span class="pc-line muted" style="margin-right:6px;">${escapeHtml(creator ? creator.name : 'Unknown creator')}</span>
+          <button type="button" class="mini-btn danger" data-admin-rig-remove="${r.id}">Remove</button>
+        </div>
+      </li>`;
+    }).join('') + '</ul>';
+    el.querySelectorAll('[data-admin-rig-remove]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if(!confirmDelete('this rig')) return;
+        try{
+          await sbDelete('rigs', 'id=eq.'+btn.dataset.adminRigRemove);
+          renderAdminRigsList();
+        }catch(e){
+          console.error(e);
+          alert('Could not delete: ' + (e.message || 'unknown error'));
+        }
+      });
+    });
+  }catch(e){
+    console.error(e);
+    el.innerHTML = '<div class="empty">Could not load rigs.</div>';
+  }
+}
+
+document.getElementById('admin-tackle-angler-filter').addEventListener('change', renderAdminTackleList);
 document.getElementById('admin-user-select').addEventListener('change', (e)=>{
   document.getElementById('admin-user-actions').style.display = e.target.value ? 'block' : 'none';
 });
@@ -6604,8 +6911,12 @@ async function renderSpectatorCompetition(compId){
     }
     return;
   }
-  // A Google sign-in lands back here with tokens in the URL — handle that first
+  // A Google sign-in — or a password reset link — lands back here with
+  // tokens in the URL. Handle that first, before anything else runs.
   const cameFromOAuth = await handleOAuthReturn();
+  if(cameFromOAuth === 'recovery'){
+    document.getElementById('reset-password-modal').classList.add('open');
+  }
   if(!cameFromOAuth) loadSessionFromStorage();
   try{
     const keepEl = document.getElementById('keep-signed-in');
@@ -6616,7 +6927,7 @@ async function renderSpectatorCompetition(compId){
   renderAccountArea();
   await loadPeople();
   let oauthProfile = null;
-  if(cameFromOAuth) oauthProfile = await ensureProfileForCurrentUser();
+  if(cameFromOAuth && cameFromOAuth !== 'recovery') oauthProfile = await ensureProfileForCurrentUser();
   renderAccountArea();
   await loadKnownRodOptions();
   await loadKnownRigs();
