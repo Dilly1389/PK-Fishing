@@ -892,70 +892,79 @@
 
     <!-- ADMIN -->
     <div class="panel" id="panel-admin">
-      <section class="card">
+      <section class="card" id="admin-users-card">
         <h2>Admin: Users</h2>
-        <div class="field">
-          <label>Select angler</label>
-          <select id="admin-user-select"><option value="">Choose...</option></select>
-        </div>
-        <div id="admin-user-actions" style="display:none;">
-          <button class="mini-btn" id="admin-user-view-btn">View / edit profile</button>
+        <div id="admin-users-body">
+          <div class="field">
+            <label>Select angler</label>
+            <select id="admin-user-select"><option value="">Choose...</option></select>
+          </div>
+          <div id="admin-user-actions" style="display:none;">
+            <button class="mini-btn" id="admin-user-view-btn">View / edit profile</button>
+          </div>
         </div>
       </section>
 
-      <section class="card">
+      <section class="card" id="admin-competitions-card">
         <h2>Admin: Competitions</h2>
-        <div class="field">
-          <label>Select competition</label>
-          <select id="admin-competition-select"><option value="">Choose...</option></select>
+        <div id="admin-competitions-body">
+          <div class="field">
+            <label>Select competition</label>
+            <select id="admin-competition-select"><option value="">Choose...</option></select>
+          </div>
+          <div id="admin-competition-info" class="pc-line muted"></div>
+          <button class="mini-btn danger" id="admin-competition-delete-btn" style="display:none;margin-top:8px;">Delete competition</button>
         </div>
-        <div id="admin-competition-info" class="pc-line muted"></div>
-        <button class="mini-btn danger" id="admin-competition-delete-btn" style="display:none;margin-top:8px;">Delete competition</button>
       </section>
 
-      
-      <section class="card">
+      <section class="card" id="admin-tackle-card">
         <h2>Admin: Tackle Box</h2>
-        <div class="field">
-          <label>Filter by angler (optional)</label>
-          <select id="admin-tackle-angler-filter"><option value="">Everyone</option></select>
+        <div id="admin-tackle-card-body">
+          <div class="field">
+            <label>Filter by angler (optional)</label>
+            <select id="admin-tackle-angler-filter"><option value="">Everyone</option></select>
+          </div>
+          <div id="admin-tackle-list"><div class="empty">Loading...</div></div>
         </div>
-        <div id="admin-tackle-list"><div class="empty">Loading...</div></div>
       </section>
 
-      <section class="card">
+      <section class="card" id="admin-rigs-card">
         <h2>Admin: Rigs</h2>
-        <div id="admin-rigs-list"><div class="empty">Loading...</div></div>
+        <div id="admin-rigs-card-body">
+          <div id="admin-rigs-list"><div class="empty">Loading...</div></div>
+        </div>
       </section>
 
-      <section class="card">
+      <section class="card" id="admin-catches-card">
         <h2>Admin: Catches</h2>
-        <div class="field">
-          <label>Angler</label>
-          <select id="admin-catch-angler-select"><option value="">Choose...</option></select>
-        </div>
-        <div class="field">
-          <label>Catch</label>
-          <select id="admin-catch-select" disabled><option value="">Choose an angler first...</option></select>
-        </div>
-        <div id="admin-catch-editor" style="display:none;margin-top:10px;">
-          <div class="catch-toggle" id="admin-catch-caught-toggle">
-            <button type="button" class="sel-yes" data-yn="yes">Caught a fish</button>
-            <button type="button" class="sel-no" data-yn="no">No catch</button>
+        <div id="admin-catches-body">
+          <div class="field">
+            <label>Angler</label>
+            <select id="admin-catch-angler-select"><option value="">Choose...</option></select>
           </div>
-          <div class="row2">
-            <div class="field">
-              <label>Type</label>
-              <input type="text" maxlength="100" id="admin-catch-type" placeholder="e.g. Carp" autocomplete="off">
-            </div>
-            <div class="field">
-              <label>Weight (kg)</label>
-              <input type="number" step="0.01" min="0" max="500" id="admin-catch-weight">
-            </div>
+          <div class="field">
+            <label>Catch</label>
+            <select id="admin-catch-select" disabled><option value="">Choose an angler first...</option></select>
           </div>
-          <button class="primary-btn" id="admin-catch-save-btn">Save changes</button>
-          <div class="status" id="admin-catch-status"></div>
-          <button class="mini-btn danger" id="admin-catch-delete-btn" style="margin-top:10px;">Delete this catch</button>
+          <div id="admin-catch-editor" style="display:none;margin-top:10px;">
+            <div class="catch-toggle" id="admin-catch-caught-toggle">
+              <button type="button" class="sel-yes" data-yn="yes">Caught a fish</button>
+              <button type="button" class="sel-no" data-yn="no">No catch</button>
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label>Type</label>
+                <input type="text" maxlength="100" id="admin-catch-type" placeholder="e.g. Carp" autocomplete="off">
+              </div>
+              <div class="field">
+                <label>Weight (kg)</label>
+                <input type="number" step="0.01" min="0" max="500" id="admin-catch-weight">
+              </div>
+            </div>
+            <button class="primary-btn" id="admin-catch-save-btn">Save changes</button>
+            <div class="status" id="admin-catch-status"></div>
+            <button class="mini-btn danger" id="admin-catch-delete-btn" style="margin-top:10px;">Delete this catch</button>
+          </div>
         </div>
       </section>
     </div>
@@ -1324,14 +1333,15 @@
 </div>
 
 <div class="modal-overlay" id="photo-modal">
-  <div class="modal-card" style="max-width:92vw;max-height:88vh;overflow-y:auto;padding:12px;text-align:center;">
+  <div class="modal-card" style="max-width:92vw;max-height:88vh;overflow-y:auto;padding:12px;text-align:center;position:relative;">
+    <button type="button" id="photo-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <img id="photo-modal-img" src="" alt="Catch photo" style="max-width:100%;max-height:60vh;border-radius:10px;display:block;margin:0 auto;touch-action:pan-y;">
     <div id="photo-modal-nav" style="display:none;justify-content:space-between;align-items:center;margin-top:8px;">
       <button type="button" id="photo-prev-btn" class="mini-btn">‹ Prev</button>
       <span id="photo-modal-counter" style="font-size:12px;color:var(--muted);"></span>
       <button type="button" id="photo-next-btn" class="mini-btn">Next ›</button>
     </div>
-    <div id="photo-like-wrap" style="margin-top:12px;"></div>
+    <div id="photo-like-wrap" style="margin-top:8px;text-align:left;"></div>
     <div id="photo-comment-section" style="text-align:left;margin-top:14px;display:none;">
       <p class="sub-heading" style="margin-bottom:8px;">Comments on this catch</p>
       <div class="field" id="photo-comment-author-wrap">
@@ -1344,7 +1354,6 @@
       <div class="status" id="photo-comment-status"></div>
       <div id="photo-comments-list" style="margin-top:10px;"></div>
     </div>
-    <button class="primary-btn" id="photo-modal-close" style="margin-top:14px;background:var(--khaki);color:var(--ink);">Close</button>
   </div>
 </div>
 
@@ -5034,6 +5043,7 @@ function buildInsightsHtml(catches, venues, sessions){
       const rigTally = {};
       atVenue.forEach(c=>{ if(c.rig){ rigTally[c.rig] = (rigTally[c.rig]||0)+1; } });
       const bestRig = Object.keys(rigTally).sort((a,b)=>rigTally[b]-rigTally[a])[0];
+      const venueObj = (venues||[]).find(v=>v.name === r.key);
       html += `<li>
         <div class="who">
           <b>${escapeHtml(r.key)}</b>
@@ -5043,6 +5053,7 @@ function buildInsightsHtml(catches, venues, sessions){
           <span class="pill">${r.count} fish</span>
           <span class="pill">${r.weight.toFixed(1)}kg</span>
           ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
+          ${venueObj ? `<button type="button" class="mini-btn danger" data-delete-venue="${venueObj.id}">Remove</button>` : ''}
         </div>
       </li>`;
     });
@@ -5140,6 +5151,20 @@ async function openInsights(){
           await renderSessionUi();
           renderActiveCompetitionsBar();
         }
+        await openInsights();
+      }catch(e){
+        console.error(e);
+        alert('Could not delete: ' + (e.message || 'unknown error'));
+      }
+    });
+  });
+
+  body.querySelectorAll('[data-delete-venue]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirmDelete('this venue (your catches are kept, just unlinked from it)')) return;
+      try{
+        await sbDelete('venues', 'id=eq.'+btn.dataset.deleteVenue);
+        // Re-rendering from scratch also rebuilds the map, so the pin goes with it
         await openInsights();
       }catch(e){
         console.error(e);
@@ -5604,7 +5629,7 @@ function openPhotoModal(src, catchId, index){
   }
   document.getElementById('photo-modal').classList.add('open');
 }
-document.getElementById('photo-modal-close').addEventListener('click', ()=>{
+document.getElementById('photo-modal-x').addEventListener('click', ()=>{
   document.getElementById('photo-modal').classList.remove('open');
 });
 document.getElementById('photo-modal').addEventListener('click', (e)=>{
@@ -6620,6 +6645,12 @@ async function renderCompetitions(){
 // ---------- Admin tab ----------
 async function renderAdminTab(){
   if(!isSuperUser()) return;
+
+  makeCardCollapsible('admin-users-card', 'admin-users-body', 'pk_fishing_collapse_admin_users');
+  makeCardCollapsible('admin-competitions-card', 'admin-competitions-body', 'pk_fishing_collapse_admin_comps');
+  makeCardCollapsible('admin-tackle-card', 'admin-tackle-card-body', 'pk_fishing_collapse_admin_tackle');
+  makeCardCollapsible('admin-rigs-card', 'admin-rigs-card-body', 'pk_fishing_collapse_admin_rigs');
+  makeCardCollapsible('admin-catches-card', 'admin-catches-body', 'pk_fishing_collapse_admin_catches');
 
   // Users
   const userSel = document.getElementById('admin-user-select');
