@@ -536,6 +536,8 @@
           </div>
         </div>
 
+        <div id="session-weather-bar" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:13px;color:var(--ink);"></div>
+
         <div id="rod-cards"></div>
       </div>
     </div>
@@ -2279,7 +2281,13 @@ function buildCatchPayload(personId, entry){
     longitude: entry.longitude != null ? entry.longitude : null,
     venue_id: entry.venueId || null,
     session_id: entry.sessionId || null,
-    competition_id: entry.competitionId || null
+    competition_id: entry.competitionId || null,
+    weather_temp: entry.weather ? entry.weather.temp : null,
+    weather_wind_speed: entry.weather ? entry.weather.windSpeed : null,
+    weather_wind_dir: entry.weather ? entry.weather.windDir : null,
+    weather_cloud_cover: entry.weather ? entry.weather.cloudCover : null,
+    weather_pressure: entry.weather ? entry.weather.pressure : null,
+    moon_phase: entry.moonPhase || null
   };
   for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = entry['hook'+i] || ''; }
   return payload;
@@ -4047,6 +4055,7 @@ async function loadPerson(id){
         rodIdentifier: c.rod_identifier || '',
         venueId: c.venue_id || null,
         hasKnownTime: c.has_known_time !== false,
+        moonPhase: c.moon_phase || null,
         sessionId: c.session_id || null,
         photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
         likes: c.likes || 0
@@ -4391,6 +4400,51 @@ function capturePosition(){
   });
 }
 
+// ---------- Weather & moon phase ----------
+// Open-Meteo — free, no API key, no backend needed. Same reasoning that
+// led us to it over Windy: nothing to expose in a public client-side app.
+async function fetchWeather(lat, lng){
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,surface_pressure`;
+    const res = await fetch(url);
+    if(!res.ok) return null;
+    const data = await res.json();
+    const c = data.current;
+    if(!c) return null;
+    return {
+      temp: c.temperature_2m,
+      windSpeed: c.wind_speed_10m,
+      windDir: c.wind_direction_10m,
+      cloudCover: c.cloud_cover,
+      pressure: c.surface_pressure
+    };
+  }catch(e){ console.error('fetchWeather failed', e); return null; }
+}
+
+function windDirLabel(deg){
+  if(deg == null) return '';
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(deg/45) % 8];
+}
+
+// Pure date math — no API needed. Based on a known new moon reference date.
+function moonPhase(date){
+  date = date || new Date();
+  const synodicMonth = 29.53058867;
+  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14); // Jan 6 2000, a known new moon
+  const daysSince = (date.getTime() - knownNewMoon) / 86400000;
+  const phase = ((daysSince % synodicMonth) + synodicMonth) % synodicMonth;
+  const pct = phase / synodicMonth;
+  if(pct < 0.03 || pct > 0.97) return {label:'New Moon', emoji:'🌑'};
+  if(pct < 0.22) return {label:'Waxing Crescent', emoji:'🌒'};
+  if(pct < 0.28) return {label:'First Quarter', emoji:'🌓'};
+  if(pct < 0.47) return {label:'Waxing Gibbous', emoji:'🌔'};
+  if(pct < 0.53) return {label:'Full Moon', emoji:'🌕'};
+  if(pct < 0.72) return {label:'Waning Gibbous', emoji:'🌖'};
+  if(pct < 0.78) return {label:'Last Quarter', emoji:'🌗'};
+  return {label:'Waning Crescent', emoji:'🌘'};
+}
+
 // Rough distance in metres between two coordinates
 function distanceMeters(a, b){
   const R = 6371000;
@@ -4514,14 +4568,54 @@ async function renderSessionUi(){
       activeRodsSel.innerHTML = rodsOptionsHtml(rods);
       activeRodsSel.value = String(rods);
     }
+    renderSessionWeather();
   }else{
     setup.style.display = 'block';
     bar.style.display = 'none';
     rodCards.style.display = 'none';
+    document.getElementById('session-weather-bar').style.display = 'none';
     const rodsSel = document.getElementById('session-rods');
     if(rodsSel && !rodsSel.options.length) rodsSel.innerHTML = rodsOptionsHtml(1);
     await renderActiveCompetitionsBar();
   }
+}
+
+// Cached per session, so switching tabs or re-rendering doesn't refetch
+let weatherCache = {sessionId: null, weather: null, moon: null};
+async function renderSessionWeather(){
+  const el = document.getElementById('session-weather-bar');
+  if(!el || !activeSession) return;
+
+  if(weatherCache.sessionId !== activeSession.id){
+    let coords = null;
+    // Prefer the session's actual venue coordinates over a fresh GPS read —
+    // more consistent, and doesn't need another permission prompt
+    if(activeSession.venue_id){
+      try{
+        const venues = await loadMyVenues();
+        const v = venues.find(x=>x.id===activeSession.venue_id);
+        if(v && v.latitude != null && v.longitude != null) coords = {lat:v.latitude, lng:v.longitude};
+      }catch(e){ console.error(e); }
+    }
+    if(!coords) coords = await capturePosition();
+    const weather = coords ? await fetchWeather(coords.lat, coords.lng) : null;
+    weatherCache = {sessionId: activeSession.id, weather, moon: moonPhase()};
+  }
+
+  const {weather, moon} = weatherCache;
+  if(!weather && !moon){ el.style.display = 'none'; return; }
+
+  const parts = [];
+  if(weather){
+    if(weather.temp != null) parts.push(`${Math.round(weather.temp)}°C`);
+    if(weather.windSpeed != null) parts.push(`💨 ${Math.round(weather.windSpeed)}km/h ${windDirLabel(weather.windDir)}`);
+    if(weather.cloudCover != null) parts.push(`☁️ ${Math.round(weather.cloudCover)}%`);
+    if(weather.pressure != null) parts.push(`${Math.round(weather.pressure)}hPa`);
+  }
+  if(moon) parts.push(`${moon.emoji} ${moon.label}`);
+
+  el.style.display = 'block';
+  el.textContent = parts.join(' · ');
 }
 
 document.getElementById('session-start-btn').addEventListener('click', async ()=>{
@@ -4832,7 +4926,14 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
     if(activeSession){
       entry.sessionId = activeSession.id;
       entry.competitionId = activeSession.competition_id || null;
+      // Reuse whatever we already fetched for the session bar — no need
+      // for a second weather API call just to log the catch
+      if(weatherCache.sessionId === activeSession.id){
+        entry.weather = weatherCache.weather;
+        entry.moonPhase = weatherCache.moon ? weatherCache.moon.label : null;
+      }
     }
+    if(!entry.moonPhase) entry.moonPhase = moonPhase().label;
     const coords = await capturePosition();
     if(coords){
       entry.latitude = coords.lat;
@@ -5059,6 +5160,10 @@ function buildInsightsHtml(catches, venues, sessions){
 
   // Species breakdown
   html += statTable('By species', groupStats(c=>[c.type]), 'No species recorded yet.');
+
+  // By moon phase — only catches logged since this feature was added will
+  // have this, so it'll fill in gradually rather than showing everything
+  html += statTable('By moon phase', groupStats(c=> c.moonPhase ? [c.moonPhase] : []), 'No moon phase data yet — this fills in as you log new catches.');
 
   // Best time of day — only catches with a real time count here. A past
   // catch logged with just a date defaults to noon internally so the date
