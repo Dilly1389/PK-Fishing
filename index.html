@@ -5631,8 +5631,12 @@ async function renderPhotoLike(errorMsg){
   const myName = isSignedIn() ? (people.find(p=>p.user_id===session.user.id)||{}).name : null;
   const alreadyLiked = myName ? likers.includes(myName) : false;
 
-  wrap.innerHTML = `<button class="lb-like-btn ${alreadyLiked?'liked':''}" id="photo-like-btn" title="${alreadyLiked ? 'Tap to remove your Lekker' : 'Tap to give this a Lekker'}">👌 <span class="lb-like-count">${likers.length}</span></button>` +
-    (errorMsg ? `<div class="status" style="margin-top:6px;color:#c04;">${escapeHtml(errorMsg)}</div>` : '');
+  wrap.innerHTML = `
+    <button class="lb-like-btn ${alreadyLiked?'liked':''}" id="photo-like-btn" title="${alreadyLiked ? 'Tap to remove your Lekker' : 'Tap to give this a Lekker'}">👌</button>
+    <button type="button" class="lb-like-count" id="photo-like-count-btn" style="background:none;border:none;cursor:${likers.length ? 'pointer' : 'default'};font-family:inherit;font-size:inherit;color:inherit;padding:0;text-decoration:${likers.length ? 'underline' : 'none'};">${likers.length}</button>
+    <div id="photo-likers-list" style="display:none;margin-top:4px;"></div>
+    ${errorMsg ? `<div class="status" style="margin-top:6px;color:#c04;">${escapeHtml(errorMsg)}</div>` : ''}
+  `;
   const btn = document.getElementById('photo-like-btn');
   if(btn){
     btn.addEventListener('click', async ()=>{
@@ -5641,6 +5645,21 @@ async function renderPhotoLike(errorMsg){
         await unlikeCurrentPhoto(catchId);
       }else{
         await likeCurrentPhoto(catchId);
+      }
+    });
+  }
+  const countBtn = document.getElementById('photo-like-count-btn');
+  if(countBtn && likers.length){
+    countBtn.addEventListener('click', ()=>{
+      const listEl = document.getElementById('photo-likers-list');
+      if(!listEl) return;
+      const open = listEl.style.display !== 'none';
+      if(open){
+        listEl.style.display = 'none';
+      }else{
+        listEl.textContent = 'Liked by ' + likers.join(', ');
+        listEl.className = 'pc-line muted';
+        listEl.style.display = 'block';
       }
     });
   }
