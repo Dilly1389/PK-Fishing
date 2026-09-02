@@ -462,7 +462,7 @@
 </head>
 <body>
 <div class="app">
-  <header class="top">
+  <header class="top" id="app-header">
     <h1>👌 PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
     <button id="notif-bell" aria-label="Notifications" style="display:none;">
       🔔<span id="notif-badge" style="display:none;"></span>
@@ -554,7 +554,7 @@
             </div>
             <div class="field">
               <label>Display Name / Nickname</label>
-              <input type="text" maxlength="100" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
+              <input type="text" maxlength="100" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call" autocomplete="off">
             </div>
             <div class="field">
               <label>Country</label>
@@ -644,16 +644,16 @@
           </div>
           <div class="field">
             <label>Display Name / Nickname</label>
-            <input type="text" maxlength="100" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call">
+            <input type="text" maxlength="100" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call" autocomplete="off">
           </div>
           <div class="row2">
             <div class="field">
               <label>Name</label>
-              <input type="text" maxlength="100" id="details-first-name" placeholder="First name">
+              <input type="text" maxlength="100" id="details-first-name" placeholder="First name" autocomplete="off">
             </div>
             <div class="field">
               <label>Surname</label>
-              <input type="text" maxlength="100" id="details-last-name" placeholder="Surname">
+              <input type="text" maxlength="100" id="details-last-name" placeholder="Surname" autocomplete="off">
             </div>
           </div>
           <div class="field">
@@ -663,7 +663,7 @@
           <p class="pc-line muted" style="margin-top:-6px;margin-bottom:12px;">Name, surname, and country are private — only you can see them here, never shown publicly.</p>
           <div class="field">
             <label>Email</label>
-            <input type="email" maxlength="120" id="details-email" placeholder="you@example.com">
+            <input type="email" maxlength="120" id="details-email" placeholder="you@example.com" autocomplete="off">
           </div>
           <button class="primary-btn" id="details-save-btn">Save details</button>
           <div class="status" id="details-save-status"></div>
@@ -744,7 +744,7 @@
         <button class="mini-btn danger" id="delete-account-btn">Delete everything</button>
         <div id="delete-account-confirm" style="display:none;margin-top:10px;">
           <p class="pc-line" style="color:#c04;">Type <b>DELETE</b> below to confirm.</p>
-          <input type="text" maxlength="100" id="delete-account-confirm-input" placeholder="DELETE" style="margin-bottom:8px;">
+          <input type="text" maxlength="100" id="delete-account-confirm-input" placeholder="DELETE" style="margin-bottom:8px;" autocomplete="off">
           <div class="row2">
             <button class="mini-btn" id="delete-account-cancel-btn">Cancel</button>
             <button class="mini-btn danger" id="delete-account-final-btn">Permanently delete</button>
@@ -814,11 +814,11 @@
         <div class="row2">
           <div class="field">
             <label>Name</label>
-            <input type="text" maxlength="100" id="competition-name" placeholder="e.g. October Weekend">
+            <input type="text" maxlength="100" id="competition-name" placeholder="e.g. October Weekend" autocomplete="off">
           </div>
           <div class="field">
             <label>Venue</label>
-            <input type="text" maxlength="100" id="competition-dam" placeholder="Where is it being fished?">
+            <input type="text" maxlength="100" id="competition-dam" placeholder="Where is it being fished?" autocomplete="off">
           </div>
         </div>
         <div class="row2">
@@ -939,7 +939,7 @@
           <div class="row2">
             <div class="field">
               <label>Type</label>
-              <input type="text" maxlength="100" id="admin-catch-type" placeholder="e.g. Carp">
+              <input type="text" maxlength="100" id="admin-catch-type" placeholder="e.g. Carp" autocomplete="off">
             </div>
             <div class="field">
               <label>Weight (kg)</label>
@@ -975,7 +975,7 @@
           <div class="row2">
             <div class="field">
               <label>Name</label>
-              <input type="text" maxlength="100" id="tackle-name" list="tackle-name-suggestions" placeholder="e.g. Size 6 Barbel hook">
+              <input type="text" maxlength="100" id="tackle-name" list="tackle-name-suggestions" placeholder="e.g. Size 6 Barbel hook" autocomplete="off">
               <datalist id="tackle-name-suggestions"></datalist>
             </div>
             <div class="field">
@@ -996,7 +996,7 @@
           </div>
           <div class="field">
             <label>Brand (optional)</label>
-            <input type="text" maxlength="100" id="tackle-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Nash, Dynamite">
+            <input type="text" maxlength="100" id="tackle-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Nash, Dynamite" autocomplete="off">
             <datalist id="tackle-brand-suggestions"></datalist>
           </div>
           <div class="field" id="tackle-baittype-wrap" style="display:none;">
@@ -1030,7 +1030,7 @@
           </div>
           <div class="field">
             <label>Notes (optional)</label>
-            <input type="text" maxlength="100" id="tackle-notes" placeholder="e.g. brand, size, qty">
+            <input type="text" maxlength="100" id="tackle-notes" placeholder="e.g. brand, size, qty" autocomplete="off">
           </div>
           <div class="field">
             <label>Photo (optional)</label>
@@ -1109,11 +1109,11 @@
           <h2>Build a rig</h2>
           <div class="field">
             <label>Type of rig</label>
-            <input type="text" maxlength="100" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo...">
+            <input type="text" maxlength="100" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo..." autocomplete="off">
           </div>
           <div class="field">
             <label>Brand (optional)</label>
-            <input type="text" maxlength="100" id="rig-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Gardner, ESP...">
+            <input type="text" maxlength="100" id="rig-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Gardner, ESP..." autocomplete="off">
           </div>
           <div class="row2">
             <div class="field">
@@ -1328,7 +1328,7 @@
     <div id="photo-comment-section" style="text-align:left;margin-top:14px;display:none;">
       <p class="sub-heading" style="margin-bottom:8px;">Comments on this catch</p>
       <div class="field" id="photo-comment-author-wrap">
-        <input type="text" maxlength="100" id="photo-comment-author" placeholder="Your name (optional)">
+        <input type="text" maxlength="100" id="photo-comment-author" placeholder="Your name (optional)" autocomplete="off">
       </div>
       <div class="field">
         <textarea maxlength="500" id="photo-comment-message" placeholder="Comment on this catch..."></textarea>
@@ -1373,7 +1373,7 @@
             <option value="Eel">Eel</option>
             <option value="Other">Other</option>
           </select>
-          <input type="text" maxlength="100" id="edit-catch-type-other" placeholder="Type of fish" style="display:none;margin-top:8px;">
+          <input type="text" maxlength="100" id="edit-catch-type-other" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="off">
         </div>
         <div class="field">
           <label>Weight (kg)</label>
@@ -1641,30 +1641,31 @@ function renderMultiPickerResults(rod, key){
     .filter(item => !current.includes(item.name))
     .filter(item => !typeFilter || item.type === typeFilter)
     .filter(item => !term || item.name.toLowerCase().includes(term))
-    .slice(0, 12);
+    .slice(0, 40);
 
-  resultsEl.innerHTML = matches.length
-    ? matches.map(item=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);gap:8px;">
-          <span style="font-size:14px;">
-            ${escapeHtml(item.name)}
-            ${item.brand ? `<span class="pc-line muted"> · ${escapeHtml(item.brand)}</span>` : ''}
-            ${item.type ? `<span class="pc-line muted"> · ${escapeHtml(item.type)}</span>` : ''}
-          </span>
-          <button type="button" class="multi-picker-add" data-rod="${rod}" data-key="${key}" data-value="${escapeHtml(item.name)}">Add</button>
-        </div>`).join('')
-    : '<div class="empty">Nothing in your tackle box matches.</div>';
+  if(matches.length === 0){
+    resultsEl.innerHTML = '<div class="empty">Nothing in your tackle box matches.</div>';
+    return;
+  }
 
-  resultsEl.querySelectorAll('.multi-picker-add').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const arr = parseMultiValue(currentPerson.notes[rod][key]);
-      if(!arr.includes(btn.dataset.value)) arr.push(btn.dataset.value);
-      currentPerson.notes[rod][key] = joinMultiValue(arr);
-      await saveRodState(currentPersonId, rod);
-      searchEl.value = '';
-      renderMultiPickerResults(rod, key);
-      renderMultiPickerPills(rod, key);
-    });
+  resultsEl.innerHTML = `<div style="display:flex;gap:6px;align-items:center;">
+    <select class="multi-picker-select" data-rod="${rod}" data-key="${key}" style="flex:1;">
+      ${matches.map(item=>`<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.brand ? ' · '+escapeHtml(item.brand) : ''}${item.type ? ' · '+escapeHtml(item.type) : ''}</option>`).join('')}
+    </select>
+    <button type="button" class="mini-btn multi-picker-add-select" data-rod="${rod}" data-key="${key}">Add</button>
+  </div>`;
+
+  resultsEl.querySelector('.multi-picker-add-select').addEventListener('click', async ()=>{
+    const sel = resultsEl.querySelector('.multi-picker-select');
+    const value = sel ? sel.value : '';
+    if(!value) return;
+    const arr = parseMultiValue(currentPerson.notes[rod][key]);
+    if(!arr.includes(value)) arr.push(value);
+    currentPerson.notes[rod][key] = joinMultiValue(arr);
+    await saveRodState(currentPersonId, rod);
+    searchEl.value = '';
+    renderMultiPickerResults(rod, key);
+    renderMultiPickerPills(rod, key);
   });
 }
 
@@ -1685,6 +1686,17 @@ function renderRigFields(rod){
   if(!container || !currentPerson) return;
   const rigName = getRodFieldValue(rod, 'rig');
   const rigDef = rigName ? findRigDef(rigName) : null;
+
+  // The "which hook caught it" selector on the catch form should only ever
+  // offer hooks this specific rig actually has — not every hook slot the
+  // app supports in general.
+  const catchHookSel = document.querySelector('.catch-hook[data-rod="'+rod+'"]');
+  if(catchHookSel){
+    const hookCount = rigDef ? rigDef.hookCount : MAX_HOOKS;
+    const prevValue = catchHookSel.value;
+    catchHookSel.innerHTML = catchHookOptionsHtml(hookCount);
+    if([...catchHookSel.options].some(o=>o.value===prevValue)) catchHookSel.value = prevValue;
+  }
 
   if(!rigDef){
     container.innerHTML = '';
@@ -1723,7 +1735,7 @@ function hookFieldHtml(r, n){
   return `<div class="field">
       <label>Hook ${n}</label>
       <select class="rod-select" data-rod="${r}" data-key="${key}">${buildRodOptionsHtml(knownHookOptions)}</select>
-      <input type="text" maxlength="100" class="rod-field rod-select-other" data-rod="${r}" data-key="${key}" placeholder="Rig, bait, depth..." style="display:none;margin-top:6px;">
+      <input type="text" maxlength="100" class="rod-field rod-select-other" data-rod="${r}" data-key="${key}" placeholder="Rig, bait, depth..." style="display:none;margin-top:6px;" autocomplete="off">
     </div>`;
 }
 
@@ -2610,6 +2622,19 @@ function renderAccountArea(){
   const adminTabBtn = document.getElementById('admin-tab-btn');
   if(adminTabBtn) adminTabBtn.style.display = isSuperUser() ? '' : 'none';
   refreshNotifBadge();
+
+  // Signed out, not spectating a shared link: strip everything down to just
+  // the sign-in card and the general walkthrough — no nav, no header, no
+  // other cards, since none of it does anything until you're signed in.
+  const isSignedOutNormalView = !(session && session.user) && !IS_SPECTATOR;
+  const header = document.getElementById('app-header');
+  const nav = document.getElementById('nav-tabs');
+  const appearanceCard = document.getElementById('appearance-card');
+  const profileHelpBtn = document.getElementById('profile-help-btn');
+  if(header) header.style.display = isSignedOutNormalView ? 'none' : 'block';
+  if(nav) nav.style.display = isSignedOutNormalView ? 'none' : 'flex';
+  if(appearanceCard) appearanceCard.style.display = isSignedOutNormalView ? 'none' : 'block';
+  if(profileHelpBtn) profileHelpBtn.style.display = isSignedOutNormalView ? 'none' : 'inline-block';
 }
 
 function updateTimersVisibility(){
@@ -3236,7 +3261,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
     <div class="row2">
       <div class="field">
         <label>Name</label>
-        <input type="text" maxlength="100" class="tackle-edit-name" value="${escapeHtml(item.name)}">
+        <input type="text" maxlength="100" class="tackle-edit-name" value="${escapeHtml(item.name)}" autocomplete="off">
       </div>
       <div class="field">
         <label>Category</label>
@@ -3276,11 +3301,11 @@ async function renderTackleItemEditForm(itemId, containerEl){
     </div>
     <div class="field">
       <label>Brand</label>
-      <input type="text" maxlength="100" class="tackle-edit-brand" list="tackle-brand-suggestions" value="${escapeHtml(item.brand||'')}">
+      <input type="text" maxlength="100" class="tackle-edit-brand" list="tackle-brand-suggestions" value="${escapeHtml(item.brand||'')}" autocomplete="off">
     </div>
     <div class="field">
       <label>Notes</label>
-      <input type="text" maxlength="100" class="tackle-edit-notes" value="${escapeHtml(item.notes||'')}">
+      <input type="text" maxlength="100" class="tackle-edit-notes" value="${escapeHtml(item.notes||'')}" autocomplete="off">
     </div>
     <div class="field">
       <label>Replace photo (optional)</label>
@@ -3549,11 +3574,11 @@ async function renderRigsList(){
           <div class="row2">
             <div class="field">
               <label>Rig name (admin)</label>
-              <input type="text" maxlength="100" class="rig-edit-name" value="${escapeHtml(rig ? rig.name : '')}">
+              <input type="text" maxlength="100" class="rig-edit-name" value="${escapeHtml(rig ? rig.name : '')}" autocomplete="off">
             </div>
             <div class="field">
               <label>Brand (admin)</label>
-              <input type="text" maxlength="100" class="rig-edit-brand" value="${escapeHtml(rig && rig.brand ? rig.brand : '')}">
+              <input type="text" maxlength="100" class="rig-edit-brand" value="${escapeHtml(rig && rig.brand ? rig.brand : '')}" autocomplete="off">
             </div>
           </div>` : ''}
         <div class="field">
@@ -4103,7 +4128,7 @@ function rodCardHtml(r){
     <section class="card rod-card" id="rodcard-${r}">
       <div class="rod-title-row">
         <input type="color" class="rod-dot" data-rod="${r}" value="#C1440E" title="Rod color">
-        <input type="text" maxlength="100" class="rod-field rod-name-input" data-rod="${r}" data-key="identifier" placeholder="${RID_LABEL[r]}" title="Tap to rename this rod">
+        <input type="text" maxlength="100" class="rod-field rod-name-input" data-rod="${r}" data-key="identifier" placeholder="${RID_LABEL[r]}" title="Tap to rename this rod" autocomplete="off">
       </div>
       <div class="bobber-row" id="bobber-row-${r}">
         <div class="bobber" id="bobber-${r}"><div class="time mono" id="time-${r}">00:00:00</div></div>
@@ -4162,7 +4187,7 @@ function rodCardHtml(r){
               <option value="Eel">Eel</option>
               <option value="Other">Other</option>
             </select>
-            <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;">
+            <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="off">
           </div>
           <div class="field">
             <label>Weight (kg)</label>
@@ -4954,13 +4979,13 @@ function buildInsightsHtml(catches, venues, sessions){
   // Which rig performs
   html += statTable('Which rig lands fish', groupStats(c=>[c.rig]), 'No rigs recorded on your catches yet.');
 
-  // Which bait performs — pull every hook's bait, splitting multi-select values
+  // Which bait performs — only the hook that actually caught the fish counts,
+  // not everything that happened to be on the other hooks at the time
   html += statTable('Which bait lands fish', groupStats(c=>{
-    const baits = [];
-    for(let n=1; n<=MAX_HOOKS; n++){
-      (c['hook'+n]||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(b=>baits.push(b));
-    }
-    return [...new Set(baits)];
+    const hookMatch = /Hook (\d+)/.exec(c.hook||'');
+    if(!hookMatch) return [];
+    const hookField = c['hook'+hookMatch[1]] || '';
+    return [...new Set(hookField.split(',').map(s=>s.trim()).filter(Boolean))];
   }), 'No baits recorded on your catches yet.');
 
   // Which bom performs
@@ -5340,11 +5365,11 @@ async function openProfile(personId){
       <p class="sub-heading">Admin: edit this angler</p>
       <div class="field">
         <label>Display Name</label>
-        <input type="text" maxlength="100" id="admin-edit-name" value="${escapeHtml(p.name)}">
+        <input type="text" maxlength="100" id="admin-edit-name" value="${escapeHtml(p.name)}" autocomplete="off">
       </div>
       <div class="field">
         <label>Email</label>
-        <input type="email" maxlength="120" id="admin-edit-email" value="${escapeHtml(p.email||'')}">
+        <input type="email" maxlength="120" id="admin-edit-email" value="${escapeHtml(p.email||'')}" autocomplete="off">
       </div>
       <button class="primary-btn" id="admin-edit-save-btn">Save changes</button>
       <div class="status" id="admin-edit-status"></div>
@@ -6353,11 +6378,11 @@ function renderCompetitionEditForm(comp, containerEl){
     <div class="row2">
       <div class="field">
         <label>Name</label>
-        <input type="text" maxlength="100" class="comp-edit-name" value="${escapeHtml(comp.name||'')}">
+        <input type="text" maxlength="100" class="comp-edit-name" value="${escapeHtml(comp.name||'')}" autocomplete="off">
       </div>
       <div class="field">
         <label>Venue</label>
-        <input type="text" maxlength="100" class="comp-edit-venue" value="${escapeHtml(comp.dam||'')}">
+        <input type="text" maxlength="100" class="comp-edit-venue" value="${escapeHtml(comp.dam||'')}" autocomplete="off">
       </div>
     </div>
     <div class="row2">
