@@ -514,7 +514,7 @@
           <input type="hidden" id="session-competition" value="">
           <div class="field">
             <label>Venue</label>
-            <input type="text" maxlength="100" id="session-venue" placeholder="Where are you fishing?" autocomplete="pk-venue-1" name="pk-venue-field-1">
+            <input type="text" maxlength="100" id="session-venue" placeholder="Where are you fishing?" autocomplete="pk-venue-1" name="pk-venue-field-1" readonly onfocus="if(!document.getElementById('session-competition').value){ this.removeAttribute('readonly'); }">
           </div>
           <div class="field">
             <label>How many rods?</label>
@@ -4671,6 +4671,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
     const venueEl = document.getElementById('session-venue');
     venueEl.value = '';
     venueEl.readOnly = false;
+    venueEl.setAttribute('readonly', ''); // re-arm the anti-autofill trick for next time
     venueEl.style.opacity = '1';
     document.getElementById('session-competition').value = '';
     st.textContent = '';
