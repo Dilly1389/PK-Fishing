@@ -707,9 +707,13 @@
             <input type="date" id="past-catch-date">
           </div>
           <div class="field">
-            <label>Venue (optional)</label>
-            <input type="text" maxlength="100" id="past-catch-venue" placeholder="Where was it caught?" autocomplete="pk-venue-2" name="pk-venue-field-2">
+            <label>Time (optional, if you remember roughly)</label>
+            <input type="time" id="past-catch-time">
           </div>
+        </div>
+        <div class="field">
+          <label>Venue (optional)</label>
+          <input type="text" maxlength="100" id="past-catch-venue" placeholder="Where was it caught?" autocomplete="pk-venue-2" name="pk-venue-field-2">
         </div>
         <div class="field">
           <label>Photo (optional)</label>
@@ -4042,6 +4046,7 @@ async function loadPerson(id){
         rig: c.rig || '',
         rodIdentifier: c.rod_identifier || '',
         venueId: c.venue_id || null,
+        hasKnownTime: c.has_known_time !== false,
         sessionId: c.session_id || null,
         photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
         likes: c.likes || 0
@@ -4871,7 +4876,9 @@ function renderProfilePhotoGrid(entries, filterType){
 }
 
 function catchDetailHtml(c){
-  const timeStr = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const timeStr = c.hasKnownTime === false
+    ? 'not recorded'
+    : new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(c.timerElapsed||0);
   const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
   let html = `<div class="profile-catch">
@@ -5012,9 +5019,13 @@ function buildInsightsHtml(catches, venues, sessions){
   // Species breakdown
   html += statTable('By species', groupStats(c=>[c.type]), 'No species recorded yet.');
 
-  // Best time of day
+  // Best time of day — only catches with a real time count here. A past
+  // catch logged with just a date defaults to noon internally so the date
+  // can't shift across timezones, but that's not a real time and shouldn't
+  // be treated as one.
+  const withKnownTime = caught.filter(c=>c.hasKnownTime);
   const byHour = {};
-  caught.forEach(c=>{
+  withKnownTime.forEach(c=>{
     const h = new Date(c.time).getHours();
     const band = h<6 ? 'Night (00:00–06:00)' : h<12 ? 'Morning (06:00–12:00)' : h<18 ? 'Afternoon (12:00–18:00)' : 'Evening (18:00–24:00)';
     if(!byHour[band]) byHour[band] = 0;
@@ -5022,7 +5033,12 @@ function buildInsightsHtml(catches, venues, sessions){
   });
   const timeRows = Object.keys(byHour).map(k=>({key:k, count:byHour[k], weight:0, avgSoak:0}))
     .sort((a,b)=>b.count-a.count);
-  html += `<p class="sub-heading">Best time of day</p><ul class="people-list">` +
+  const skippedForTime = caught.length - withKnownTime.length;
+  html += `<p class="sub-heading">Best time of day</p>`;
+  if(skippedForTime > 0){
+    html += `<p class="pc-line muted">${skippedForTime} past catch${skippedForTime===1?'':'es'} logged without a time ${skippedForTime===1?'is':'are'} not counted here.</p>`;
+  }
+  html += `<ul class="people-list">` +
     timeRows.map(r=>`<li>
       <div class="who"><b>${escapeHtml(r.key)}</b></div>
       <div class="actions"><span class="pill">${r.count} fish</span></div>
@@ -5332,12 +5348,16 @@ document.getElementById('past-catch-save-btn').addEventListener('click', async (
     }
 
     const catchId = uid();
-    // Midday, so timezone shifts can't nudge it to the wrong day
-    const when = new Date(dateVal + 'T12:00:00');
+    const timeVal = document.getElementById('past-catch-time').value;
+    // A real time was given — use it. Otherwise fall back to noon purely so
+    // timezone conversion can't shift the date to the wrong day, and flag
+    // it as not a real time so time-of-day insights correctly ignore it.
+    const when = timeVal ? new Date(dateVal + 'T' + timeVal + ':00') : new Date(dateVal + 'T12:00:00');
     const payload = {
       id: catchId, fisherman_id: myId, rod: 'A', hook: '',
       caught: true, fish_type: species, weight: parseFloat(weightRaw),
       time: when.toISOString(), timer_elapsed_ms: 0,
+      has_known_time: !!timeVal,
       bom: '', rig: '', rod_identifier: '',
       photos: JSON.stringify(photoUrl ? [photoUrl] : []),
       latitude: null, longitude: null,
@@ -5348,6 +5368,7 @@ document.getElementById('past-catch-save-btn').addEventListener('click', async (
 
     document.getElementById('past-catch-weight').value = '';
     document.getElementById('past-catch-date').value = '';
+    document.getElementById('past-catch-time').value = '';
     document.getElementById('past-catch-venue').value = '';
     photoEl.value = '';
     const label = document.querySelector('.photo-filename[data-target="past-catch-photo"]');
