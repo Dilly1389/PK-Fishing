@@ -139,6 +139,8 @@
   .status-dot.connected{background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,0.8),0 0 0 3px rgba(255,255,255,0.15);}
   #db-status{display:none;background:#b23a1f;color:#fff;padding:8px 14px;font-size:12px;text-align:center;}
   nav.tabs{display:flex;background:var(--dam-deep);position:sticky;top:0;z-index:10;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  body.signed-out-view header.top{display:none;}
+  body.signed-out-view nav.tabs{display:none;}
   body.spectator-mode nav.tabs{display:none;}
   body.spectator-mode #panel-timers,
   body.spectator-mode #panel-schedule,
@@ -2033,8 +2035,10 @@ function makeCardCollapsible(cardId, bodyId, storageKey){
   toggleBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);padding:0;font-weight:700;text-transform:none;letter-spacing:normal;';
   h2.appendChild(toggleBtn);
 
-  let collapsed = false;
-  try{ collapsed = localStorage.getItem(storageKey) === 'true'; }catch(e){}
+  // Default to collapsed on a person's first visit — they can expand
+  // whichever cards they actually want, and that choice is remembered
+  let collapsed = true;
+  try{ collapsed = localStorage.getItem(storageKey) !== 'false'; }catch(e){}
   function apply(){
     body.style.display = collapsed ? 'none' : 'block';
     toggleBtn.textContent = collapsed ? '▸ Show' : '▾ Hide';
@@ -2655,12 +2659,12 @@ function renderAccountArea(){
   // the sign-in card and the general walkthrough — no nav, no header, no
   // other cards, since none of it does anything until you're signed in.
   const isSignedOutNormalView = !(session && session.user) && !IS_SPECTATOR;
-  const header = document.getElementById('app-header');
-  const nav = document.getElementById('nav-tabs');
   const appearanceCard = document.getElementById('appearance-card');
   const profileHelpBtn = document.getElementById('profile-help-btn');
-  if(header) header.style.display = isSignedOutNormalView ? 'none' : 'block';
-  if(nav) nav.style.display = isSignedOutNormalView ? 'none' : 'flex';
+  // A body class, not inline styles on nav/header — inline display:flex was
+  // overriding the hamburger menu's own CSS toggle at mobile widths, since
+  // inline styles beat media-query rules regardless of the .open class.
+  document.body.classList.toggle('signed-out-view', isSignedOutNormalView);
   if(appearanceCard) appearanceCard.style.display = isSignedOutNormalView ? 'none' : 'block';
   if(profileHelpBtn) profileHelpBtn.style.display = isSignedOutNormalView ? 'none' : 'inline-block';
 }
