@@ -779,12 +779,12 @@
             <select id="lb-filter-competition"><option value="">All anglers</option></select>
           </div>
           <div class="field">
-            <label>Fish type</label>
+            <label>Species</label>
             <select id="lb-filter-type"><option value="">All types</option></select>
           </div>
         </div>
         <div class="field">
-          <label>Rank by</label>
+          <label>Ranked by</label>
           <select id="lb-sort-mode">
             <option value="bag">Biggest bag (total kg)</option>
             <option value="fish">Biggest fish (single catch)</option>
@@ -928,9 +928,44 @@
       <section class="card" id="admin-tackle-card">
         <h2>Admin: Tackle Box</h2>
         <div id="admin-tackle-card-body">
+          <div class="row2">
+            <div class="field">
+              <label>Angler</label>
+              <select id="admin-tackle-angler-filter"><option value="">Everyone</option></select>
+            </div>
+            <div class="field">
+              <label>Category</label>
+              <select id="admin-tackle-category-filter">
+                <option value="">All categories</option>
+                <option value="Rod">Rod</option>
+                <option value="Reel">Reel</option>
+                <option value="Bait">Bait</option>
+                <option value="Dips">Dips</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label>Sharing</label>
+              <select id="admin-tackle-sharing-filter">
+                <option value="">Any</option>
+                <option value="shared">Shared with everyone</option>
+                <option value="private">Not shared with everyone</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Photos</label>
+              <select id="admin-tackle-photo-filter">
+                <option value="">Any</option>
+                <option value="with">Has a photo</option>
+                <option value="without">No photo</option>
+              </select>
+            </div>
+          </div>
           <div class="field">
-            <label>Filter by angler (optional)</label>
-            <select id="admin-tackle-angler-filter"><option value="">Everyone</option></select>
+            <label>Search by name or brand</label>
+            <input type="text" maxlength="100" id="admin-tackle-search" placeholder="Type to filter..." autocomplete="pk-admin-tackle-search">
           </div>
           <div id="admin-tackle-list"><div class="empty">Loading...</div></div>
         </div>
@@ -1073,7 +1108,7 @@
         </section>
 
         <section class="card">
-          <h2>Tackle box</h2>
+          <h2>Tackle Box</h2>
           <div class="row2">
             <div class="field">
               <label>Category</label>
@@ -1206,7 +1241,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">2. Start a session</div>
-      <div class="pc-line muted">On the Timers tab, set your venue and how many rods you're on. Your rods appear, ready to go.</div>
+      <div class="pc-line muted">On the Timers tab, set your venue and how many rods you're on. If a competition you're in is running, tap its banner to fish it — that tags every catch to it automatically.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">3. Run your timers</div>
@@ -1214,11 +1249,11 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">4. Log your catches</div>
-      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time is recorded automatically.</div>
+      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time, and the weather and moon phase at the time, are all recorded automatically.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">5. See what's working</div>
-      <div class="pc-line muted">Over time, My Insights on the Profile tab shows which rigs and baits actually land fish for you.</div>
+      <div class="pc-line muted">Over time, My Insights on the Profile tab shows which rigs and baits actually land fish for you. Your Reel Records and badges build up on your profile as you go.</div>
     </div>
     <button class="primary-btn" id="onboarding-close" style="margin-top:14px;">Got it</button>
   </div>
@@ -1284,6 +1319,10 @@
     <div class="profile-catch">
       <div class="pc-head">Log a past catch</div>
       <div class="pc-line muted">For fish you caught before you had the app. No rod or timer needed — just species, weight, date, and optionally a venue and photo. It counts toward your Reel Records and insights exactly like any other catch.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Badges</div>
+      <div class="pc-line muted">Earned automatically as you fish — milestones, rare species, night and full-moon catches, competitions. They appear on your profile and you'll get a notification when you unlock one.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">My insights</div>
@@ -1437,6 +1476,47 @@ const ALL_BAIT_TYPES = [
   'Other','Particles/Seeds','Paste','Pellets','Pop-ups','Small hard floats',
   'Small soft floats','Tiger nuts','Wafters'
 ];
+
+// ---------- Badges ----------
+// Each badge is a key, some display info, and a test against an angler's
+// stats. Deliberately all in one place so adding or changing badges later
+// means editing this list and nothing else.
+const BADGE_DEFS = [
+  {key:'first_catch',    emoji:'🎣', name:'First Catch',       desc:'Logged your first fish',
+   test: s=> s.catchCount >= 1},
+  {key:'catch_10',       emoji:'🔟', name:'Double Figures',    desc:'Logged 10 catches',
+   test: s=> s.catchCount >= 10},
+  {key:'catch_50',       emoji:'⭐', name:'Half Century',      desc:'Logged 50 catches',
+   test: s=> s.catchCount >= 50},
+  {key:'catch_100',      emoji:'💯', name:'Century',           desc:'Logged 100 catches',
+   test: s=> s.catchCount >= 100},
+  {key:'first_blank',    emoji:'🫥', name:'Blanked',           desc:'Logged your first blank — it happens',
+   test: s=> s.blankCount >= 1},
+  {key:'ten_kg',         emoji:'🐋', name:'Double Digits',     desc:'Landed a fish over 10kg',
+   test: s=> s.biggest >= 10},
+  {key:'five_species',   emoji:'🐟', name:'Mixed Bag',         desc:'Caught 5 different species',
+   test: s=> s.speciesCount >= 5},
+  {key:'night_owl',      emoji:'🦉', name:'Night Owl',         desc:'Caught a fish between midnight and 6am',
+   test: s=> s.nightCatch},
+  {key:'full_moon',      emoji:'🌕', name:'Full Moon Fish',    desc:'Caught a fish on a full moon',
+   test: s=> s.fullMoonCatch},
+  {key:'ten_sessions',   emoji:'⏱️', name:'Regular',           desc:'Fished 10 sessions',
+   test: s=> s.sessionCount >= 10},
+  {key:'three_venues',   emoji:'📍', name:'Explorer',          desc:'Fished 3 different venues',
+   test: s=> s.venueCount >= 3},
+  {key:'competitor',     emoji:'🏆', name:'Competitor',        desc:'Took part in a competition',
+   test: s=> s.competitionCount >= 1},
+  {key:'grand_slam',     emoji:'🎖️', name:'Grand Slam',        desc:'Caught every species in your Reel Records',
+   test: s=> s.recordSpeciesTotal > 0 && s.recordSpeciesCaught >= s.recordSpeciesTotal},
+  {key:'rare_catch',     emoji:'🦄', name:'Rare Catch',        desc:'Landed one of the uncommon ones — Eel, Mudfish or Koi',
+   test: s=> s.rareCatch},
+  {key:'beat_your_best', emoji:'📈', name:'Personal Best',     desc:'Beat your own record for a species',
+   test: s=> s.beatenOwnPb}
+];
+
+// The uncommon species — catching one of these is a genuine achievement,
+// unlike carp which is routine on most SA dams
+const RARE_SPECIES = ['Eel','Mudfish','Koi'];
 
 const ALL_TROPHY_SPECIES = [
   'Carp','Mirror Carp','Grass Carp','Barbel','Yellowfish',
@@ -3754,7 +3834,13 @@ async function renderTackleList(){
 
   if(visFilter === 'shared-with-me'){
     sharedByWrap.style.display = 'block';
-    const sharedWithMeItems = tackleItemsCache.filter(it=> sharedWithMeIds.has(it.id) && !(isSignedIn() && it.owner_user_id === session.user.id));
+    // Shared with me covers both per-item shares AND whole-box shares —
+    // the latter create no per-item rows, so checking only tackle_item_shares
+    // silently hid everything shared that way.
+    const isSharedWithMe = (it)=>
+      (sharedWithMeIds.has(it.id) || boxSharedOwners.has(it.owner_user_id))
+      && !(isSignedIn() && it.owner_user_id === session.user.id);
+    const sharedWithMeItems = tackleItemsCache.filter(isSharedWithMe);
     const sharerUserIds = [...new Set(sharedWithMeItems.map(it=>it.owner_user_id))];
     const currentSharedBy = sharedBySel.value;
     sharedBySel.innerHTML = '<option value="">Anyone</option>' +
@@ -3764,7 +3850,7 @@ async function renderTackleList(){
       }).join('');
     if([...sharedBySel.options].some(o=>o.value===currentSharedBy)) sharedBySel.value = currentSharedBy;
 
-    items = items.filter(it=> sharedWithMeIds.has(it.id) && !(isSignedIn() && it.owner_user_id === session.user.id));
+    items = items.filter(isSharedWithMe);
     if(sharedBySel.value) items = items.filter(it=> it.owner_user_id === sharedBySel.value);
   }else{
     sharedByWrap.style.display = 'none';
@@ -4961,6 +5047,7 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   if(entry.caught && (entry.weight||0) > 0){
     notifyFriendsOfCatch(entry.id);
   }
+  checkAndAwardBadges();
 });
 
 document.getElementById('confirm-edit').addEventListener('click', ()=>{
@@ -5284,6 +5371,86 @@ function buildInsightsHtml(catches, venues, sessions){
   return html;
 }
 
+// ---------- Badges ----------
+async function loadBadgesFor(fishermanId){
+  try{
+    const rows = await sbGet('badges_earned?select=badge_key,earned_at&fisherman_id=eq.'+fishermanId+'&order=earned_at.asc');
+    return rows;
+  }catch(e){ console.error('loadBadgesFor failed', e); return []; }
+}
+
+// Build the stats each badge test runs against
+async function computeBadgeStats(fishermanId){
+  const rec = await loadPerson(fishermanId);
+  const catches = (rec && rec.catches) ? rec.catches : [];
+  const caught = catches.filter(c=>c.caught);
+  const stats = {
+    catchCount: caught.length,
+    blankCount: catches.filter(c=>!c.caught).length,
+    biggest: caught.reduce((m,c)=> Math.max(m, c.weight||0), 0),
+    speciesCount: new Set(caught.map(c=>c.type).filter(Boolean)).size,
+    nightCatch: caught.some(c=>{
+      if(c.hasKnownTime === false) return false;
+      const h = new Date(c.time).getHours();
+      return h < 6;
+    }),
+    fullMoonCatch: caught.some(c=> c.moonPhase === 'Full Moon'),
+    venueCount: new Set(caught.map(c=>c.venueId).filter(Boolean)).size,
+    sessionCount: 0,
+    competitionCount: new Set(caught.map(c=>c.competitionId).filter(Boolean)).size,
+    rareCatch: caught.some(c=> RARE_SPECIES.includes(c.type)),
+    recordSpeciesTotal: 0,
+    recordSpeciesCaught: 0,
+    beatenOwnPb: false
+  };
+
+  // Grand Slam — every species this angler has chosen for Reel Records
+  const person = people.find(x=>x.id===fishermanId);
+  const recordSpecies = getTrophySpeciesFor(person);
+  const caughtSpecies = new Set(caught.map(c=>c.type).filter(Boolean));
+  stats.recordSpeciesTotal = recordSpecies.length;
+  stats.recordSpeciesCaught = recordSpecies.filter(s=> caughtSpecies.has(s)).length;
+
+  // Beaten your own PB — for any species, a later catch outweighs an earlier one
+  const bySpecies = {};
+  caught.slice().sort((a,b)=> a.time - b.time).forEach(c=>{
+    if(!c.type || !(c.weight > 0)) return;
+    if(bySpecies[c.type] === undefined){
+      bySpecies[c.type] = c.weight;
+    }else if(c.weight > bySpecies[c.type]){
+      stats.beatenOwnPb = true;
+      bySpecies[c.type] = c.weight;
+    }
+  });
+  try{
+    const sessions = await sbGet('sessions?select=id&fisherman_id=eq.'+fishermanId);
+    stats.sessionCount = sessions.length;
+  }catch(e){ console.error(e); }
+  return stats;
+}
+
+// Check for newly-earned badges and award them. Safe to call repeatedly —
+// the unique constraint means a badge can only ever be awarded once.
+async function checkAndAwardBadges(){
+  const myId = getMyFishermanId();
+  if(!isSignedIn() || !myId || !navigator.onLine) return;
+  try{
+    const [existing, stats] = await Promise.all([
+      loadBadgesFor(myId),
+      computeBadgeStats(myId)
+    ]);
+    const have = new Set(existing.map(b=>b.badge_key));
+    const newlyEarned = BADGE_DEFS.filter(b=> !have.has(b.key) && b.test(stats));
+    for(const badge of newlyEarned){
+      try{
+        await sbPost('badges_earned', {id: uid(), fisherman_id: myId, badge_key: badge.key});
+        await sbRpc('notify_badge_earned', {p_badge_key: badge.key, p_badge_name: badge.name});
+      }catch(e){ console.error('award failed', badge.key, e); }
+    }
+    if(newlyEarned.length) refreshNotifBadge();
+  }catch(e){ console.error('checkAndAwardBadges failed', e); }
+}
+
 async function loadMySessions(){
   const myId = getMyFishermanId();
   if(!myId) return [];
@@ -5559,7 +5726,45 @@ async function openProfile(personId){
   });
   const photoTypes = [...new Set(photoEntries.map(e=>e.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 
-  let html = `<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">${avatarHtml(p, 56)}<h3 style="margin:0;">${escapeHtml(p.name)}</h3></div>`;
+  // Follower / following counts, Garmin-style alongside the name
+  let followerCount = 0, followingCount = 0;
+  try{
+    const [followers, following] = await Promise.all([
+      sbGet('follows?select=id&followed_fisherman_id=eq.'+p.id),
+      p.user_id ? sbGet('follows?select=id&follower_user_id=eq.'+p.user_id) : Promise.resolve([])
+    ]);
+    followerCount = followers.length;
+    followingCount = following.length;
+  }catch(e){ console.error('follow counts failed', e); }
+
+  let html = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
+    ${avatarHtml(p, 64)}
+    <div>
+      <h3 style="margin:0 0 4px;">${escapeHtml(p.name)}</h3>
+      <div style="display:flex;gap:16px;">
+        <div><b style="font-size:15px;">${followerCount}</b> <span class="pc-line muted">Follower${followerCount===1?'':'s'}</span></div>
+        <div><b style="font-size:15px;">${followingCount}</b> <span class="pc-line muted">Following</span></div>
+      </div>
+    </div>
+  </div>`;
+
+  // Badge strip — horizontal scroll, earned badges only
+  const earnedBadges = await loadBadgesFor(p.id);
+  if(earnedBadges.length){
+    const earnedKeys = new Set(earnedBadges.map(b=>b.badge_key));
+    const earnedDefs = BADGE_DEFS.filter(b=> earnedKeys.has(b.key));
+    html += `<div style="display:flex;gap:10px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch;">` +
+      earnedDefs.map(b=>{
+        const earned = earnedBadges.find(e=>e.badge_key===b.key);
+        const when = earned ? new Date(earned.earned_at).toLocaleDateString([], {month:'short', year:'numeric'}) : '';
+        return `<div style="flex-shrink:0;width:82px;text-align:center;" title="${escapeHtml(b.desc)}">
+          <img src="badge-${b.key}.png" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
+          <div style="font-size:11px;font-weight:700;color:var(--ink);line-height:1.2;">${escapeHtml(b.name)}</div>
+          <div style="font-size:10px;color:var(--muted);">${escapeHtml(when)}</div>
+        </div>`;
+      }).join('') + `</div>`;
+  }
+
   const myFishermanId = getMyFishermanId();
   if(isSignedIn() && myFishermanId && myFishermanId !== p.id){
     html += `<button class="mini-btn" id="profile-follow-btn" data-id="${p.id}" style="margin-bottom:10px;">Follow</button>`;
@@ -5631,7 +5836,7 @@ async function openProfile(personId){
     html += `<p class="sub-heading">Photos (${photoEntries.length})</p>`;
     if(photoTypes.length > 1){
       html += `<div class="field">
-          <label>Filter by fish type</label>
+          <label>Filter by species</label>
           <select id="profile-photo-filter">
             <option value="">All types</option>
             ${photoTypes.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}
@@ -6866,15 +7071,35 @@ async function renderAdminTackleList(){
   if(!el) return;
   el.innerHTML = '<div class="empty">Loading...</div>';
   const filterUser = document.getElementById('admin-tackle-angler-filter').value;
+  const filterCat = document.getElementById('admin-tackle-category-filter').value;
+  const filterSharing = document.getElementById('admin-tackle-sharing-filter').value;
+  const filterPhoto = document.getElementById('admin-tackle-photo-filter').value;
+  const searchTerm = document.getElementById('admin-tackle-search').value.trim().toLowerCase();
   try{
-    let query = 'tackle_items?select=id,name,brand,category,bait_type,owner_user_id,is_shared,has_photo&order=category.asc,name.asc';
+    // photo is included here so thumbnails can render inline
+    let query = 'tackle_items?select=id,name,brand,category,bait_type,owner_user_id,is_shared,has_photo,photo&order=category.asc,name.asc';
     if(filterUser) query += '&owner_user_id=eq.'+filterUser;
-    const items = await sbGet(query);
-    if(items.length === 0){ el.innerHTML = '<div class="empty">No tackle items match this filter.</div>'; return; }
-    el.innerHTML = '<ul class="people-list">' + items.map(it=>{
+    let items = await sbGet(query);
+
+    if(filterCat) items = items.filter(it=> (it.category||'Other') === filterCat);
+    if(filterSharing === 'shared') items = items.filter(it=> it.is_shared === true);
+    if(filterSharing === 'private') items = items.filter(it=> it.is_shared !== true);
+    if(filterPhoto === 'with') items = items.filter(it=> !!it.photo);
+    if(filterPhoto === 'without') items = items.filter(it=> !it.photo);
+    if(searchTerm){
+      items = items.filter(it=>
+        (it.name||'').toLowerCase().includes(searchTerm) ||
+        (it.brand||'').toLowerCase().includes(searchTerm)
+      );
+    }
+
+    if(items.length === 0){ el.innerHTML = '<div class="empty">No tackle items match these filters.</div>'; return; }
+    el.innerHTML = `<p class="pc-line muted">${items.length} item${items.length===1?'':'s'}</p>` +
+      '<ul class="people-list">' + items.map(it=>{
       const owner = people.find(p=>p.user_id===it.owner_user_id);
       return `<li>
-        <div class="who">
+        <div class="who" style="align-items:center;">
+          ${it.photo ? `<img src="${escapeHtml(it.photo)}" alt="" class="admin-tackle-thumb" data-photo="${escapeHtml(it.photo)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0;">` : ''}
           <b>${escapeHtml(it.name)}</b>
           <span class="pill">${escapeHtml(it.category||'Other')}</span>
           ${it.brand ? `<span class="pill">${escapeHtml(it.brand)}</span>` : ''}
@@ -6886,6 +7111,10 @@ async function renderAdminTackleList(){
         </div>
       </li>`;
     }).join('') + '</ul>';
+
+    el.querySelectorAll('.admin-tackle-thumb').forEach(img=>{
+      img.addEventListener('click', ()=> openPhotoModal(img.dataset.photo, null));
+    });
     el.querySelectorAll('[data-admin-tackle-remove]').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         if(!confirmDelete('this tackle item')) return;
@@ -6945,6 +7174,10 @@ async function renderAdminRigsList(){
 }
 
 document.getElementById('admin-tackle-angler-filter').addEventListener('change', renderAdminTackleList);
+document.getElementById('admin-tackle-category-filter').addEventListener('change', renderAdminTackleList);
+document.getElementById('admin-tackle-sharing-filter').addEventListener('change', renderAdminTackleList);
+document.getElementById('admin-tackle-photo-filter').addEventListener('change', renderAdminTackleList);
+document.getElementById('admin-tackle-search').addEventListener('input', renderAdminTackleList);
 document.getElementById('admin-user-select').addEventListener('change', (e)=>{
   document.getElementById('admin-user-actions').style.display = e.target.value ? 'block' : 'none';
 });
@@ -7192,6 +7425,7 @@ await loadTackleCategoryOptions();
   updateOfflineBanner();
   syncPendingCatches();
   announceFinishedCompetitions();
+  checkAndAwardBadges();
   if(isSignedIn()){ await loadActiveSession(); await renderSessionUi(); }
   maybeShowInstallBanner();
   try{
