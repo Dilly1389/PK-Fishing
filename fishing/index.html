@@ -1212,6 +1212,14 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="follow-list-modal">
+  <div class="modal-card">
+    <h3 id="follow-list-title" style="margin-top:0;"></h3>
+    <div id="follow-list-body"></div>
+    <button class="mini-btn" id="follow-list-close" style="margin-top:12px;">Close</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="profile-modal">
   <div class="modal-card wide">
     <div id="profile-body"></div>
@@ -5709,6 +5717,37 @@ document.getElementById('insights-close').addEventListener('click', ()=>{
   document.getElementById('insights-modal').classList.remove('open');
 });
 
+// Shows the actual people behind a follower/following count. idType is
+// 'user' for follower_user_id values, 'fisherman' for followed_fisherman_id
+function openFollowList(title, ids, idType){
+  const body = document.getElementById('follow-list-body');
+  document.getElementById('follow-list-title').textContent = title;
+  const matched = ids.map(id=>{
+    return idType === 'user' ? people.find(p=>p.user_id===id) : people.find(p=>p.id===id);
+  }).filter(Boolean);
+
+  if(!matched.length){
+    body.innerHTML = '<div class="empty">Nobody to show.</div>';
+  }else{
+    body.innerHTML = matched.map(p=>
+      `<button type="button" class="follow-list-item" data-id="${p.id}" style="display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;border-bottom:1px solid var(--line);padding:10px 0;cursor:pointer;font-family:inherit;text-align:left;">
+        ${avatarHtml(p, 36)}
+        <span style="font-size:15px;color:var(--ink);">${escapeHtml(p.name)}</span>
+      </button>`
+    ).join('');
+    body.querySelectorAll('.follow-list-item').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        document.getElementById('follow-list-modal').classList.remove('open');
+        openProfile(btn.dataset.id);
+      });
+    });
+  }
+  document.getElementById('follow-list-modal').classList.add('open');
+}
+document.getElementById('follow-list-close').addEventListener('click', ()=>{
+  document.getElementById('follow-list-modal').classList.remove('open');
+});
+
 async function openProfile(personId){
   const p = people.find(x=>x.id===personId);
   const rec = await loadPerson(personId);
@@ -5728,13 +5767,16 @@ async function openProfile(personId){
 
   // Follower / following counts, Garmin-style alongside the name
   let followerCount = 0, followingCount = 0;
+  let followerUserIds = [], followingFishermanIds = [];
   try{
     const [followers, following] = await Promise.all([
-      sbGet('follows?select=id&followed_fisherman_id=eq.'+p.id),
-      p.user_id ? sbGet('follows?select=id&follower_user_id=eq.'+p.user_id) : Promise.resolve([])
+      sbGet('follows?select=follower_user_id&followed_fisherman_id=eq.'+p.id),
+      p.user_id ? sbGet('follows?select=followed_fisherman_id&follower_user_id=eq.'+p.user_id) : Promise.resolve([])
     ]);
-    followerCount = followers.length;
-    followingCount = following.length;
+    followerUserIds = followers.map(f=>f.follower_user_id);
+    followingFishermanIds = following.map(f=>f.followed_fisherman_id);
+    followerCount = followerUserIds.length;
+    followingCount = followingFishermanIds.length;
   }catch(e){ console.error('follow counts failed', e); }
 
   let html = `<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
@@ -5742,8 +5784,12 @@ async function openProfile(personId){
     <div>
       <h3 style="margin:0 0 4px;">${escapeHtml(p.name)}</h3>
       <div style="display:flex;gap:16px;">
-        <div><b style="font-size:15px;">${followerCount}</b> <span class="pc-line muted">Follower${followerCount===1?'':'s'}</span></div>
-        <div><b style="font-size:15px;">${followingCount}</b> <span class="pc-line muted">Following</span></div>
+        <button type="button" class="follow-count-btn" data-follow-type="followers" style="background:none;border:none;padding:0;cursor:${followerCount?'pointer':'default'};font-family:inherit;text-align:left;">
+          <b style="font-size:15px;color:var(--ink);">${followerCount}</b> <span class="pc-line muted" style="${followerCount?'text-decoration:underline;':''}">Follower${followerCount===1?'':'s'}</span>
+        </button>
+        <button type="button" class="follow-count-btn" data-follow-type="following" style="background:none;border:none;padding:0;cursor:${followingCount?'pointer':'default'};font-family:inherit;text-align:left;">
+          <b style="font-size:15px;color:var(--ink);">${followingCount}</b> <span class="pc-line muted" style="${followingCount?'text-decoration:underline;':''}">Following</span>
+        </button>
       </div>
     </div>
   </div>`;
@@ -5848,6 +5894,14 @@ async function openProfile(personId){
   html += catches.length ? catches.map(catchDetailHtml).join('') : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>';
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
+
+  document.querySelectorAll('.follow-count-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const type = btn.dataset.followType;
+      if(type === 'followers' && followerCount) openFollowList('Followers', followerUserIds, 'user');
+      if(type === 'following' && followingCount) openFollowList('Following', followingFishermanIds, 'fisherman');
+    });
+  });
 
   document.querySelectorAll('.pb-thumb').forEach(img=>{
     img.addEventListener('click', ()=> openPhotoModal(img.dataset.pbPhoto, null));
