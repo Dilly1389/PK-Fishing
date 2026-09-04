@@ -1212,6 +1212,16 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="badge-detail-modal">
+  <div class="modal-card" style="text-align:center;">
+    <img id="badge-detail-img" src="" alt="" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
+    <h3 id="badge-detail-title" style="margin:0 0 6px;"></h3>
+    <p class="pc-line muted" id="badge-detail-desc" style="margin-bottom:4px;"></p>
+    <p class="pc-line muted" id="badge-detail-when"></p>
+    <button class="mini-btn" id="badge-detail-close" style="margin-top:12px;">Close</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="follow-list-modal">
   <div class="modal-card">
     <h3 id="follow-list-title" style="margin-top:0;"></h3>
@@ -1221,7 +1231,8 @@
 </div>
 
 <div class="modal-overlay" id="profile-modal">
-  <div class="modal-card wide">
+  <div class="modal-card wide" style="position:relative;">
+    <button type="button" id="profile-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <div id="profile-body"></div>
     <button class="primary-btn" id="profile-close">Close</button>
   </div>
@@ -5747,6 +5758,9 @@ function openFollowList(title, ids, idType){
 document.getElementById('follow-list-close').addEventListener('click', ()=>{
   document.getElementById('follow-list-modal').classList.remove('open');
 });
+document.getElementById('badge-detail-close').addEventListener('click', ()=>{
+  document.getElementById('badge-detail-modal').classList.remove('open');
+});
 
 async function openProfile(personId){
   const p = people.find(x=>x.id===personId);
@@ -5803,11 +5817,11 @@ async function openProfile(personId){
       earnedDefs.map(b=>{
         const earned = earnedBadges.find(e=>e.badge_key===b.key);
         const when = earned ? new Date(earned.earned_at).toLocaleDateString([], {month:'short', year:'numeric'}) : '';
-        return `<div style="flex-shrink:0;width:82px;text-align:center;" title="${escapeHtml(b.desc)}">
+        return `<button type="button" class="badge-strip-item" data-badge-key="${b.key}" data-badge-when="${escapeHtml(when)}" style="flex-shrink:0;width:82px;text-align:center;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">
           <img src="badge-${b.key}.png" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
           <div style="font-size:11px;font-weight:700;color:var(--ink);line-height:1.2;">${escapeHtml(b.name)}</div>
           <div style="font-size:10px;color:var(--muted);">${escapeHtml(when)}</div>
-        </div>`;
+        </button>`;
       }).join('') + `</div>`;
   }
 
@@ -5903,6 +5917,18 @@ async function openProfile(personId){
     });
   });
 
+  document.querySelectorAll('.badge-strip-item').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const def = BADGE_DEFS.find(x=>x.key === btn.dataset.badgeKey);
+      if(!def) return;
+      document.getElementById('badge-detail-title').textContent = def.name;
+      document.getElementById('badge-detail-img').src = 'badge-'+def.key+'.png';
+      document.getElementById('badge-detail-desc').textContent = def.desc;
+      document.getElementById('badge-detail-when').textContent = btn.dataset.badgeWhen ? 'Earned ' + btn.dataset.badgeWhen : '';
+      document.getElementById('badge-detail-modal').classList.add('open');
+    });
+  });
+
   document.querySelectorAll('.pb-thumb').forEach(img=>{
     img.addEventListener('click', ()=> openPhotoModal(img.dataset.pbPhoto, null));
   });
@@ -5995,6 +6021,9 @@ async function openProfile(personId){
   }
 }
 document.getElementById('profile-close').addEventListener('click', ()=>{
+  document.getElementById('profile-modal').classList.remove('open');
+});
+document.getElementById('profile-modal-x').addEventListener('click', ()=>{
   document.getElementById('profile-modal').classList.remove('open');
 });
 
