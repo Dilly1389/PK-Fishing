@@ -429,6 +429,9 @@
     align-items:center;justify-content:center;z-index:200;padding:20px;
   }
   .modal-overlay.open{display:flex;}
+  /* These two open on top of an already-open profile modal, so they need
+     to win the stacking order regardless of where they sit in the DOM */
+  #badge-detail-modal, #follow-list-modal{z-index:220;}
   .modal-card{
     background:var(--card-bg);border-radius:16px;padding:24px 22px;max-width:320px;width:100%;
     text-align:center;border:1px solid var(--line);
@@ -1500,6 +1503,11 @@ const ALL_BAIT_TYPES = [
 // Each badge is a key, some display info, and a test against an angler's
 // stats. Deliberately all in one place so adding or changing badges later
 // means editing this list and nothing else.
+// Bump this whenever a badge image file is replaced with the same filename —
+// otherwise browsers (and CDN caches) can keep serving the old cached version
+// indefinitely, since nothing about the URL itself changes.
+const BADGE_ASSET_VERSION = 2;
+
 const BADGE_DEFS = [
   {key:'first_catch',    emoji:'🎣', name:'First Catch',       desc:'Logged your first fish',
    test: s=> s.catchCount >= 1},
@@ -3099,7 +3107,7 @@ document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,trophy_species,avatar_url,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,trophy_species,avatar_url,hide_from_directory,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
     clearDbError();
   }catch(e){
     console.error(e); people = [];
@@ -3884,6 +3892,17 @@ async function renderTackleList(){
   }
 
   if(items.length===0){ el.innerHTML = '<div class="empty">No tackle matches this filter.</div>'; return; }
+
+  // Bulk "add all" — only worth showing when there's something not
+  // already ticked, so the button isn't just sitting there uselessly
+  let addAllHtml = '';
+  if(visFilter === 'shared-with-me'){
+    const notYetInUse = items.filter(it=> sharedWithMeIds.get(it.id) !== true);
+    if(notYetInUse.length){
+      addAllHtml = `<button type="button" class="mini-btn" id="tackle-use-all-btn" style="margin-bottom:10px;">Add all ${notYetInUse.length} to my list</button>`;
+    }
+  }
+
   const byCategory = {};
   items.forEach(it=>{
     const cat = it.category || 'Other';
@@ -3891,7 +3910,7 @@ async function renderTackleList(){
     byCategory[cat].push(it);
   });
   const catNames = Object.keys(byCategory).sort((a,b)=>a.localeCompare(b));
-  el.innerHTML = catNames.map(cat=>{
+  const catHtml = catNames.map(cat=>{
     const rows = byCategory[cat].map(it=>{
       const baitTag = it.bait_type ? `<span class="pill" style="background:var(--khaki);color:var(--ink);">${escapeHtml(it.bait_type)}</span>` : '';
       const isMine = isSignedIn() && it.owner_user_id === session.user.id;
@@ -3946,6 +3965,36 @@ async function renderTackleList(){
     }).join('');
     return `<h2 style="font-size:14px;color:var(--khaki);margin:14px 0 6px;">${escapeHtml(cat)}</h2><ul class="people-list">${rows}</ul>`;
   }).join('');
+  el.innerHTML = addAllHtml + catHtml;
+
+  const useAllBtn = document.getElementById('tackle-use-all-btn');
+  if(useAllBtn){
+    useAllBtn.addEventListener('click', async ()=>{
+      useAllBtn.disabled = true;
+      useAllBtn.textContent = 'Adding...';
+      const notYetInUse = items.filter(it=> sharedWithMeIds.get(it.id) !== true);
+      let failed = 0;
+      for(const it of notYetInUse){
+        try{
+          const existing = await sbGet('tackle_item_shares?select=id&tackle_item_id=eq.'+it.id+'&shared_with_user_id=eq.'+session.user.id);
+          if(existing.length){
+            await sbPatch('tackle_item_shares', 'tackle_item_id=eq.'+it.id+'&shared_with_user_id=eq.'+session.user.id, {in_use: true});
+          }else{
+            await sbPost('tackle_item_shares', {
+              id: uid(), tackle_item_id: it.id,
+              shared_with_user_id: session.user.id, in_use: true
+            });
+          }
+        }catch(e){ console.error('add-all failed for', it.id, e); failed++; }
+      }
+      await loadGearOptions();
+      await loadTackleCategoryOptions();
+      if(currentPerson) renderAll();
+      if(failed) alert(`Added ${notYetInUse.length - failed} of ${notYetInUse.length} — ${failed} failed, try those individually.`);
+      renderTackleList();
+    });
+  }
+
   el.querySelectorAll('[data-tackle-edit]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const itemId = btn.dataset.tackleEdit;
@@ -5818,7 +5867,7 @@ async function openProfile(personId){
         const earned = earnedBadges.find(e=>e.badge_key===b.key);
         const when = earned ? new Date(earned.earned_at).toLocaleDateString([], {month:'short', year:'numeric'}) : '';
         return `<button type="button" class="badge-strip-item" data-badge-key="${b.key}" data-badge-when="${escapeHtml(when)}" style="flex-shrink:0;width:82px;text-align:center;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">
-          <img src="badge-${b.key}.png" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
+          <img src="badge-${b.key}.png?v=${BADGE_ASSET_VERSION}" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
           <div style="font-size:11px;font-weight:700;color:var(--ink);line-height:1.2;">${escapeHtml(b.name)}</div>
           <div style="font-size:10px;color:var(--muted);">${escapeHtml(when)}</div>
         </button>`;
@@ -5826,7 +5875,7 @@ async function openProfile(personId){
   }
 
   const myFishermanId = getMyFishermanId();
-  if(isSignedIn() && myFishermanId && myFishermanId !== p.id){
+  if(isSignedIn() && myFishermanId && myFishermanId !== p.id && !p.hide_from_directory){
     html += `<button class="mini-btn" id="profile-follow-btn" data-id="${p.id}" style="margin-bottom:10px;">Follow</button>`;
   }
   if(isSuperUser()){
@@ -5922,7 +5971,7 @@ async function openProfile(personId){
       const def = BADGE_DEFS.find(x=>x.key === btn.dataset.badgeKey);
       if(!def) return;
       document.getElementById('badge-detail-title').textContent = def.name;
-      document.getElementById('badge-detail-img').src = 'badge-'+def.key+'.png';
+      document.getElementById('badge-detail-img').src = 'badge-'+def.key+'.png?v='+BADGE_ASSET_VERSION;
       document.getElementById('badge-detail-desc').textContent = def.desc;
       document.getElementById('badge-detail-when').textContent = btn.dataset.badgeWhen ? 'Earned ' + btn.dataset.badgeWhen : '';
       document.getElementById('badge-detail-modal').classList.add('open');
@@ -6724,7 +6773,7 @@ async function renderFeed(refetch){
   let matchingPeople = null;
   let matchingIds = null;
   if(searchTerm){
-    matchingPeople = people.filter(p => !p.archived && p.name.toLowerCase().includes(searchTerm));
+    matchingPeople = people.filter(p => !p.archived && !p.hide_from_directory && p.name.toLowerCase().includes(searchTerm));
     matchingIds = matchingPeople.map(p => p.id);
     if(matchingIds.length === 0){
       el.innerHTML = '<div class="empty">No anglers match that name.</div>';
