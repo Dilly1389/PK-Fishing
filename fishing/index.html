@@ -6488,10 +6488,12 @@ async function openProfile(personId){
     }
     html += `<div id="profile-photo-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>`;
   }
-  // Only your own catches are editable (admin can edit anyone's)
+  // Only catches added via "Log a past catch" are editable here — those have
+  // no session behind them. Live session catches are part of a real timed
+  // session, so they're left alone.
   const canEditCatches = (myFishermanId && myFishermanId === p.id) || isSuperUser();
   html += catches.length
-    ? catches.map(c=>catchDetailHtml(c, canEditCatches)).join('')
+    ? catches.map(c=>catchDetailHtml(c, canEditCatches && !c.sessionId)).join('')
     : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>';
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
