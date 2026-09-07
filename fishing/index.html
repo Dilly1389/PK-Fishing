@@ -5887,10 +5887,50 @@ function renderVenueMap(venues){
     maxZoom: 18
   }).addTo(venueMapInstance);
 
-  const markers = mappable.map(v=>
-    L.marker([v.latitude, v.longitude]).bindPopup(escapeHtml(v.name))
-  );
+  // Each pin gets a popup with the venue name and actions, so a
+  // misplaced pin can be fixed or removed straight from the map
+  const markers = mappable.map(v=>{
+    const popupHtml = `
+      <div style="text-align:center;min-width:130px;">
+        <b style="font-size:14px;">${escapeHtml(v.name)}</b><br>
+        <span style="font-size:11px;color:#666;">${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)}</span>
+        <div style="display:flex;gap:6px;margin-top:8px;justify-content:center;">
+          <button type="button" class="map-venue-edit" data-venue-id="${v.id}"
+            style="border:1px solid #999;background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Edit</button>
+          <button type="button" class="map-venue-remove" data-venue-id="${v.id}"
+            style="border:1px solid #c33;background:#fff;color:#c33;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Remove</button>
+        </div>
+      </div>`;
+    return L.marker([v.latitude, v.longitude]).bindPopup(popupHtml);
+  });
   markers.forEach(m=> m.addTo(venueMapInstance));
+
+  // Popups are created on open, so the buttons only exist from then on
+  venueMapInstance.on('popupopen', (e)=>{
+    const node = e.popup.getElement();
+    if(!node) return;
+    const editBtn = node.querySelector('.map-venue-edit');
+    const removeBtn = node.querySelector('.map-venue-remove');
+    if(editBtn){
+      editBtn.addEventListener('click', ()=>{
+        venueMapInstance.closePopup();
+        openVenueEdit(editBtn.dataset.venueId);
+      });
+    }
+    if(removeBtn){
+      removeBtn.addEventListener('click', async ()=>{
+        if(!confirmDelete('this venue (your catches are kept, just unlinked from it)')) return;
+        try{
+          await sbDelete('venues', 'id=eq.'+removeBtn.dataset.venueId);
+          venueMapInstance.closePopup();
+          await openInsights();
+        }catch(err){
+          console.error(err);
+          alert('Could not remove: ' + (err.message || 'unknown error'));
+        }
+      });
+    }
+  });
 
   if(markers.length === 1){
     venueMapInstance.setView([mappable[0].latitude, mappable[0].longitude], 13);
