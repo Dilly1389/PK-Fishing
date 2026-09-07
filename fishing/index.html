@@ -432,7 +432,7 @@
   .modal-overlay.open{display:flex;}
   /* These two open on top of an already-open profile modal, so they need
      to win the stacking order regardless of where they sit in the DOM */
-  #badge-detail-modal, #follow-list-modal, #session-edit-modal, #forecast-modal{z-index:220;}
+  #badge-detail-modal, #follow-list-modal, #session-edit-modal, #forecast-modal, #edit-catch-modal{z-index:220;}
   /* Pin drop opens on top of the session edit modal, so it needs to be higher still */
   #pin-drop-modal{z-index:240;}
   .modal-card{
@@ -2022,9 +2022,10 @@ let editingCatchId = null;
 let editCaught = false;
 let editPhotos = [];
 
-function openEditCatch(catchId){
-  if(!currentPerson) return;
-  const c = currentPerson.catches.find(x=>x.id===catchId);
+function openEditCatch(catchId, catchObj){
+  // catchObj lets this work from the profile view, where the catch may
+  // belong to a different angler than the one loaded into currentPerson
+  const c = catchObj || (currentPerson && currentPerson.catches.find(x=>x.id===catchId));
   if(!c) return;
   editingCatchId = catchId;
   editCaught = !!c.caught;
@@ -2128,6 +2129,12 @@ document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
     editingCatchId = null;
     document.getElementById('edit-catch-modal').classList.remove('open');
     renderCatchList(c.rod);
+    // If the profile view is open, refresh it too — that's where past
+    // catches are edited from, and it wouldn't otherwise update
+    const profileModal = document.getElementById('profile-modal');
+    if(profileModal && profileModal.classList.contains('open') && currentProfileId){
+      openProfile(currentProfileId);
+    }
     clearDbError();
   }catch(e){
     console.error(e);
@@ -5353,18 +5360,22 @@ function renderProfilePhotoGrid(entries, filterType){
   ).join('');
 }
 
-function catchDetailHtml(c){
+function catchDetailHtml(c, editable){
   const timeStr = c.hasKnownTime === false
     ? 'not recorded'
     : new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(c.timerElapsed||0);
   const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
+  const dateStr = new Date(c.time).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'});
   let html = `<div class="profile-catch">
-    <div class="pc-head">${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</div>`;
+    <div class="pc-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span>${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</span>
+      ${editable ? `<button type="button" class="mini-btn profile-edit-catch" data-catch-id="${c.id}" style="text-transform:none;letter-spacing:normal;">Edit</button>` : ''}
+    </div>`;
   if(c.caught){
     html += `<div class="pc-line">${escapeHtml(c.type||'Fish')} — ${c.weight}kg</div>`;
   }
-  html += `<div class="pc-line muted">Time of day: ${timeStr} &middot; Rod timer: ${timerStr}</div>`;
+  html += `<div class="pc-line muted">${escapeHtml(dateStr)} &middot; Time of day: ${timeStr} &middot; Rod timer: ${timerStr}</div>`;
   if(c.rig){
     html += `<div class="pc-line muted">Rig: ${escapeHtml(c.rig)}</div>`;
   }
@@ -6324,10 +6335,14 @@ document.getElementById('badge-detail-close').addEventListener('click', ()=>{
   document.getElementById('badge-detail-modal').classList.remove('open');
 });
 
+// Which profile is currently open — so an edit made from it can refresh it
+let currentProfileId = null;
+
 async function openProfile(personId){
   const p = people.find(x=>x.id===personId);
   const rec = await loadPerson(personId);
   if(!p) return;
+  currentProfileId = personId;
   const catches = rec && rec.catches ? rec.catches.slice().sort((a,b)=> b.time-a.time) : [];
   const caughtOnly = catches.filter(c=>c.caught);
   const totalWeight = caughtOnly.reduce((s,c)=>s+(c.weight||0),0);
@@ -6473,9 +6488,20 @@ async function openProfile(personId){
     }
     html += `<div id="profile-photo-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>`;
   }
-  html += catches.length ? catches.map(catchDetailHtml).join('') : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>';
+  // Only your own catches are editable (admin can edit anyone's)
+  const canEditCatches = (myFishermanId && myFishermanId === p.id) || isSuperUser();
+  html += catches.length
+    ? catches.map(c=>catchDetailHtml(c, canEditCatches)).join('')
+    : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>';
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
+
+  document.querySelectorAll('.profile-edit-catch').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const c = catches.find(x=>x.id === btn.dataset.catchId);
+      openEditCatch(btn.dataset.catchId, c);
+    });
+  });
 
   document.querySelectorAll('.follow-count-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
