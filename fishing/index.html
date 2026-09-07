@@ -1454,7 +1454,8 @@
 </div>
 
 <div class="modal-overlay" id="insights-modal">
-  <div class="modal-card wide">
+  <div class="modal-card wide" style="position:relative;">
+    <button type="button" id="insights-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;">My insights</h3>
     <div id="insights-body"><div class="empty">Loading...</div></div>
     <button class="primary-btn" id="insights-close" style="margin-top:14px;">Close</button>
@@ -4945,6 +4946,10 @@ async function openForecast(){
 }
 
 document.getElementById('session-start-btn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('session-start-btn');
+  // Starting a session involves several awaits — without this guard a second
+  // tap during that window creates a whole duplicate session
+  if(btn.disabled) return;
   const st = document.getElementById('session-status');
   const venueName = document.getElementById('session-venue').value.trim();
   const competitionId = document.getElementById('session-competition').value || null;
@@ -4952,6 +4957,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
   const myId = getMyFishermanId();
   if(!myId){ st.textContent = 'Could not find your angler profile.'; return; }
   if(!venueName){ st.textContent = 'Enter a venue.'; return; }
+  btn.disabled = true;
   st.textContent = 'Starting...';
   try{
     // Match this venue to a saved one, or create it (with coordinates if available)
@@ -5009,6 +5015,8 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
   }catch(e){
     console.error(e);
     st.textContent = 'Could not start session: ' + (e.message || 'unknown error');
+  }finally{
+    btn.disabled = false;
   }
 });
 
@@ -5562,15 +5570,17 @@ function buildInsightsHtml(catches, venues, sessions){
       atVenue.forEach(c=>{ if(c.rig){ rigTally[c.rig] = (rigTally[c.rig]||0)+1; } });
       const bestRig = Object.keys(rigTally).sort((a,b)=>rigTally[b]-rigTally[a])[0];
       const venueObj = (venues||[]).find(v=>v.name === r.key);
-      html += `<li>
-        <div class="who">
+      html += `<li style="display:block;">
+        <div class="who" style="margin-bottom:6px;">
           <b>${escapeHtml(r.key)}</b>
           ${bestRig ? `<span class="pill">Best rig: ${escapeHtml(bestRig)}</span>` : ''}
         </div>
-        <div class="actions">
-          <span class="pill">${r.count} fish</span>
-          <span class="pill">${r.weight.toFixed(1)}kg</span>
-          ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <span class="pill">${r.count} fish</span>
+            <span class="pill">${r.weight.toFixed(1)}kg</span>
+            ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
+          </div>
           ${venueObj ? `<button type="button" class="mini-btn danger" data-delete-venue="${venueObj.id}">Remove</button>` : ''}
         </div>
       </li>`;
@@ -5609,18 +5619,22 @@ function buildInsightsHtml(catches, venues, sessions){
       </div>`;
     html += '<ul class="people-list">';
     sessionRows.slice(0, 10).forEach(s=>{
-      html += `<li>
-        <div class="who">
+      html += `<li style="display:block;">
+        <div class="who" style="margin-bottom:6px;">
           <b>${escapeHtml(s.name)}</b>
           <span class="pill">${escapeHtml(s.when)}</span>
           ${s.ongoing ? '<span class="pill">Ongoing</span>' : ''}
         </div>
-        <div class="actions">
-          <span class="pill">${s.count} fish</span>
-          ${s.weight ? `<span class="pill">${s.weight.toFixed(1)}kg</span>` : ''}
-          <span class="pill">${fmtDuration(s.duration)}</span>
-          <button type="button" class="mini-btn" data-edit-session="${s.id}">Edit</button>
-          <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Delete</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <span class="pill">${s.count} fish</span>
+            ${s.weight ? `<span class="pill">${s.weight.toFixed(1)}kg</span>` : ''}
+            <span class="pill">${fmtDuration(s.duration)}</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="mini-btn" data-edit-session="${s.id}">Edit</button>
+            <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Delete</button>
+          </div>
         </div>
       </li>`;
     });
@@ -6266,6 +6280,9 @@ document.getElementById('past-catch-save-btn').addEventListener('click', async (
 });
 
 document.getElementById('open-insights-btn').addEventListener('click', openInsights);
+document.getElementById('insights-modal-x').addEventListener('click', ()=>{
+  document.getElementById('insights-modal').classList.remove('open');
+});
 document.getElementById('insights-close').addEventListener('click', ()=>{
   document.getElementById('insights-modal').classList.remove('open');
 });
