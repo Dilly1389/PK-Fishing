@@ -432,7 +432,7 @@
   .modal-overlay.open{display:flex;}
   /* These two open on top of an already-open profile modal, so they need
      to win the stacking order regardless of where they sit in the DOM */
-  #badge-detail-modal, #follow-list-modal, #session-edit-modal, #forecast-modal, #edit-catch-modal{z-index:220;}
+  #badge-detail-modal, #follow-list-modal, #session-edit-modal, #venue-edit-modal, #forecast-modal, #edit-catch-modal{z-index:220;}
   /* Pin drop opens on top of the session edit modal, so it needs to be higher still */
   #pin-drop-modal{z-index:240;}
   .modal-card{
@@ -1230,6 +1230,25 @@
       <button class="primary-btn" id="confirm-edit" style="background:var(--khaki);color:var(--ink);">Edit</button>
       <button class="primary-btn" id="confirm-correct">Correct</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="venue-edit-modal">
+  <div class="modal-card" style="position:relative;">
+    <button type="button" id="venue-edit-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <h3 style="margin-top:0;">Edit venue</h3>
+    <div class="field">
+      <label>Venue name</label>
+      <input type="text" maxlength="100" id="venue-edit-name" placeholder="Name of the water" autocomplete="pk-venue-edit">
+    </div>
+    <p class="pc-line muted" id="venue-edit-coords" style="margin-bottom:6px;"></p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      <button type="button" class="mini-btn" id="venue-edit-lookup">📍 Search for it</button>
+      <button type="button" class="mini-btn" id="venue-edit-pin">🗺️ Drop a pin</button>
+    </div>
+    <div id="venue-edit-results" style="margin-bottom:10px;"></div>
+    <button class="primary-btn" id="venue-edit-save">Save changes</button>
+    <div class="status" id="venue-edit-status"></div>
   </div>
 </div>
 
@@ -5592,7 +5611,10 @@ function buildInsightsHtml(catches, venues, sessions){
             <span class="pill">${r.weight.toFixed(1)}kg</span>
             ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
           </div>
-          ${venueObj ? `<button type="button" class="mini-btn danger" data-delete-venue="${venueObj.id}">Remove</button>` : ''}
+          ${venueObj ? `<div style="display:flex;gap:6px;">
+            <button type="button" class="mini-btn" data-edit-venue="${venueObj.id}">Edit</button>
+            <button type="button" class="mini-btn danger" data-delete-venue="${venueObj.id}">Remove</button>
+          </div>` : ''}
         </div>
       </li>`;
     });
@@ -5830,6 +5852,10 @@ async function openInsights(){
     });
   });
 
+  body.querySelectorAll('[data-edit-venue]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openVenueEdit(btn.dataset.editVenue));
+  });
+
   body.querySelectorAll('[data-delete-venue]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       if(!confirmDelete('this venue (your catches are kept, just unlinked from it)')) return;
@@ -6057,6 +6083,97 @@ document.getElementById('pin-drop-confirm').addEventListener('click', ()=>{
 // ---------- Editing a session's venue ----------
 let editingSession = null;
 let editingSessionCoords = null;
+
+// ---------- Editing a venue directly ----------
+// Needed because a venue created by "Log a past catch" has no session
+// behind it, so there was previously no way to correct its name or pin.
+let editingVenue = null;
+let editingVenueCoords = null;
+
+async function openVenueEdit(venueId){
+  const venues = await loadMyVenues();
+  const v = venues.find(x=>x.id === venueId);
+  if(!v) return;
+  editingVenue = v;
+  editingVenueCoords = (v.latitude != null) ? {lat: v.latitude, lng: v.longitude} : null;
+
+  document.getElementById('venue-edit-name').value = v.name || '';
+  document.getElementById('venue-edit-results').innerHTML = '';
+  document.getElementById('venue-edit-status').textContent = '';
+  updateVenueEditCoordsLabel();
+  document.getElementById('venue-edit-modal').classList.add('open');
+}
+
+function updateVenueEditCoordsLabel(){
+  const el = document.getElementById('venue-edit-coords');
+  el.textContent = editingVenueCoords
+    ? `📍 ${editingVenueCoords.lat.toFixed(4)}, ${editingVenueCoords.lng.toFixed(4)}`
+    : 'No map location set yet.';
+}
+
+document.getElementById('venue-edit-pin').addEventListener('click', ()=>{
+  openPinDrop(editingVenueCoords, (coords)=>{
+    editingVenueCoords = coords;
+    updateVenueEditCoordsLabel();
+  });
+});
+
+document.getElementById('venue-edit-lookup').addEventListener('click', async ()=>{
+  const query = document.getElementById('venue-edit-name').value.trim();
+  const results = document.getElementById('venue-edit-results');
+  if(query.length < 3){ results.innerHTML = '<div class="empty">Type at least 3 letters first.</div>'; return; }
+  results.innerHTML = '<div class="empty">Searching...</div>';
+  const places = await searchPlaces(query);
+  if(!places.length){
+    results.innerHTML = '<div class="empty">No matching place found — try "Drop a pin" instead.</div>';
+    return;
+  }
+  results.innerHTML = places.map((p,i)=>
+    `<button type="button" class="mini-btn venue-place-result" data-idx="${i}" style="display:block;width:100%;text-align:left;margin-bottom:4px;">
+      <b>${escapeHtml(p.name)}</b><br><span class="pc-line muted">${escapeHtml(p.fullName)}</span>
+    </button>`).join('');
+  results.querySelectorAll('.venue-place-result').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = places[parseInt(btn.dataset.idx,10)];
+      document.getElementById('venue-edit-name').value = p.name;
+      editingVenueCoords = {lat: p.lat, lng: p.lng};
+      updateVenueEditCoordsLabel();
+      results.innerHTML = '';
+    });
+  });
+});
+
+document.getElementById('venue-edit-save').addEventListener('click', async ()=>{
+  const st = document.getElementById('venue-edit-status');
+  if(!editingVenue) return;
+  const newName = document.getElementById('venue-edit-name').value.trim();
+  if(!newName){ st.textContent = 'Enter a venue name.'; return; }
+  st.textContent = 'Saving...';
+  try{
+    await sbPatch('venues', 'id=eq.'+editingVenue.id, {
+      name: newName,
+      latitude: editingVenueCoords ? editingVenueCoords.lat : null,
+      longitude: editingVenueCoords ? editingVenueCoords.lng : null
+    });
+    // Sessions store the venue name directly too, so keep them in step
+    await sbPatch('sessions', 'venue_id=eq.'+editingVenue.id, {venue_name: newName});
+    if(activeSession && activeSession.venue_id === editingVenue.id){
+      activeSession.venue_name = newName;
+      await renderSessionUi();
+    }
+    document.getElementById('venue-edit-modal').classList.remove('open');
+    editingVenue = null;
+    await openInsights();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+  }
+});
+
+document.getElementById('venue-edit-x').addEventListener('click', ()=>{
+  document.getElementById('venue-edit-modal').classList.remove('open');
+  editingVenue = null;
+});
 
 async function openSessionEdit(sessionId){
   const sessions = await loadMySessions();
