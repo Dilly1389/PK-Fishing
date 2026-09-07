@@ -432,7 +432,9 @@
   .modal-overlay.open{display:flex;}
   /* These two open on top of an already-open profile modal, so they need
      to win the stacking order regardless of where they sit in the DOM */
-  #badge-detail-modal, #follow-list-modal{z-index:220;}
+  #badge-detail-modal, #follow-list-modal, #session-edit-modal, #forecast-modal{z-index:220;}
+  /* Pin drop opens on top of the session edit modal, so it needs to be higher still */
+  #pin-drop-modal{z-index:240;}
   .modal-card{
     background:var(--card-bg);border-radius:16px;padding:24px 22px;max-width:320px;width:100%;
     text-align:center;border:1px solid var(--line);
@@ -1228,6 +1230,25 @@
       <button class="primary-btn" id="confirm-edit" style="background:var(--khaki);color:var(--ink);">Edit</button>
       <button class="primary-btn" id="confirm-correct">Correct</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="session-edit-modal">
+  <div class="modal-card" style="position:relative;">
+    <button type="button" id="session-edit-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <h3 style="margin-top:0;">Edit session</h3>
+    <div class="field">
+      <label>Venue</label>
+      <input type="text" maxlength="100" id="session-edit-venue" list="venue-suggestions-past" placeholder="Where was it fished?" autocomplete="pk-edit-venue">
+    </div>
+    <p class="pc-line muted" id="session-edit-coords" style="margin-bottom:6px;"></p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      <button type="button" class="mini-btn" id="session-edit-lookup">📍 Search for it</button>
+      <button type="button" class="mini-btn" id="session-edit-pin">🗺️ Drop a pin</button>
+    </div>
+    <div id="session-edit-results" style="margin-bottom:10px;"></div>
+    <button class="primary-btn" id="session-edit-save">Save changes</button>
+    <div class="status" id="session-edit-status"></div>
   </div>
 </div>
 
@@ -5598,6 +5619,7 @@ function buildInsightsHtml(catches, venues, sessions){
           <span class="pill">${s.count} fish</span>
           ${s.weight ? `<span class="pill">${s.weight.toFixed(1)}kg</span>` : ''}
           <span class="pill">${fmtDuration(s.duration)}</span>
+          <button type="button" class="mini-btn" data-edit-session="${s.id}">Edit</button>
           <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Delete</button>
         </div>
       </li>`;
@@ -5740,6 +5762,10 @@ async function openInsights(){
   const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
   body.innerHTML = buildInsightsHtml(rec && rec.catches ? rec.catches : [], venues, sessions);
   renderVenueMap(venues);
+
+  body.querySelectorAll('[data-edit-session]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openSessionEdit(btn.dataset.editSession));
+  });
 
   body.querySelectorAll('[data-delete-session]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -5940,7 +5966,12 @@ document.getElementById('past-catch-coord-apply').addEventListener('click', ()=>
   document.getElementById('past-catch-coord-entry').style.display = 'none';
 });
 
-document.getElementById('past-catch-venue-pin').addEventListener('click', async ()=>{
+// Shared pin-drop map, used by both the past-catch form and session editing.
+// onConfirm receives the chosen {lat, lng}.
+let pinDropOnConfirm = null;
+
+async function openPinDrop(startCoords, onConfirm){
+  pinDropOnConfirm = onConfirm;
   document.getElementById('pin-drop-modal').classList.add('open');
   document.getElementById('pin-drop-readout').textContent = 'No spot chosen yet.';
   document.getElementById('pin-drop-confirm').disabled = true;
@@ -5949,19 +5980,28 @@ document.getElementById('past-catch-venue-pin').addEventListener('click', async 
   if(typeof L === 'undefined') return;
   if(pinDropMap){ pinDropMap.remove(); pinDropMap = null; pinDropMarker = null; }
 
-  // Start somewhere sensible — an existing venue, current position, or
-  // a wide view of South Africa as a last resort
+  // Start somewhere sensible — the venue's existing spot, another venue,
+  // current position, or a wide view of South Africa as a last resort
   let startAt = [-28.5, 24.7], startZoom = 5;
   const existingVenues = await loadMyVenues();
   const withCoords = existingVenues.find(v=> v.latitude != null);
   if(withCoords){ startAt = [withCoords.latitude, withCoords.longitude]; startZoom = 11; }
-  const pos = lastKnownPosition;
-  if(pos){ startAt = [pos.lat, pos.lng]; startZoom = 13; }
+  if(lastKnownPosition){ startAt = [lastKnownPosition.lat, lastKnownPosition.lng]; startZoom = 13; }
+  if(startCoords){ startAt = [startCoords.lat, startCoords.lng]; startZoom = 14; }
 
   pinDropMap = L.map('pin-drop-map').setView(startAt, startZoom);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
   }).addTo(pinDropMap);
+
+  // Show where it currently sits, if it already has a location
+  if(startCoords){
+    pinDropMarker = L.marker([startCoords.lat, startCoords.lng]).addTo(pinDropMap);
+    pinDropChoice = {lat: startCoords.lat, lng: startCoords.lng};
+    document.getElementById('pin-drop-readout').textContent =
+      `Currently: ${startCoords.lat.toFixed(4)}, ${startCoords.lng.toFixed(4)} — tap to move it`;
+    document.getElementById('pin-drop-confirm').disabled = false;
+  }
 
   pinDropMap.on('click', (e)=>{
     pinDropChoice = {lat: e.latlng.lat, lng: e.latlng.lng};
@@ -5972,16 +6012,138 @@ document.getElementById('past-catch-venue-pin').addEventListener('click', async 
     document.getElementById('pin-drop-confirm').disabled = false;
   });
 
-  // The modal only just became visible, so Leaflet needs to re-measure
   setTimeout(()=>{ if(pinDropMap) pinDropMap.invalidateSize(); }, 150);
+}
+
+document.getElementById('past-catch-venue-pin').addEventListener('click', ()=>{
+  openPinDrop(pastCatchCoords, (coords)=>{
+    pastCatchCoords = coords;
+    document.getElementById('past-catch-venue-results').innerHTML =
+      `<div class="pc-line muted">📍 Location set — ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}</div>`;
+  });
 });
 
 document.getElementById('pin-drop-confirm').addEventListener('click', ()=>{
   if(!pinDropChoice) return;
-  pastCatchCoords = {lat: pinDropChoice.lat, lng: pinDropChoice.lng};
-  document.getElementById('past-catch-venue-results').innerHTML =
-    `<div class="pc-line muted">📍 Location set — ${pinDropChoice.lat.toFixed(4)}, ${pinDropChoice.lng.toFixed(4)}</div>`;
+  if(pinDropOnConfirm) pinDropOnConfirm({lat: pinDropChoice.lat, lng: pinDropChoice.lng});
   document.getElementById('pin-drop-modal').classList.remove('open');
+});
+
+// ---------- Editing a session's venue ----------
+let editingSession = null;
+let editingSessionCoords = null;
+
+async function openSessionEdit(sessionId){
+  const sessions = await loadMySessions();
+  const s = sessions.find(x=>x.id === sessionId);
+  if(!s) return;
+  editingSession = s;
+
+  const venues = await loadMyVenues();
+  const venue = venues.find(v=>v.id === s.venue_id);
+  editingSessionCoords = (venue && venue.latitude != null)
+    ? {lat: venue.latitude, lng: venue.longitude} : null;
+
+  document.getElementById('session-edit-venue').value = s.venue_name || '';
+  document.getElementById('session-edit-results').innerHTML = '';
+  document.getElementById('session-edit-status').textContent = '';
+  updateSessionEditCoordsLabel();
+  refreshVenueSuggestions();
+  document.getElementById('session-edit-modal').classList.add('open');
+}
+
+function updateSessionEditCoordsLabel(){
+  const el = document.getElementById('session-edit-coords');
+  el.textContent = editingSessionCoords
+    ? `📍 ${editingSessionCoords.lat.toFixed(4)}, ${editingSessionCoords.lng.toFixed(4)}`
+    : 'No map location set for this venue yet.';
+}
+
+document.getElementById('session-edit-pin').addEventListener('click', ()=>{
+  openPinDrop(editingSessionCoords, (coords)=>{
+    editingSessionCoords = coords;
+    updateSessionEditCoordsLabel();
+  });
+});
+
+document.getElementById('session-edit-lookup').addEventListener('click', async ()=>{
+  const query = document.getElementById('session-edit-venue').value.trim();
+  const results = document.getElementById('session-edit-results');
+  if(query.length < 3){ results.innerHTML = '<div class="empty">Type at least 3 letters first.</div>'; return; }
+  results.innerHTML = '<div class="empty">Searching...</div>';
+  const places = await searchPlaces(query);
+  if(!places.length){
+    results.innerHTML = '<div class="empty">No matching place found — try "Drop a pin" instead.</div>';
+    return;
+  }
+  results.innerHTML = places.map((p,i)=>
+    `<button type="button" class="mini-btn session-place-result" data-idx="${i}" style="display:block;width:100%;text-align:left;margin-bottom:4px;">
+      <b>${escapeHtml(p.name)}</b><br><span class="pc-line muted">${escapeHtml(p.fullName)}</span>
+    </button>`).join('');
+  results.querySelectorAll('.session-place-result').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = places[parseInt(btn.dataset.idx,10)];
+      document.getElementById('session-edit-venue').value = p.name;
+      editingSessionCoords = {lat: p.lat, lng: p.lng};
+      updateSessionEditCoordsLabel();
+      results.innerHTML = '';
+    });
+  });
+});
+
+document.getElementById('session-edit-save').addEventListener('click', async ()=>{
+  const st = document.getElementById('session-edit-status');
+  if(!editingSession) return;
+  const newName = document.getElementById('session-edit-venue').value.trim();
+  if(!newName){ st.textContent = 'Enter a venue name.'; return; }
+  st.textContent = 'Saving...';
+  try{
+    const venues = await loadMyVenues();
+    // Reuse a matching venue if one exists, otherwise create it — same
+    // case-insensitive matching as everywhere else, to avoid duplicates
+    let venueId = editingSession.venue_id;
+    const existing = venues.find(v=> v.name.toLowerCase() === newName.toLowerCase());
+    if(existing){
+      venueId = existing.id;
+      if(editingSessionCoords){
+        await sbPatch('venues', 'id=eq.'+existing.id, {
+          latitude: editingSessionCoords.lat, longitude: editingSessionCoords.lng
+        });
+      }
+    }else{
+      venueId = uid();
+      await sbPost('venues', {
+        id: venueId, owner_user_id: session.user.id, name: newName,
+        latitude: editingSessionCoords ? editingSessionCoords.lat : null,
+        longitude: editingSessionCoords ? editingSessionCoords.lng : null
+      });
+    }
+
+    await sbPatch('sessions', 'id=eq.'+editingSession.id, {
+      venue_name: newName, venue_id: venueId
+    });
+    // Keep catches from this session pointing at the right venue too
+    await sbPatch('catches', 'session_id=eq.'+editingSession.id, {venue_id: venueId});
+
+    // If this is the session currently running, update it on Timers as well
+    if(activeSession && activeSession.id === editingSession.id){
+      activeSession.venue_name = newName;
+      activeSession.venue_id = venueId;
+      await renderSessionUi();
+    }
+
+    document.getElementById('session-edit-modal').classList.remove('open');
+    editingSession = null;
+    await openInsights();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+  }
+});
+
+document.getElementById('session-edit-x').addEventListener('click', ()=>{
+  document.getElementById('session-edit-modal').classList.remove('open');
+  editingSession = null;
 });
 
 document.getElementById('pin-drop-x').addEventListener('click', ()=>{
