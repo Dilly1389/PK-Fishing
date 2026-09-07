@@ -241,6 +241,7 @@
   .start-time-label{font-size:11.5px;color:var(--muted);}
   .btn-pause{background:var(--khaki);color:var(--ink);}
   .btn-reset{background:transparent;color:var(--muted);border:1px solid var(--line);}
+  .btn-recast{background:transparent;color:var(--dam);border:1px solid var(--dam);}
 
   .field{margin-bottom:12px;}
   .field label{
@@ -519,7 +520,8 @@
           <input type="hidden" id="session-competition" value="">
           <div class="field">
             <label>Venue</label>
-            <input type="text" maxlength="100" id="session-venue" placeholder="Where are you fishing?" autocomplete="pk-venue-1" name="pk-venue-field-1" readonly onfocus="if(!document.getElementById('session-competition').value){ this.removeAttribute('readonly'); }">
+            <input type="text" maxlength="100" id="session-venue" list="venue-suggestions" placeholder="Where are you fishing?" autocomplete="pk-venue-1" name="pk-venue-field-1" readonly onfocus="if(!document.getElementById('session-competition').value){ this.removeAttribute('readonly'); }">
+            <datalist id="venue-suggestions"></datalist>
           </div>
           <div class="field">
             <label>How many rods?</label>
@@ -705,22 +707,36 @@
           </div>
           <div class="field">
             <label>Weight (kg)</label>
-            <input type="number" step="0.01" min="0" max="500" id="past-catch-weight" placeholder="e.g. 12.4">
+            <input type="number" step="0.01" min="0" max="500" id="past-catch-weight" placeholder="e.g. 12.4" autocomplete="pk-x1">
           </div>
         </div>
         <div class="row2">
           <div class="field">
             <label>When</label>
-            <input type="date" id="past-catch-date">
+            <input type="date" id="past-catch-date" autocomplete="pk-x2">
           </div>
           <div class="field">
             <label>Time (optional, if you remember roughly)</label>
-            <input type="time" id="past-catch-time">
+            <input type="time" id="past-catch-time" autocomplete="pk-x3">
           </div>
         </div>
         <div class="field">
           <label>Venue (optional)</label>
-          <input type="text" maxlength="100" id="past-catch-venue" placeholder="Where was it caught?" autocomplete="pk-venue-2" name="pk-venue-field-2">
+          <input type="text" maxlength="100" id="past-catch-venue" list="venue-suggestions-past" placeholder="Where was it caught?" autocomplete="pk-venue-2" name="pk-venue-field-2">
+          <datalist id="venue-suggestions-past"></datalist>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+            <button type="button" class="mini-btn" id="past-catch-venue-lookup">📍 Search for it</button>
+            <button type="button" class="mini-btn" id="past-catch-venue-pin">🗺️ Drop a pin</button>
+            <button type="button" class="mini-btn" id="past-catch-venue-coords">⌖ Enter coordinates</button>
+          </div>
+          <div id="past-catch-venue-results" style="margin-top:6px;"></div>
+          <div id="past-catch-coord-entry" style="display:none;margin-top:6px;">
+            <p class="pc-line muted" style="margin-bottom:4px;">Paste coordinates, e.g. -26.7145, 28.0912</p>
+            <div style="display:flex;gap:6px;">
+              <input type="text" maxlength="60" id="past-catch-coord-input" placeholder="-26.7145, 28.0912" autocomplete="pk-coords" style="flex:1;">
+              <button type="button" class="mini-btn" id="past-catch-coord-apply">Set</button>
+            </div>
+          </div>
         </div>
         <div class="field">
           <label>Photo (optional)</label>
@@ -842,21 +858,21 @@
         <div class="row2">
           <div class="field">
             <label>Start date</label>
-            <input type="date" id="competition-start">
+            <input type="date" id="competition-start" autocomplete="pk-x4">
           </div>
           <div class="field">
             <label>Start time</label>
-            <input type="time" id="competition-start-time" value="00:00">
+            <input type="time" id="competition-start-time" value="00:00" autocomplete="pk-x5">
           </div>
         </div>
         <div class="row2">
           <div class="field">
             <label>End date</label>
-            <input type="date" id="competition-end">
+            <input type="date" id="competition-end" autocomplete="pk-x6">
           </div>
           <div class="field">
             <label>End time</label>
-            <input type="time" id="competition-end-time" value="23:59">
+            <input type="time" id="competition-end-time" value="23:59" autocomplete="pk-x7">
           </div>
         </div>
         <div class="row2">
@@ -1004,7 +1020,7 @@
               </div>
               <div class="field">
                 <label>Weight (kg)</label>
-                <input type="number" step="0.01" min="0" max="500" id="admin-catch-weight">
+                <input type="number" step="0.01" min="0" max="500" id="admin-catch-weight" autocomplete="pk-x8">
               </div>
             </div>
             <button class="primary-btn" id="admin-catch-save-btn">Save changes</button>
@@ -1215,6 +1231,25 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="pin-drop-modal">
+  <div class="modal-card wide" style="position:relative;">
+    <button type="button" id="pin-drop-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:500;">×</button>
+    <h3 style="margin-top:0;">Drop a pin</h3>
+    <p class="pc-line muted">Tap the map where the water is. Pinch to zoom in for accuracy.</p>
+    <div id="pin-drop-map" style="height:320px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:10px;"></div>
+    <p class="pc-line muted" id="pin-drop-readout">No spot chosen yet.</p>
+    <button class="primary-btn" id="pin-drop-confirm" disabled>Use this spot</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="forecast-modal">
+  <div class="modal-card wide" style="position:relative;">
+    <button type="button" id="forecast-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <h3 style="margin-top:0;">Forecast</h3>
+    <div id="forecast-body"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="badge-detail-modal">
   <div class="modal-card" style="text-align:center;">
     <img id="badge-detail-img" src="" alt="" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
@@ -1314,6 +1349,10 @@
     <div class="profile-catch">
       <div class="pc-head">Running a timer</div>
       <div class="pc-line muted">Start it when a rod goes out. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. It resets automatically once you log a catch or a blank, ready for the next run. Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Recast</div>
+      <div class="pc-line muted">Tangled line, snag, or just going back out with the same bait? Tap Recast to restart the clock without touching your rig or hooks. Nothing gets logged — it's not a blank, just a fresh soak time.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Logging a catch</div>
@@ -1417,7 +1456,7 @@
         <input type="text" maxlength="100" id="photo-comment-author" placeholder="Your name (optional)" autocomplete="pk-field-17">
       </div>
       <div class="field">
-        <textarea maxlength="500" id="photo-comment-message" placeholder="Comment on this catch..."></textarea>
+        <textarea maxlength="500" id="photo-comment-message" placeholder="Comment on this catch..." autocomplete="pk-x9"></textarea>
       </div>
       <button class="primary-btn" id="photo-comment-post-btn">Post comment</button>
       <div class="status" id="photo-comment-status"></div>
@@ -1462,7 +1501,7 @@
         </div>
         <div class="field">
           <label>Weight (kg)</label>
-          <input type="number" step="0.01" min="0" max="500" id="edit-catch-weight" placeholder="e.g. 2.4">
+          <input type="number" step="0.01" min="0" max="500" id="edit-catch-weight" placeholder="e.g. 2.4" autocomplete="pk-x10">
         </div>
       </div>
       <div class="field">
@@ -1509,6 +1548,9 @@ const ALL_BAIT_TYPES = [
 const BADGE_ASSET_VERSION = 2;
 
 const BADGE_DEFS = [
+  // One-off badges: `test` returns true once the condition is met.
+  // Repeatable badges: `count` returns how many times it's been earned,
+  // shown as a small number on the badge.
   {key:'first_catch',    emoji:'🎣', name:'First Catch',       desc:'Logged your first fish',
    test: s=> s.catchCount >= 1},
   {key:'catch_10',       emoji:'🔟', name:'Double Figures',    desc:'Logged 10 catches',
@@ -1517,28 +1559,28 @@ const BADGE_DEFS = [
    test: s=> s.catchCount >= 50},
   {key:'catch_100',      emoji:'💯', name:'Century',           desc:'Logged 100 catches',
    test: s=> s.catchCount >= 100},
-  {key:'first_blank',    emoji:'🫥', name:'Blanked',           desc:'Logged your first blank — it happens',
-   test: s=> s.blankCount >= 1},
+  {key:'first_blank',    emoji:'🫥', name:'Blanked',           desc:'Fished a whole session without a single fish — it happens',
+   count: s=> s.blankSessionCount},
   {key:'ten_kg',         emoji:'🐋', name:'Double Digits',     desc:'Landed a fish over 10kg',
-   test: s=> s.biggest >= 10},
+   count: s=> s.tenKgCount},
   {key:'five_species',   emoji:'🐟', name:'Mixed Bag',         desc:'Caught 5 different species',
    test: s=> s.speciesCount >= 5},
   {key:'night_owl',      emoji:'🦉', name:'Night Owl',         desc:'Caught a fish between midnight and 6am',
-   test: s=> s.nightCatch},
+   count: s=> s.nightCatchCount},
   {key:'full_moon',      emoji:'🌕', name:'Full Moon Fish',    desc:'Caught a fish on a full moon',
-   test: s=> s.fullMoonCatch},
+   count: s=> s.fullMoonCatchCount},
   {key:'ten_sessions',   emoji:'⏱️', name:'Regular',           desc:'Fished 10 sessions',
    test: s=> s.sessionCount >= 10},
   {key:'three_venues',   emoji:'📍', name:'Explorer',          desc:'Fished 3 different venues',
    test: s=> s.venueCount >= 3},
   {key:'competitor',     emoji:'🏆', name:'Competitor',        desc:'Took part in a competition',
-   test: s=> s.competitionCount >= 1},
+   count: s=> s.competitionCount},
   {key:'grand_slam',     emoji:'🎖️', name:'Grand Slam',        desc:'Caught every species in your Reel Records',
    test: s=> s.recordSpeciesTotal > 0 && s.recordSpeciesCaught >= s.recordSpeciesTotal},
   {key:'rare_catch',     emoji:'🦄', name:'Rare Catch',        desc:'Landed one of the uncommon ones — Eel, Mudfish or Koi',
-   test: s=> s.rareCatch},
+   count: s=> s.rareCatchCount},
   {key:'beat_your_best', emoji:'📈', name:'Personal Best',     desc:'Beat your own record for a species',
-   test: s=> s.beatenOwnPb}
+   count: s=> s.beatenOwnPbCount}
 ];
 
 // The uncommon species — catching one of these is a genuine achievement,
@@ -1730,7 +1772,7 @@ function multiPickerFieldHtml(rod, key, label){
   return `<div class="field">
     <label>${escapeHtml(label)}</label>
     ${typeFilter}
-    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search, or pick a type above..." autocomplete="pk-field-19" autocorrect="off" autocapitalize="off" spellcheck="false" name="search-${rod}-${key}">
+    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search name or brand — add as many as you like" autocomplete="pk-field-19" autocorrect="off" autocapitalize="off" spellcheck="false" name="search-${rod}-${key}">
     <div class="multi-picker-results" data-rod="${rod}" data-key="${key}"></div>
     <div class="multi-picker-pills" data-rod="${rod}" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
   </div>`;
@@ -1771,7 +1813,11 @@ function renderMultiPickerResults(rod, key){
   const matches = multiPickerSourceList(key)
     .filter(item => !current.includes(item.name))
     .filter(item => !typeFilter || item.type === typeFilter)
-    .filter(item => !term || item.name.toLowerCase().includes(term))
+    // Match on brand too — searching "Dynamite" should turn up their
+    // boilies, wafters and pop-ups together, not just one type
+    .filter(item => !term
+      || item.name.toLowerCase().includes(term)
+      || (item.brand || '').toLowerCase().includes(term))
     .slice(0, 40);
 
   if(matches.length === 0){
@@ -1794,7 +1840,8 @@ function renderMultiPickerResults(rod, key){
     if(!arr.includes(value)) arr.push(value);
     currentPerson.notes[rod][key] = joinMultiValue(arr);
     await saveRodState(currentPersonId, rod);
-    searchEl.value = '';
+    // Keep the search term — you often want several items on one hook
+    // (a boilie plus a wafter, say), and clearing it emptied the list
     renderMultiPickerResults(rod, key);
     renderMultiPickerPills(rod, key);
   });
@@ -1861,14 +1908,6 @@ function getRodFieldValue(rod, key){
   return sel.value;
 }
 
-function hookFieldHtml(r, n){
-  const key = 'hook'+n;
-  return `<div class="field">
-      <label>Hook ${n}</label>
-      <select class="rod-select" data-rod="${r}" data-key="${key}">${buildRodOptionsHtml(knownHookOptions)}</select>
-      <input type="text" maxlength="100" class="rod-field rod-select-other" data-rod="${r}" data-key="${key}" placeholder="Rig, bait, depth..." style="display:none;margin-top:6px;" autocomplete="pk-field-20">
-    </div>`;
-}
 
 
 const MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15MB — generous for a phone photo, blocks absurd files
@@ -1930,40 +1969,6 @@ async function uploadPhoto(file, opts){
   return SUPABASE_URL + '/storage/v1/object/public/photos/' + path;
 }
 
-function resizeImageFile(file, maxDim, quality){
-  maxDim = maxDim || 800;
-  quality = quality || 0.7;
-  return new Promise((resolve, reject)=>{
-    // Validate before doing any work — this is the single choke point every
-    // upload in the app goes through
-    if(!file){ reject(new Error('No file selected')); return; }
-    if(!file.type || !file.type.startsWith('image/')){
-      reject(new Error('That file is not an image'));
-      return;
-    }
-    if(file.size > MAX_UPLOAD_BYTES){
-      reject(new Error('That image is too large (max ' + Math.round(MAX_UPLOAD_BYTES/1024/1024) + 'MB)'));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e)=>{
-      const img = new Image();
-      img.onload = ()=>{
-        let w = img.width, h = img.height;
-        if(w > h){ if(w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; } }
-        else { if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; } }
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
 
 function renderPhotoPreview(rod){
   const preview = document.querySelector('.catch-photo-preview[data-rod="'+rod+'"]');
@@ -2747,6 +2752,7 @@ function renderAccountArea(){
     makeCardCollapsible('my-details-card', 'my-details-body', 'pk_fishing_collapse_details');
     makeCardCollapsible('reel-records-settings-card', 'reel-records-settings-body', 'pk_fishing_collapse_reelrecords');
     makeCardCollapsible('past-catch-card', 'past-catch-body', 'pk_fishing_collapse_pastcatch');
+    refreshVenueSuggestions();
   }else{
     if(authForms) authForms.style.display = 'block';
     if(signedInArea) signedInArea.style.display = 'none';
@@ -3035,6 +3041,10 @@ document.getElementById('signin-btn').addEventListener('click', async ()=>{
   const password = document.getElementById('signin-password').value;
   const st = document.getElementById('signin-status');
   if(!email || !password){ st.textContent = 'Enter your email and password.'; return; }
+  if(!navigator.onLine){
+    st.textContent = 'You need a connection to sign in. Once signed in, the app works offline.';
+    return;
+  }
   st.textContent = 'Signing in...';
   try{
     const authData = await authSignIn(email, password);
@@ -3109,9 +3119,20 @@ async function loadPeople(){
   try{
     people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,trophy_species,avatar_url,hide_from_directory,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
     clearDbError();
+    // Keep a local copy so the app still knows who everyone is when offline
+    try{ localStorage.setItem('pk_fishing_people_cache', JSON.stringify(people)); }catch(e){}
   }catch(e){
-    console.error(e); people = [];
-    showDbError('Could not reach Supabase. Check the project URL and anon key.');
+    console.error(e);
+    // Offline or unreachable — fall back to the last known list rather than
+    // blanking it, which would make the app forget who the signed-in angler is
+    let cached = [];
+    try{ cached = JSON.parse(localStorage.getItem('pk_fishing_people_cache') || '[]'); }catch(e2){}
+    people = cached;
+    if(cached.length){
+      showDbError('Offline — showing saved data. Changes will sync when you reconnect.');
+    }else{
+      showDbError('Could not reach Supabase. Check the project URL and anon key.');
+    }
   }
 }
 
@@ -4322,6 +4343,7 @@ function rodCardHtml(r){
         <div class="bobber" id="bobber-${r}"><div class="time mono" id="time-${r}">00:00:00</div></div>
         <div class="bobber-controls">
           <button class="btn btn-start" data-rod="${r}" data-action="start">Start</button>
+          <button class="btn btn-recast" data-rod="${r}" data-action="recast" style="display:none;">↻ Recast</button>
           <span class="start-time-label" id="start-time-${r}"></span>
         </div>
       </div>
@@ -4379,12 +4401,12 @@ function rodCardHtml(r){
           </div>
           <div class="field">
             <label>Weight (kg)</label>
-            <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4">
+            <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4" autocomplete="pk-x11">
           </div>
         </div>
         <div class="field">
           <label>Date caught (leave blank for now)</label>
-          <input type="datetime-local" class="catch-date" data-rod="${r}">
+          <input type="datetime-local" class="catch-date" data-rod="${r}" autocomplete="pk-x12">
         </div>
         <div class="field">
           <label>Photos (optional — add as many as you like)</label>
@@ -4420,6 +4442,12 @@ function attachRodCardHandlers(){
       if(action==='start' && !t.running){ t.running=true; t.startTs=Date.now(); }
       if(action==='pause' && t.running){ t.accumulatedMs += Date.now()-t.startTs; t.running=false; t.startTs=null; }
       if(action==='reset'){ currentPerson.timers[rod] = {running:false,startTs:null,accumulatedMs:0}; }
+      // Recast — line got tangled or snagged, going back out with the same
+      // rig and bait. Just restart the clock; nothing is logged, since an
+      // interrupted cast isn't a real "fished this long with no bite".
+      if(action==='recast'){
+        currentPerson.timers[rod] = {running:true, startTs:Date.now(), accumulatedMs:0};
+      }
       renderTimers();
       await saveRodState(currentPersonId, rod);
     });
@@ -4561,6 +4589,19 @@ function capturePosition(){
 // ---------- Weather & moon phase ----------
 // Open-Meteo — free, no API key, no backend needed. Same reasoning that
 // led us to it over Windy: nothing to expose in a public client-side app.
+// Hourly and daily forecast, for the detail view when the weather bar is tapped
+async function fetchForecast(lat, lng){
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}`
+      + `&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,surface_pressure,precipitation_probability`
+      + `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max`
+      + `&forecast_days=4&timezone=auto`;
+    const res = await fetch(url);
+    if(!res.ok) return null;
+    return await res.json();
+  }catch(e){ console.error('fetchForecast failed', e); return null; }
+}
+
 async function fetchWeather(lat, lng){
   try{
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,surface_pressure`;
@@ -4636,6 +4677,26 @@ async function loadActiveSession(){
 
 // Which competitions am I in that are running right now? Shown on Timers so
 // you know a session counts toward something while you're actually fishing.
+// Whether a competition is genuinely live right now — respecting the start
+// and end *times*, not just the dates. A comp ending at 16:00 should stop
+// counting at 16:00, not run on silently until midnight.
+function competitionIsLive(c, now){
+  now = now || new Date();
+  if(!c.start_date || !c.end_date) return false;
+  const startTime = (c.start_time || '00:00').slice(0,5);
+  const endTime = (c.end_time || '23:59').slice(0,5);
+  const start = new Date(c.start_date + 'T' + startTime + ':00');
+  const end = new Date(c.end_date + 'T' + endTime + ':59');
+  return now >= start && now <= end;
+}
+
+function competitionHasEnded(c, now){
+  now = now || new Date();
+  if(!c.end_date) return false;
+  const endTime = (c.end_time || '23:59').slice(0,5);
+  return now > new Date(c.end_date + 'T' + endTime + ':59');
+}
+
 async function renderActiveCompetitionsBar(){
   const bar = document.getElementById('active-competitions-bar');
   if(!bar) return;
@@ -4643,7 +4704,9 @@ async function renderActiveCompetitionsBar(){
   if(!isSignedIn() || !myId || !navigator.onLine){ bar.style.display = 'none'; return; }
   try{
     const today = new Date().toISOString().slice(0,10);
-    const comps = await sbGet('competitions?select=id,name,dam,metric,fish_type_filter,end_date&start_date=lte.'+today+'&end_date=gte.'+today);
+    // Fetch by date, then narrow by actual time below
+    let comps = await sbGet('competitions?select=id,name,dam,metric,fish_type_filter,start_date,start_time,end_date,end_time&start_date=lte.'+today+'&end_date=gte.'+today);
+    comps = comps.filter(c=> competitionIsLive(c));
     if(!comps.length){ bar.style.display = 'none'; return; }
 
     // Only the ones I'm actually in (or that are open to everyone)
@@ -4664,7 +4727,12 @@ async function renderActiveCompetitionsBar(){
     bar.innerHTML = mine.map(c=>{
       const metricLabel = c.metric==='catch_count' ? 'most catches'
         : (c.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
-      const endsIn = Math.ceil((new Date(c.end_date+'T23:59:59') - Date.now()) / 86400000);
+      const endMoment = new Date(c.end_date + 'T' + (c.end_time || '23:59').slice(0,5) + ':59');
+      const msLeft = endMoment - Date.now();
+      const hoursLeft = msLeft / 3600000;
+      const endsLabel = hoursLeft <= 24
+        ? (hoursLeft <= 1 ? 'ends within the hour' : 'ends in ' + Math.round(hoursLeft) + ' hours')
+        : 'ends in ' + Math.ceil(hoursLeft / 24) + ' days';
       const selected = chosenId === c.id;
       // Selected inverts to the card colour with red text — reads clearly in
       // both light and dark mode, since --card-bg follows the theme
@@ -4674,7 +4742,7 @@ async function renderActiveCompetitionsBar(){
       return `<div class="${locked ? '' : 'comp-banner-pick'}" data-comp-id="${c.id}" data-comp-venue="${escapeHtml(c.dam||'')}"
         style="${styles}border-radius:10px;padding:10px 12px;margin-bottom:6px;${locked ? '' : 'cursor:pointer;'}">
         🏆 <b>${escapeHtml(c.name)}</b> ${selected ? '— you\'re fishing this' : 'is running'} — ${metricLabel}${c.fish_type_filter ? ', '+escapeHtml(c.fish_type_filter)+' only' : ''}
-        <span style="opacity:.8;">· ${endsIn <= 1 ? 'ends today' : 'ends in '+endsIn+' days'}</span>
+        <span style="opacity:.8;">· ${endsLabel}</span>
         ${locked ? '' : `<div style="opacity:.8;margin-top:2px;">${selected ? '✓ Tap again to fish without it' : 'Tap to fish this competition'}</div>`}
       </div>`;
     }).join('');
@@ -4735,6 +4803,7 @@ async function renderSessionUi(){
     const rodsSel = document.getElementById('session-rods');
     if(rodsSel && !rodsSel.options.length) rodsSel.innerHTML = rodsOptionsHtml(1);
     await renderActiveCompetitionsBar();
+    refreshVenueSuggestions();
   }
 }
 
@@ -4757,7 +4826,7 @@ async function renderSessionWeather(){
     }
     if(!coords) coords = await capturePosition();
     const weather = coords ? await fetchWeather(coords.lat, coords.lng) : null;
-    weatherCache = {sessionId: activeSession.id, weather, moon: moonPhase()};
+    weatherCache = {sessionId: activeSession.id, weather, moon: moonPhase(), coords};
   }
 
   const {weather, moon} = weatherCache;
@@ -4773,7 +4842,85 @@ async function renderSessionWeather(){
   if(moon) parts.push(`${moon.emoji} ${moon.label}`);
 
   el.style.display = 'block';
-  el.textContent = parts.join(' · ');
+  el.style.cursor = weatherCache.coords ? 'pointer' : 'default';
+  el.innerHTML = `<span>${escapeHtml(parts.join(' · '))}</span>` +
+    (weatherCache.coords ? `<span style="float:right;opacity:.7;">Forecast ›</span>` : '');
+  el.onclick = weatherCache.coords ? openForecast : null;
+}
+
+// Full forecast for wherever the session is — hourly for today, then a
+// few days ahead. Same Open-Meteo source as the current conditions.
+async function openForecast(){
+  const modal = document.getElementById('forecast-modal');
+  const body = document.getElementById('forecast-body');
+  modal.classList.add('open');
+  body.innerHTML = '<div class="empty">Loading forecast...</div>';
+
+  const coords = weatherCache.coords;
+  if(!coords){ body.innerHTML = '<div class="empty">No location available for this session.</div>'; return; }
+
+  const data = await fetchForecast(coords.lat, coords.lng);
+  if(!data || !data.hourly){ body.innerHTML = '<div class="empty">Could not load the forecast right now.</div>'; return; }
+
+  // Next 12 hours from now
+  const now = new Date();
+  const times = data.hourly.time || [];
+  let startIdx = times.findIndex(t=> new Date(t) >= now);
+  if(startIdx < 0) startIdx = 0;
+  const hours = [];
+  for(let i = startIdx; i < Math.min(startIdx + 12, times.length); i++){
+    hours.push({
+      time: new Date(times[i]),
+      temp: data.hourly.temperature_2m?.[i],
+      wind: data.hourly.wind_speed_10m?.[i],
+      windDir: data.hourly.wind_direction_10m?.[i],
+      cloud: data.hourly.cloud_cover?.[i],
+      pressure: data.hourly.surface_pressure?.[i],
+      rain: data.hourly.precipitation_probability?.[i]
+    });
+  }
+
+  let html = `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
+  hours.forEach(h=>{
+    html += `<li>
+      <div class="who"><b>${h.time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</b></div>
+      <div class="actions">
+        <span class="pill">${h.temp != null ? Math.round(h.temp)+'°C' : '—'}</span>
+        <span class="pill">💨 ${h.wind != null ? Math.round(h.wind)+'km/h '+windDirLabel(h.windDir) : '—'}</span>
+        ${h.rain != null ? `<span class="pill">🌧️ ${Math.round(h.rain)}%</span>` : ''}
+        ${h.pressure != null ? `<span class="pill">${Math.round(h.pressure)}hPa</span>` : ''}
+      </div>
+    </li>`;
+  });
+  html += '</ul>';
+
+  // Pressure trend matters to carp anglers more than the raw number
+  if(hours.length > 3 && hours[0].pressure != null){
+    const change = hours[hours.length-1].pressure - hours[0].pressure;
+    const trend = Math.abs(change) < 1 ? 'holding steady'
+      : (change > 0 ? 'rising' : 'falling');
+    html += `<p class="pc-line muted" style="margin-bottom:14px;">Pressure is ${trend} over the next 12 hours (${change > 0 ? '+' : ''}${change.toFixed(1)}hPa).</p>`;
+  }
+
+  if(data.daily && data.daily.time){
+    html += `<p class="sub-heading">Next few days</p><ul class="people-list">`;
+    data.daily.time.forEach((d, i)=>{
+      const day = new Date(d).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
+      html += `<li>
+        <div class="who"><b>${escapeHtml(day)}</b></div>
+        <div class="actions">
+          <span class="pill">${Math.round(data.daily.temperature_2m_min[i])}–${Math.round(data.daily.temperature_2m_max[i])}°C</span>
+          <span class="pill">💨 ${Math.round(data.daily.wind_speed_10m_max[i])}km/h</span>
+          <span class="pill">🌧️ ${Math.round(data.daily.precipitation_probability_max[i])}%</span>
+        </div>
+      </li>`;
+    });
+    html += '</ul>';
+  }
+
+  const m = moonPhase();
+  html += `<p class="pc-line muted" style="margin-top:10px;">${m.emoji} ${escapeHtml(m.label)}</p>`;
+  body.innerHTML = html;
 }
 
 document.getElementById('session-start-btn').addEventListener('click', async ()=>{
@@ -4918,6 +5065,47 @@ document.getElementById('session-end-btn').addEventListener('click', async ()=>{
     updateOfflineBanner();
   }
 });
+
+// Fill the venue autocomplete lists from venues already saved. Without this,
+// typing "Vaal Dam" then "Vaal dam" creates two separate venues and splits
+// your PBs and stats across both.
+// Look up a real place by name, so a venue can get proper coordinates even
+// when it's added from home rather than at the water. Free, no API key —
+// same reasoning that led us to Open-Meteo over Windy.
+async function searchPlaces(query){
+  if(!query || query.trim().length < 3) return [];
+  try{
+    const url = 'https://nominatim.openstreetmap.org/search'
+      + '?q=' + encodeURIComponent(query.trim())
+      + '&format=json&limit=6&countrycodes=za&addressdetails=1';
+    const res = await fetch(url, {headers: {'Accept': 'application/json'}});
+    if(!res.ok) return [];
+    const data = await res.json();
+    return data.map(r=>({
+      name: r.display_name.split(',')[0],
+      fullName: r.display_name,
+      lat: parseFloat(r.lat),
+      lng: parseFloat(r.lon)
+    }));
+  }catch(e){ console.error('searchPlaces failed', e); return []; }
+}
+
+async function refreshVenueSuggestions(){
+  if(!isSignedIn()) return;
+  try{
+    const venues = await loadMyVenues();
+    const options = venues
+      .map(v=>v.name)
+      .filter(Boolean)
+      .sort((a,b)=> a.localeCompare(b))
+      .map(n=>`<option value="${escapeHtml(n)}"></option>`)
+      .join('');
+    ['venue-suggestions','venue-suggestions-past'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.innerHTML = options;
+    });
+  }catch(e){ console.error('refreshVenueSuggestions failed', e); }
+}
 
 async function loadMyVenues(){
   if(!isSignedIn()) return [];
@@ -5168,19 +5356,6 @@ function catchDetailHtml(c){
   return html;
 }
 
-function buildDistinctOptions(values, current){
-  const set = new Set(values.filter(Boolean));
-  const arr = [...set].sort((a,b)=>a.localeCompare(b));
-  let html = '<option value="">None</option>';
-  arr.forEach(v=>{
-    html += `<option value="${escapeHtml(v)}" ${v===current?'selected':''}>${escapeHtml(v)}</option>`;
-  });
-  if(current && !arr.includes(current)){
-    html += `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>`;
-  }
-  html += `<option value="__other__">+ Add new...</option>`;
-  return html;
-}
 
 // ---------- Insights (personal analytics from logged catches) ----------
 function fmtDuration(ms){
@@ -5442,7 +5617,7 @@ function buildInsightsHtml(catches, venues, sessions){
 // ---------- Badges ----------
 async function loadBadgesFor(fishermanId){
   try{
-    const rows = await sbGet('badges_earned?select=badge_key,earned_at&fisherman_id=eq.'+fishermanId+'&order=earned_at.asc');
+    const rows = await sbGet('badges_earned?select=badge_key,earned_at,earn_count,last_earned_at&fisherman_id=eq.'+fishermanId+'&order=earned_at.asc');
     return rows;
   }catch(e){ console.error('loadBadgesFor failed', e); return []; }
 }
@@ -5455,21 +5630,22 @@ async function computeBadgeStats(fishermanId){
   const stats = {
     catchCount: caught.length,
     blankCount: catches.filter(c=>!c.caught).length,
+    blankSessionCount: 0,
     biggest: caught.reduce((m,c)=> Math.max(m, c.weight||0), 0),
     speciesCount: new Set(caught.map(c=>c.type).filter(Boolean)).size,
-    nightCatch: caught.some(c=>{
+    tenKgCount: caught.filter(c=> (c.weight||0) >= 10).length,
+    nightCatchCount: caught.filter(c=>{
       if(c.hasKnownTime === false) return false;
-      const h = new Date(c.time).getHours();
-      return h < 6;
-    }),
-    fullMoonCatch: caught.some(c=> c.moonPhase === 'Full Moon'),
+      return new Date(c.time).getHours() < 6;
+    }).length,
+    fullMoonCatchCount: caught.filter(c=> c.moonPhase === 'Full Moon').length,
     venueCount: new Set(caught.map(c=>c.venueId).filter(Boolean)).size,
     sessionCount: 0,
     competitionCount: new Set(caught.map(c=>c.competitionId).filter(Boolean)).size,
-    rareCatch: caught.some(c=> RARE_SPECIES.includes(c.type)),
+    rareCatchCount: caught.filter(c=> RARE_SPECIES.includes(c.type)).length,
     recordSpeciesTotal: 0,
     recordSpeciesCaught: 0,
-    beatenOwnPb: false
+    beatenOwnPbCount: 0
   };
 
   // Grand Slam — every species this angler has chosen for Reel Records
@@ -5486,13 +5662,16 @@ async function computeBadgeStats(fishermanId){
     if(bySpecies[c.type] === undefined){
       bySpecies[c.type] = c.weight;
     }else if(c.weight > bySpecies[c.type]){
-      stats.beatenOwnPb = true;
+      stats.beatenOwnPbCount++;
       bySpecies[c.type] = c.weight;
     }
   });
   try{
-    const sessions = await sbGet('sessions?select=id&fisherman_id=eq.'+fishermanId);
+    const sessions = await sbGet('sessions?select=id,ended_at&fisherman_id=eq.'+fishermanId);
     stats.sessionCount = sessions.length;
+    // A blank session is one that's finished with no fish caught in it at all
+    const caughtSessionIds = new Set(caught.map(c=>c.sessionId).filter(Boolean));
+    stats.blankSessionCount = sessions.filter(s=> s.ended_at && !caughtSessionIds.has(s.id)).length;
   }catch(e){ console.error(e); }
   return stats;
 }
@@ -5507,15 +5686,36 @@ async function checkAndAwardBadges(){
       loadBadgesFor(myId),
       computeBadgeStats(myId)
     ]);
-    const have = new Set(existing.map(b=>b.badge_key));
-    const newlyEarned = BADGE_DEFS.filter(b=> !have.has(b.key) && b.test(stats));
-    for(const badge of newlyEarned){
+    const byKey = {};
+    existing.forEach(b=>{ byKey[b.badge_key] = b; });
+    let changed = 0;
+
+    for(const badge of BADGE_DEFS){
+      const current = byKey[badge.key];
+      // Repeatable badges track how many times they've been earned;
+      // one-off badges are simply earned or not
+      const target = badge.count ? (badge.count(stats) || 0) : (badge.test(stats) ? 1 : 0);
+      if(target <= 0) continue;
+
       try{
-        await sbPost('badges_earned', {id: uid(), fisherman_id: myId, badge_key: badge.key});
-        await sbRpc('notify_badge_earned', {p_badge_key: badge.key, p_badge_name: badge.name});
+        if(!current){
+          await sbPost('badges_earned', {
+            id: uid(), fisherman_id: myId, badge_key: badge.key,
+            earn_count: target, last_earned_at: new Date().toISOString()
+          });
+          await sbRpc('notify_badge_earned', {p_badge_key: badge.key, p_badge_name: badge.name});
+          changed++;
+        }else if(target > (current.earn_count || 1)){
+          // Earned again — bump the count rather than creating a duplicate
+          await sbPatch('badges_earned', 'fisherman_id=eq.'+myId+'&badge_key=eq.'+badge.key, {
+            earn_count: target, last_earned_at: new Date().toISOString()
+          });
+          await sbRpc('notify_badge_earned', {p_badge_key: badge.key, p_badge_name: badge.name + ' ×' + target});
+          changed++;
+        }
       }catch(e){ console.error('award failed', badge.key, e); }
     }
-    if(newlyEarned.length) refreshNotifBadge();
+    if(changed) refreshNotifBadge();
   }catch(e){ console.error('checkAndAwardBadges failed', e); }
 }
 
@@ -5546,6 +5746,9 @@ async function openInsights(){
       const id = btn.dataset.deleteSession;
       if(!confirmDelete('this session (the catches logged in it are kept)')) return;
       try{
+        // Note which venue this session used, so we can tidy up after
+        const goingVenueId = (sessions.find(s=>s.id===id) || {}).venue_id;
+
         await sbDelete('sessions', 'id=eq.'+id);
         // If that was the session currently showing on Timers, clear it too
         if(activeSession && activeSession.id === id){
@@ -5553,6 +5756,21 @@ async function openInsights(){
           await renderSessionUi();
           renderActiveCompetitionsBar();
         }
+
+        // If nothing else references that venue any more, remove it too —
+        // otherwise its map pin lingers with no sessions or catches behind it
+        if(goingVenueId){
+          try{
+            const [stillUsedBySession, stillUsedByCatch] = await Promise.all([
+              sbGet('sessions?select=id&venue_id=eq.'+goingVenueId+'&limit=1'),
+              sbGet('catches?select=id&venue_id=eq.'+goingVenueId+'&limit=1')
+            ]);
+            if(!stillUsedBySession.length && !stillUsedByCatch.length){
+              await sbDelete('venues', 'id=eq.'+goingVenueId);
+            }
+          }catch(e){ console.error('venue cleanup failed', e); }
+        }
+
         await openInsights();
       }catch(e){
         console.error(e);
@@ -5695,6 +5913,105 @@ document.getElementById('timers-help-close').addEventListener('click', ()=>{
 // ---------- Log a past catch ----------
 // A stripped-down catch form for fish landed before the app existed —
 // no rod, no timer, no session. Everything else treats it as a normal catch.
+// Coordinates chosen from a place lookup, applied when the catch is saved
+let pastCatchCoords = null;
+
+// ---------- Setting a venue location manually ----------
+let pinDropMap = null, pinDropMarker = null, pinDropChoice = null;
+
+document.getElementById('past-catch-venue-coords').addEventListener('click', ()=>{
+  const wrap = document.getElementById('past-catch-coord-entry');
+  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+});
+
+document.getElementById('past-catch-coord-apply').addEventListener('click', ()=>{
+  const raw = document.getElementById('past-catch-coord-input').value.trim();
+  const results = document.getElementById('past-catch-venue-results');
+  // Accepts "-26.7145, 28.0912" and similar, with or without the space
+  const m = raw.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if(!m){ results.innerHTML = '<div class="empty">Couldn\'t read that — try a format like -26.7145, 28.0912</div>'; return; }
+  const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+  if(lat < -90 || lat > 90 || lng < -180 || lng > 180){
+    results.innerHTML = '<div class="empty">Those numbers are out of range for latitude/longitude.</div>';
+    return;
+  }
+  pastCatchCoords = {lat, lng};
+  results.innerHTML = `<div class="pc-line muted">📍 Location set — ${lat.toFixed(4)}, ${lng.toFixed(4)}</div>`;
+  document.getElementById('past-catch-coord-entry').style.display = 'none';
+});
+
+document.getElementById('past-catch-venue-pin').addEventListener('click', async ()=>{
+  document.getElementById('pin-drop-modal').classList.add('open');
+  document.getElementById('pin-drop-readout').textContent = 'No spot chosen yet.';
+  document.getElementById('pin-drop-confirm').disabled = true;
+  pinDropChoice = null;
+
+  if(typeof L === 'undefined') return;
+  if(pinDropMap){ pinDropMap.remove(); pinDropMap = null; pinDropMarker = null; }
+
+  // Start somewhere sensible — an existing venue, current position, or
+  // a wide view of South Africa as a last resort
+  let startAt = [-28.5, 24.7], startZoom = 5;
+  const existingVenues = await loadMyVenues();
+  const withCoords = existingVenues.find(v=> v.latitude != null);
+  if(withCoords){ startAt = [withCoords.latitude, withCoords.longitude]; startZoom = 11; }
+  const pos = lastKnownPosition;
+  if(pos){ startAt = [pos.lat, pos.lng]; startZoom = 13; }
+
+  pinDropMap = L.map('pin-drop-map').setView(startAt, startZoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
+  }).addTo(pinDropMap);
+
+  pinDropMap.on('click', (e)=>{
+    pinDropChoice = {lat: e.latlng.lat, lng: e.latlng.lng};
+    if(pinDropMarker) pinDropMarker.remove();
+    pinDropMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(pinDropMap);
+    document.getElementById('pin-drop-readout').textContent =
+      `Chosen: ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+    document.getElementById('pin-drop-confirm').disabled = false;
+  });
+
+  // The modal only just became visible, so Leaflet needs to re-measure
+  setTimeout(()=>{ if(pinDropMap) pinDropMap.invalidateSize(); }, 150);
+});
+
+document.getElementById('pin-drop-confirm').addEventListener('click', ()=>{
+  if(!pinDropChoice) return;
+  pastCatchCoords = {lat: pinDropChoice.lat, lng: pinDropChoice.lng};
+  document.getElementById('past-catch-venue-results').innerHTML =
+    `<div class="pc-line muted">📍 Location set — ${pinDropChoice.lat.toFixed(4)}, ${pinDropChoice.lng.toFixed(4)}</div>`;
+  document.getElementById('pin-drop-modal').classList.remove('open');
+});
+
+document.getElementById('pin-drop-x').addEventListener('click', ()=>{
+  document.getElementById('pin-drop-modal').classList.remove('open');
+});
+
+document.getElementById('past-catch-venue-lookup').addEventListener('click', async ()=>{
+  const query = document.getElementById('past-catch-venue').value.trim();
+  const results = document.getElementById('past-catch-venue-results');
+  if(query.length < 3){ results.innerHTML = '<div class="empty">Type at least 3 letters first.</div>'; return; }
+  results.innerHTML = '<div class="empty">Searching...</div>';
+  const places = await searchPlaces(query);
+  if(!places.length){
+    results.innerHTML = '<div class="empty">No matching place found — try "Drop a pin" to mark it on the map yourself, or save it by name alone.</div>';
+    return;
+  }
+  results.innerHTML = places.map((p,i)=>
+    `<button type="button" class="mini-btn place-result" data-idx="${i}" style="display:block;width:100%;text-align:left;margin-bottom:4px;">
+      <b>${escapeHtml(p.name)}</b><br><span class="pc-line muted">${escapeHtml(p.fullName)}</span>
+    </button>`).join('');
+  results.querySelectorAll('.place-result').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = places[parseInt(btn.dataset.idx,10)];
+      document.getElementById('past-catch-venue').value = p.name;
+      pastCatchCoords = {lat: p.lat, lng: p.lng};
+      results.innerHTML = `<div class="pc-line muted">📍 Location set — ${escapeHtml(p.name)} will appear on your map.</div>`;
+    });
+  });
+});
+
 document.getElementById('past-catch-save-btn').addEventListener('click', async ()=>{
   const st = document.getElementById('past-catch-status');
   const species = document.getElementById('past-catch-species').value;
@@ -5724,11 +6041,21 @@ document.getElementById('past-catch-save-btn').addEventListener('click', async (
       const existing = venues.find(v=>v.name.toLowerCase() === venueName.toLowerCase());
       if(existing){
         venueId = existing.id;
+        // If this venue had no coordinates and we've just looked some up,
+        // fill them in so it finally gets a map pin
+        if(pastCatchCoords && existing.latitude == null){
+          try{
+            await sbPatch('venues', 'id=eq.'+existing.id, {
+              latitude: pastCatchCoords.lat, longitude: pastCatchCoords.lng
+            });
+          }catch(e){ console.error('venue coord backfill failed', e); }
+        }
       }else{
         venueId = uid();
         await sbPost('venues', {
           id: venueId, owner_user_id: session.user.id, name: venueName,
-          latitude: null, longitude: null
+          latitude: pastCatchCoords ? pastCatchCoords.lat : null,
+          longitude: pastCatchCoords ? pastCatchCoords.lng : null
         });
       }
     }
@@ -5756,6 +6083,10 @@ document.getElementById('past-catch-save-btn').addEventListener('click', async (
     document.getElementById('past-catch-date').value = '';
     document.getElementById('past-catch-time').value = '';
     document.getElementById('past-catch-venue').value = '';
+    document.getElementById('past-catch-venue-results').innerHTML = '';
+    pastCatchCoords = null;
+    document.getElementById('past-catch-coord-input').value = '';
+    document.getElementById('past-catch-coord-entry').style.display = 'none';
     photoEl.value = '';
     const label = document.querySelector('.photo-filename[data-target="past-catch-photo"]');
     if(label) label.textContent = '';
@@ -5806,6 +6137,9 @@ function openFollowList(title, ids, idType){
 }
 document.getElementById('follow-list-close').addEventListener('click', ()=>{
   document.getElementById('follow-list-modal').classList.remove('open');
+});
+document.getElementById('forecast-modal-x').addEventListener('click', ()=>{
+  document.getElementById('forecast-modal').classList.remove('open');
 });
 document.getElementById('badge-detail-close').addEventListener('click', ()=>{
   document.getElementById('badge-detail-modal').classList.remove('open');
@@ -5866,7 +6200,13 @@ async function openProfile(personId){
       earnedDefs.map(b=>{
         const earned = earnedBadges.find(e=>e.badge_key===b.key);
         const when = earned ? new Date(earned.earned_at).toLocaleDateString([], {month:'short', year:'numeric'}) : '';
-        return `<button type="button" class="badge-strip-item" data-badge-key="${b.key}" data-badge-when="${escapeHtml(when)}" style="flex-shrink:0;width:82px;text-align:center;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">
+        const count = earned ? (earned.earn_count || 1) : 1;
+        // Only worth showing a number once it's been earned more than once
+        const countBubble = count > 1
+          ? `<span style="position:absolute;top:-2px;right:8px;background:var(--dam);color:#fff;border:2px solid var(--card-bg);border-radius:999px;min-width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;padding:0 4px;">${count}</span>`
+          : '';
+        return `<button type="button" class="badge-strip-item" data-badge-key="${b.key}" data-badge-when="${escapeHtml(when)}" data-badge-count="${count}" style="flex-shrink:0;width:82px;text-align:center;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;position:relative;">
+          ${countBubble}
           <img src="badge-${b.key}.png?v=${BADGE_ASSET_VERSION}" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
           <div style="font-size:11px;font-weight:700;color:var(--ink);line-height:1.2;">${escapeHtml(b.name)}</div>
           <div style="font-size:10px;color:var(--muted);">${escapeHtml(when)}</div>
@@ -5970,10 +6310,13 @@ async function openProfile(personId){
     btn.addEventListener('click', ()=>{
       const def = BADGE_DEFS.find(x=>x.key === btn.dataset.badgeKey);
       if(!def) return;
-      document.getElementById('badge-detail-title').textContent = def.name;
+      const count = parseInt(btn.dataset.badgeCount || '1', 10);
+      document.getElementById('badge-detail-title').textContent = def.name + (count > 1 ? ' ×' + count : '');
       document.getElementById('badge-detail-img').src = 'badge-'+def.key+'.png?v='+BADGE_ASSET_VERSION;
       document.getElementById('badge-detail-desc').textContent = def.desc;
-      document.getElementById('badge-detail-when').textContent = btn.dataset.badgeWhen ? 'Earned ' + btn.dataset.badgeWhen : '';
+      const whenText = btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '';
+      document.getElementById('badge-detail-when').textContent =
+        count > 1 ? whenText + ' · earned ' + count + ' times' : whenText.replace('First earned', 'Earned');
       document.getElementById('badge-detail-modal').classList.add('open');
     });
   });
@@ -6337,7 +6680,7 @@ async function renderPhotoComments(){
       const original = rows.find(r=>r.id===id).message;
       msgEl.dataset.editing = 'true';
       msgEl.innerHTML = `
-        <textarea maxlength="500" class="comment-edit-input" style="width:100%;margin-bottom:6px;">${escapeHtml(original)}</textarea>
+        <textarea maxlength="500" class="comment-edit-input" style="width:100%;margin-bottom:6px;" autocomplete="pk-x13">${escapeHtml(original)}</textarea>
         <button type="button" class="mini-btn comment-edit-save" data-comment-save="${id}">Save</button>
         <button type="button" class="mini-btn comment-edit-cancel" data-comment-cancel="${id}">Cancel</button>
       `;
@@ -6414,6 +6757,9 @@ function renderTimers(){
     if(row) row.classList.toggle('bobber-row-running', running);
     const startBtn = document.querySelector('.btn-start[data-rod="'+r+'"]');
     if(startBtn) startBtn.style.display = running ? 'none' : 'inline-block';
+    // Recast only makes sense on a rod that's already out
+    const recastBtn = document.querySelector('.btn-recast[data-rod="'+r+'"]');
+    if(recastBtn) recastBtn.style.display = running ? 'inline-block' : 'none';
     const label = document.getElementById('start-time-'+r);
     if(label){
       label.textContent = (t && t.running && t.startTs)
@@ -6589,12 +6935,15 @@ async function renderLeaderboard(){
 
   const perPersonCatches = {};
   const allTypes = [];
-  for(const p of people){
-    const rec = await loadPerson(p.id);
+  // Fetch everyone in parallel — sequentially this was one round-trip per
+  // angler, which adds up badly on a spectator link refreshing every 30s
+  const records = await Promise.all(people.map(p=> loadPerson(p.id)));
+  people.forEach((p, i)=>{
+    const rec = records[i];
     const catches = (rec && rec.catches) ? rec.catches.filter(c=>c.caught) : [];
     perPersonCatches[p.id] = catches;
     catches.forEach(c=>{ if(c.type) allTypes.push(c.type); });
-  }
+  });
 
   const competitionSel = document.getElementById('lb-filter-competition');
   const currentCompVal = competitionSel.value;
@@ -6838,7 +7187,10 @@ async function announceFinishedCompetitions(){
   if(!isSignedIn() || !navigator.onLine) return;
   try{
     const today = new Date().toISOString().slice(0,10);
-    const done = await sbGet('competitions?select=id&end_date=lt.'+today+'&results_sent=is.false');
+    // Include today's competitions too — one ending at 16:00 has genuinely
+    // finished by 17:00, even though the date hasn't rolled over yet
+    let candidates = await sbGet('competitions?select=id,end_date,end_time&end_date=lte.'+today+'&results_sent=is.false');
+    const done = candidates.filter(c=> competitionHasEnded(c));
     for(const c of done){
       try{ await sbRpc('notify_competition_results', {p_competition_id: c.id}); }
       catch(e){ console.error('results notify failed', c.id, e); }
@@ -6948,21 +7300,21 @@ function renderCompetitionEditForm(comp, containerEl){
     <div class="row2">
       <div class="field">
         <label>Start date</label>
-        <input type="date" class="comp-edit-start" value="${escapeHtml(comp.start_date||'')}">
+        <input type="date" class="comp-edit-start" value="${escapeHtml(comp.start_date||'')}" autocomplete="pk-x14">
       </div>
       <div class="field">
         <label>Start time</label>
-        <input type="time" class="comp-edit-start-time" value="${escapeHtml(String(comp.start_time||'00:00').slice(0,5))}">
+        <input type="time" class="comp-edit-start-time" value="${escapeHtml(String(comp.start_time||'00:00').slice(0,5))}" autocomplete="pk-x15">
       </div>
     </div>
     <div class="row2">
       <div class="field">
         <label>End date</label>
-        <input type="date" class="comp-edit-end" value="${escapeHtml(comp.end_date||'')}">
+        <input type="date" class="comp-edit-end" value="${escapeHtml(comp.end_date||'')}" autocomplete="pk-x16">
       </div>
       <div class="field">
         <label>End time</label>
-        <input type="time" class="comp-edit-end-time" value="${escapeHtml(String(comp.end_time||'23:59').slice(0,5))}">
+        <input type="time" class="comp-edit-end-time" value="${escapeHtml(String(comp.end_time||'23:59').slice(0,5))}" autocomplete="pk-x17">
       </div>
     </div>
     <div class="row2">
