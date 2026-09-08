@@ -432,7 +432,7 @@
   .modal-overlay.open{display:flex;}
   /* These two open on top of an already-open profile modal, so they need
      to win the stacking order regardless of where they sit in the DOM */
-  #badge-detail-modal, #follow-list-modal, #session-edit-modal, #venue-edit-modal, #forecast-modal, #edit-catch-modal{z-index:220;}
+  #badge-detail-modal, #follow-list-modal, #session-edit-modal, #venue-edit-modal, #venue-catches-modal, #forecast-modal, #edit-catch-modal{z-index:220;}
   /* Pin drop opens on top of the session edit modal, so it needs to be higher still */
   #pin-drop-modal{z-index:240;}
   .modal-card{
@@ -1230,6 +1230,14 @@
       <button class="primary-btn" id="confirm-edit" style="background:var(--khaki);color:var(--ink);">Edit</button>
       <button class="primary-btn" id="confirm-correct">Correct</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="venue-catches-modal">
+  <div class="modal-card wide" style="position:relative;">
+    <button type="button" id="venue-catches-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <h3 style="margin-top:0;" id="venue-catches-title"></h3>
+    <div id="venue-catches-body"></div>
   </div>
 </div>
 
@@ -5808,7 +5816,7 @@ async function openInsights(){
   }
   const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
   body.innerHTML = buildInsightsHtml(rec && rec.catches ? rec.catches : [], venues, sessions);
-  renderVenueMap(venues);
+  renderVenueMap(venues, rec && rec.catches ? rec.catches : []);
 
   body.querySelectorAll('[data-edit-session]').forEach(btn=>{
     btn.addEventListener('click', ()=> openSessionEdit(btn.dataset.editSession));
@@ -5872,7 +5880,27 @@ async function openInsights(){
 }
 
 let venueMapInstance = null;
-function renderVenueMap(venues){
+// Full catch list for one venue, opened from a map pin
+function openVenueCatches(venue, venueCatches){
+  if(!venue) return;
+  const body = document.getElementById('venue-catches-body');
+  document.getElementById('venue-catches-title').textContent = venue.name;
+
+  const sorted = venueCatches.slice().sort((a,b)=> b.time - a.time);
+  const total = sorted.reduce((s,c)=> s + (c.weight||0), 0);
+  const avg = sorted.length ? total / sorted.length : 0;
+
+  let html = `<div class="profile-summary">
+      <div><b>${sorted.length}</b>fish</div>
+      <div><b>${total.toFixed(1)}kg</b>total</div>
+      <div><b>${avg.toFixed(1)}kg</b>average</div>
+    </div>`;
+  html += sorted.map(c=>catchDetailHtml(c, false)).join('');
+  body.innerHTML = html;
+  document.getElementById('venue-catches-modal').classList.add('open');
+}
+
+function renderVenueMap(venues, allCatches){
   const container = document.getElementById('venue-map');
   if(!container || typeof L === 'undefined') return;
   const mappable = (venues||[]).filter(v=> v.latitude != null && v.longitude != null);
@@ -5887,14 +5915,35 @@ function renderVenueMap(venues){
     maxZoom: 18
   }).addTo(venueMapInstance);
 
-  // Each pin gets a popup with the venue name and actions, so a
-  // misplaced pin can be fixed or removed straight from the map
+  const catches = allCatches || [];
+
+  // Each pin shows what you've actually caught there — the question you'd
+  // naturally be asking when you tap a spot — plus actions to fix or remove it
   const markers = mappable.map(v=>{
+    const here = catches.filter(c=> c.caught && c.venueId === v.id);
+    const total = here.reduce((s,c)=> s + (c.weight||0), 0);
+    const pb = here.reduce((b,c)=> (!b || (c.weight||0) > (b.weight||0)) ? c : b, null);
+
+    const rigTally = {};
+    here.forEach(c=>{ if(c.rig){ rigTally[c.rig] = (rigTally[c.rig]||0)+1; } });
+    const bestRig = Object.keys(rigTally).sort((a,b)=>rigTally[b]-rigTally[a])[0];
+
+    const summary = here.length
+      ? `<div style="font-size:12px;margin-top:4px;">
+           <b>${here.length}</b> fish · <b>${total.toFixed(1)}kg</b>
+           ${pb ? `<br>PB: <b>${pb.weight}kg</b> ${escapeHtml(pb.type||'')}` : ''}
+           ${bestRig ? `<br>Best rig: ${escapeHtml(bestRig)}` : ''}
+         </div>`
+      : `<div style="font-size:12px;margin-top:4px;color:#666;">No fish logged here yet.</div>`;
+
     const popupHtml = `
-      <div style="text-align:center;min-width:130px;">
+      <div style="text-align:center;min-width:150px;">
         <b style="font-size:14px;">${escapeHtml(v.name)}</b><br>
         <span style="font-size:11px;color:#666;">${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)}</span>
-        <div style="display:flex;gap:6px;margin-top:8px;justify-content:center;">
+        ${summary}
+        <div style="display:flex;gap:6px;margin-top:8px;justify-content:center;flex-wrap:wrap;">
+          ${here.length ? `<button type="button" class="map-venue-catches" data-venue-id="${v.id}"
+            style="border:1px solid #999;background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">View catches</button>` : ''}
           <button type="button" class="map-venue-edit" data-venue-id="${v.id}"
             style="border:1px solid #999;background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Edit</button>
           <button type="button" class="map-venue-remove" data-venue-id="${v.id}"
@@ -5911,6 +5960,14 @@ function renderVenueMap(venues){
     if(!node) return;
     const editBtn = node.querySelector('.map-venue-edit');
     const removeBtn = node.querySelector('.map-venue-remove');
+    const catchesBtn = node.querySelector('.map-venue-catches');
+    if(catchesBtn){
+      catchesBtn.addEventListener('click', ()=>{
+        venueMapInstance.closePopup();
+        const v = mappable.find(x=>x.id === catchesBtn.dataset.venueId);
+        openVenueCatches(v, catches.filter(c=> c.caught && c.venueId === catchesBtn.dataset.venueId));
+      });
+    }
     if(editBtn){
       editBtn.addEventListener('click', ()=>{
         venueMapInstance.closePopup();
@@ -6210,6 +6267,9 @@ document.getElementById('venue-edit-save').addEventListener('click', async ()=>{
   }
 });
 
+document.getElementById('venue-catches-x').addEventListener('click', ()=>{
+  document.getElementById('venue-catches-modal').classList.remove('open');
+});
 document.getElementById('venue-edit-x').addEventListener('click', ()=>{
   document.getElementById('venue-edit-modal').classList.remove('open');
   editingVenue = null;
