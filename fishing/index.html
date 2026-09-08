@@ -7310,8 +7310,14 @@ function renderNotes(){
 function renderCatchList(rod){
   const el = document.querySelector('.catch-list[data-rod="'+rod+'"]');
   if(!el) return;
-  const entries = currentPerson ? currentPerson.catches.filter(c=>c.rod===rod) : [];
-  if(entries.length===0){ el.innerHTML = '<div class="empty">No entries yet.</div>'; return; }
+  // Only this session's catches belong here — the Timers tab is about the
+  // trip you're on, not everything ever logged on that rod. Full history
+  // lives on the profile.
+  const entries = currentPerson
+    ? currentPerson.catches.filter(c=>
+        c.rod === rod && activeSession && c.sessionId === activeSession.id)
+    : [];
+  if(entries.length===0){ el.innerHTML = '<div class="empty">No entries yet this session.</div>'; return; }
   el.innerHTML = entries.slice().reverse().map(c=>{
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${c.weight}kg (${escapeHtml(c.hook||'')})` : `No catch`;
     const time = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
