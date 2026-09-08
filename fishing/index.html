@@ -547,6 +547,15 @@
 
         <div id="session-weather-bar" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:13px;color:var(--ink);"></div>
 
+        <div id="session-log-card" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;">
+          <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;color:var(--muted);margin-bottom:5px;">Session Log</label>
+          <textarea maxlength="2000" id="session-log-text" placeholder="How's it going? Water colour, wind, what's working, anything worth remembering..." autocomplete="pk-session-log" style="width:100%;min-height:60px;padding:8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;background:var(--paper);color:var(--ink);resize:vertical;"></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <span class="pc-line muted" id="session-log-status"></span>
+            <button type="button" class="mini-btn" id="session-log-save">Save note</button>
+          </div>
+        </div>
+
         <div id="rod-cards"></div>
       </div>
     </div>
@@ -1255,6 +1264,10 @@
       <button type="button" class="mini-btn" id="venue-edit-pin">🗺️ Drop a pin</button>
     </div>
     <div id="venue-edit-results" style="margin-bottom:10px;"></div>
+    <div class="field">
+      <label>Local Knowledge</label>
+      <textarea maxlength="2000" id="venue-edit-knowledge" placeholder="Gate codes, best swims, where to park, bailiff habits — anything you'd want to know next time." autocomplete="pk-local-knowledge" style="min-height:80px;"></textarea>
+    </div>
     <button class="primary-btn" id="venue-edit-save">Save changes</button>
     <div class="status" id="venue-edit-status"></div>
   </div>
@@ -1274,6 +1287,10 @@
       <button type="button" class="mini-btn" id="session-edit-pin">🗺️ Drop a pin</button>
     </div>
     <div id="session-edit-results" style="margin-bottom:10px;"></div>
+    <div class="field">
+      <label>Session Log</label>
+      <textarea maxlength="2000" id="session-edit-log" placeholder="How did the session go?" autocomplete="pk-session-edit-log" style="min-height:80px;"></textarea>
+    </div>
     <button class="primary-btn" id="session-edit-save">Save changes</button>
     <div class="status" id="session-edit-status"></div>
   </div>
@@ -4851,11 +4868,20 @@ async function renderSessionUi(){
       activeRodsSel.value = String(rods);
     }
     renderSessionWeather();
+    // Session Log — pre-fill with whatever's already been written
+    const logCard = document.getElementById('session-log-card');
+    const logText = document.getElementById('session-log-text');
+    if(logCard && logText){
+      logCard.style.display = 'block';
+      logText.value = activeSession.session_log || '';
+      document.getElementById('session-log-status').textContent = '';
+    }
   }else{
     setup.style.display = 'block';
     bar.style.display = 'none';
     rodCards.style.display = 'none';
     document.getElementById('session-weather-bar').style.display = 'none';
+    document.getElementById('session-log-card').style.display = 'none';
     const rodsSel = document.getElementById('session-rods');
     if(rodsSel && !rodsSel.options.length) rodsSel.innerHTML = rodsOptionsHtml(1);
     await renderActiveCompetitionsBar();
@@ -5099,6 +5125,22 @@ async function clearAllRodState(){
   }
   renderAll();
 }
+
+document.getElementById('session-log-save').addEventListener('click', async ()=>{
+  if(!activeSession) return;
+  const st = document.getElementById('session-log-status');
+  const text = document.getElementById('session-log-text').value;
+  st.textContent = 'Saving...';
+  try{
+    await sbPatch('sessions', 'id=eq.'+activeSession.id, {session_log: text || null});
+    activeSession.session_log = text;
+    st.textContent = 'Saved.';
+    setTimeout(()=>{ st.textContent = ''; }, 1500);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save — try again when you have signal.';
+  }
+});
 
 document.getElementById('session-end-btn').addEventListener('click', async ()=>{
   if(!activeSession) return;
@@ -5608,6 +5650,8 @@ function buildInsightsHtml(catches, venues, sessions){
       atVenue.forEach(c=>{ if(c.rig){ rigTally[c.rig] = (rigTally[c.rig]||0)+1; } });
       const bestRig = Object.keys(rigTally).sort((a,b)=>rigTally[b]-rigTally[a])[0];
       const venueObj = (venues||[]).find(v=>v.name === r.key);
+      const knowledge = venueObj && venueObj.local_knowledge
+        ? `<div class="pc-line muted" style="margin-top:6px;white-space:pre-wrap;">📌 ${escapeHtml(venueObj.local_knowledge)}</div>` : '';
       html += `<li style="display:block;">
         <div class="who" style="margin-bottom:6px;">
           <b>${escapeHtml(r.key)}</b>
@@ -5624,6 +5668,7 @@ function buildInsightsHtml(catches, venues, sessions){
             <button type="button" class="mini-btn danger" data-delete-venue="${venueObj.id}">Remove</button>
           </div>` : ''}
         </div>
+        ${knowledge}
       </li>`;
     });
     html += '</ul>';
@@ -5645,7 +5690,8 @@ function buildInsightsHtml(catches, venues, sessions){
         weight,
         duration: durationMs,
         rods: s.rods,
-        ongoing: !s.ended_at
+        ongoing: !s.ended_at,
+        log: s.session_log || ''
       };
     }).sort((a,b)=> b.count - a.count);
 
@@ -5677,6 +5723,7 @@ function buildInsightsHtml(catches, venues, sessions){
             <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Delete</button>
           </div>
         </div>
+        ${s.log ? `<div class="pc-line muted" style="margin-top:6px;white-space:pre-wrap;">📝 ${escapeHtml(s.log)}</div>` : ''}
       </li>`;
     });
     html += '</ul>';
@@ -6195,6 +6242,7 @@ async function openVenueEdit(venueId){
   editingVenueCoords = (v.latitude != null) ? {lat: v.latitude, lng: v.longitude} : null;
 
   document.getElementById('venue-edit-name').value = v.name || '';
+  document.getElementById('venue-edit-knowledge').value = v.local_knowledge || '';
   document.getElementById('venue-edit-results').innerHTML = '';
   document.getElementById('venue-edit-status').textContent = '';
   updateVenueEditCoordsLabel();
@@ -6249,6 +6297,7 @@ document.getElementById('venue-edit-save').addEventListener('click', async ()=>{
   try{
     await sbPatch('venues', 'id=eq.'+editingVenue.id, {
       name: newName,
+      local_knowledge: document.getElementById('venue-edit-knowledge').value || null,
       latitude: editingVenueCoords ? editingVenueCoords.lat : null,
       longitude: editingVenueCoords ? editingVenueCoords.lng : null
     });
@@ -6287,6 +6336,7 @@ async function openSessionEdit(sessionId){
     ? {lat: venue.latitude, lng: venue.longitude} : null;
 
   document.getElementById('session-edit-venue').value = s.venue_name || '';
+  document.getElementById('session-edit-log').value = s.session_log || '';
   document.getElementById('session-edit-results').innerHTML = '';
   document.getElementById('session-edit-status').textContent = '';
   updateSessionEditCoordsLabel();
@@ -6362,7 +6412,8 @@ document.getElementById('session-edit-save').addEventListener('click', async ()=
     }
 
     await sbPatch('sessions', 'id=eq.'+editingSession.id, {
-      venue_name: newName, venue_id: venueId
+      venue_name: newName, venue_id: venueId,
+      session_log: document.getElementById('session-edit-log').value || null
     });
     // Keep catches from this session pointing at the right venue too
     await sbPatch('catches', 'session_id=eq.'+editingSession.id, {venue_id: venueId});
