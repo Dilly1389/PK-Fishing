@@ -5305,7 +5305,12 @@ function buildCatchEntry(rod){
   const hookEl = document.querySelector('.catch-hook[data-rod="'+rod+'"]');
   const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
   const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
-  const typeValue = typeEl.value === 'Other' ? typeOtherEl.value : typeEl.value;
+  // Only read the catch detail fields when there's actually a catch — for a
+  // blank they may not be rendered, and reading .value off null throws,
+  // which silently stopped "No catch" from doing anything at all
+  const typeValue = caught && typeEl
+    ? (typeEl.value === 'Other' ? (typeOtherEl ? typeOtherEl.value : '') : typeEl.value)
+    : '';
   const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
   const notes = currentPerson.notes[rod];
   const bomVal = notes.bom || '';
@@ -5320,9 +5325,9 @@ function buildCatchEntry(rod){
     id: uid(),
     caught,
     rod,
-    hook: caught ? hookEl.value : '',
+    hook: (caught && hookEl) ? hookEl.value : '',
     type: caught ? typeValue : '',
-    weight: caught ? (parseFloat(weightEl.value) || 0) : 0,
+    weight: (caught && weightEl) ? (parseFloat(weightEl.value) || 0) : 0,
     time: (overrideTime && !isNaN(overrideTime)) ? overrideTime : Date.now(),
     timerElapsed: elapsedMs(currentPerson.timers[rod]),
     bom: bomVal,
