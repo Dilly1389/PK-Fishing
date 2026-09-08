@@ -112,13 +112,6 @@
     display:flex;align-items:center;justify-content:center;gap:9px;
   }
   header.top p{margin:0;color:var(--khaki);font-size:13px;}
-  #nav-hamburger{
-    display:none;position:absolute;top:18px;right:14px;
-    width:38px;height:38px;border:none;background:rgba(255,255,255,0.12);
-    border-radius:8px;cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-  }
-  #nav-hamburger span{display:block;width:20px;height:2px;background:#fff;border-radius:2px;transition:transform .2s ease,opacity .2s ease;}
-  body.spectator-mode #nav-hamburger{display:none !important;}
   #notif-bell{
     position:absolute;top:18px;right:14px;
     width:38px;height:38px;border:none;background:rgba(255,255,255,0.12);
@@ -138,7 +131,13 @@
   }
   .status-dot.connected{background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,0.8),0 0 0 3px rgba(255,255,255,0.15);}
   #db-status{display:none;background:#b23a1f;color:#fff;padding:8px 14px;font-size:12px;text-align:center;}
-  nav.tabs{display:flex;background:var(--dam-deep);position:sticky;top:0;z-index:10;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  /* Bottom tab bar — fixed, thumb-reachable, the native mobile convention */
+  nav.tabs{
+    display:flex;background:var(--dam-deep);
+    position:fixed;bottom:0;left:0;right:0;z-index:50;
+    padding-bottom:env(safe-area-inset-bottom);
+    box-shadow:0 -2px 10px rgba(0,0,0,0.25);
+  }
   body.signed-out-view header.top{display:none;}
   body.signed-out-view nav.tabs{display:none;}
   body.spectator-mode nav.tabs{display:none;}
@@ -147,35 +146,30 @@
   body.spectator-mode #panel-tackle{display:none !important;}
   .lb-name{font-weight:700;font-size:14.5px;color:var(--ink);}
   nav.tabs button{
-    flex:0 0 auto;padding:13px 12px;background:transparent;border:none;
-    border-bottom:3px solid transparent;color:rgba(239,232,216,0.55);
-    font-size:12px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;
-    cursor:pointer;font-family:inherit;white-space:nowrap;
+    flex:1 1 0;padding:8px 4px 6px;background:transparent;border:none;
+    color:rgba(239,232,216,0.6);cursor:pointer;font-family:inherit;
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+    border-top:2px solid transparent;
   }
-  nav.tabs button.active{color:#fff;border-bottom-color:var(--rust);}
-  main{padding:16px 14px 60px;}
+  nav.tabs button .tab-icon{font-size:19px;line-height:1;}
+  nav.tabs button .tab-label{font-size:10px;font-weight:600;letter-spacing:0.02em;}
+  nav.tabs button.active{color:#fff;border-top-color:var(--rust);}
+  /* Room at the bottom so the fixed bar never covers content */
+  main{padding:16px 14px 86px;}
   .app-footer{
     text-align:center;font-size:11px;color:var(--muted);
-    padding:14px 14px 20px;
+    padding:14px 14px 80px;
   }
 
-  @media (max-width: 640px){
-    #nav-hamburger{display:flex;}
-    #notif-bell{right:60px;}
-    nav.tabs{
-      display:none;flex-direction:column;overflow-x:visible;
-      box-shadow:0 8px 20px rgba(0,0,0,0.3);
-      position:static;
-    }
-    nav.tabs.open{display:flex;}
-    nav.tabs button{
-      width:100%;text-align:left;padding:14px 18px;
-      border-bottom:1px solid rgba(255,255,255,0.08);
-      border-left:3px solid transparent;
-    }
-    nav.tabs button.active{border-bottom-color:rgba(255,255,255,0.08);border-left-color:var(--rust);}
-  }
   .panel{display:none;}
+  .more-link{
+    display:flex;align-items:center;gap:14px;width:100%;text-align:left;
+    background:var(--card-bg);border:1px solid var(--line);border-radius:12px;
+    padding:14px;margin-bottom:10px;cursor:pointer;font-family:inherit;
+    color:var(--ink);font-size:15px;
+  }
+  .more-link .more-icon{font-size:22px;flex-shrink:0;}
+  .more-link:active{transform:scale(0.99);}
   .panel.active{display:block;animation:fadein .25s ease;}
   @keyframes fadein{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
 
@@ -476,9 +470,6 @@
     <button id="notif-bell" aria-label="Notifications" style="display:none;">
       🔔<span id="notif-badge" style="display:none;"></span>
     </button>
-    <button id="nav-hamburger" aria-label="Menu" aria-expanded="false">
-      <span></span><span></span><span></span>
-    </button>
   </header>
   <div id="db-status"></div>
   <div id="offline-banner" style="display:none;background:#8a5a00;color:#fff;padding:8px 14px;font-size:12px;text-align:center;"></div>
@@ -491,17 +482,54 @@
   </div>
 
   <nav class="tabs" id="nav-tabs">
-    <button data-tab="timers" id="timers-tab-btn" style="display:none;">Timers</button>
-    <button data-tab="schedule" class="active">Profile</button>
-    <button data-tab="feed">Friends</button>
-    <button data-tab="competitions">Competitions</button>
-    <button data-tab="tackle">Tackle Box</button>
-    <button data-tab="admin" id="admin-tab-btn" style="display:none;">Admin</button>
+    <button data-tab="home" class="active"><span class="tab-icon">⌂</span><span class="tab-label">Home</span></button>
+    <button data-tab="timers" id="timers-tab-btn" style="display:none;"><span class="tab-icon">⏱</span><span class="tab-label">Timers</span></button>
+    <button data-tab="schedule"><span class="tab-icon">👤</span><span class="tab-label">Profile</span></button>
+    <button data-tab="insights" id="insights-tab-btn" style="display:none;"><span class="tab-icon">📊</span><span class="tab-label">Insights</span></button>
+    <button data-tab="more"><span class="tab-icon">☰</span><span class="tab-label">More</span></button>
   </nav>
 
   <main>
 
     <!-- TIMERS -->
+    <!-- HOME -->
+    <div class="panel active" id="panel-home">
+      <div id="home-weather" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;"></div>
+
+      <button class="primary-btn" id="home-start-session" style="margin-bottom:14px;">+ Start a session</button>
+
+      <div id="home-active-session" style="display:none;"></div>
+      <div id="home-competitions" style="margin-bottom:14px;"></div>
+
+      <p class="sub-heading">Latest from your mates</p>
+      <div id="home-feed"><div class="empty">Loading...</div></div>
+    </div>
+
+    <!-- MORE -->
+    <div class="panel" id="panel-more">
+      <button type="button" class="more-link" data-goto="feed">
+        <span class="more-icon">👥</span>
+        <span><b>Friends</b><br><span class="pc-line muted">Recent catches from anglers you follow</span></span>
+      </button>
+      <button type="button" class="more-link" data-goto="tackle">
+        <span class="more-icon">🎣</span>
+        <span><b>Tackle Box</b><br><span class="pc-line muted">Your rods, reels, bait, dips and rigs</span></span>
+      </button>
+      <button type="button" class="more-link" data-goto="competitions">
+        <span class="more-icon">🏆</span>
+        <span><b>Competitions</b><br><span class="pc-line muted">Create, join and follow live standings</span></span>
+      </button>
+      <button type="button" class="more-link" data-goto="admin" id="more-admin-link" style="display:none;">
+        <span class="more-icon">⚙️</span>
+        <span><b>Admin</b><br><span class="pc-line muted">Manage anglers, tackle, rigs and catches</span></span>
+      </button>
+    </div>
+
+    <!-- INSIGHTS -->
+    <div class="panel" id="panel-insights">
+      <div id="insights-body"><div class="empty">Loading...</div></div>
+    </div>
+
     <div class="panel" id="panel-timers">
       <section class="card" id="timers-signin-required">
         <h2>Timers</h2>
@@ -563,7 +591,7 @@
     </div>
 
     <!-- PROFILE -->
-    <div class="panel active" id="panel-schedule">
+    <div class="panel" id="panel-schedule">
       <button type="button" class="mini-btn" id="show-onboarding-btn" style="margin-bottom:14px;">❓ How it works</button>
       <button type="button" class="mini-btn" id="profile-help-btn" style="margin-bottom:14px;">❓ How the Profile works</button>
 
@@ -1496,15 +1524,6 @@
       <div class="pc-line muted">Bait and dip items get a slider showing how much you've got left — a quick way to see what's running low before your next trip.</div>
     </div>
     <button class="primary-btn" id="tackle-help-close" style="margin-top:14px;">Got it</button>
-  </div>
-</div>
-
-<div class="modal-overlay" id="insights-modal">
-  <div class="modal-card wide" style="position:relative;">
-    <button type="button" id="insights-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
-    <h3 style="margin-top:0;">My insights</h3>
-    <div id="insights-body"><div class="empty">Loading...</div></div>
-    <button class="primary-btn" id="insights-close" style="margin-top:14px;">Close</button>
   </div>
 </div>
 
@@ -2839,8 +2858,10 @@ function renderAccountArea(){
   }
   updateTackleVisibility();
   updateTimersVisibility();
-  const adminTabBtn = document.getElementById('admin-tab-btn');
-  if(adminTabBtn) adminTabBtn.style.display = isSuperUser() ? '' : 'none';
+  const moreAdminLink = document.getElementById('more-admin-link');
+  if(moreAdminLink) moreAdminLink.style.display = isSuperUser() ? 'flex' : 'none';
+  const insightsTabBtn = document.getElementById('insights-tab-btn');
+  if(insightsTabBtn) insightsTabBtn.style.display = isSignedIn() ? '' : 'none';
   refreshNotifBadge();
 
   // Signed out, not spectating a shared link: strip everything down to just
@@ -5855,9 +5876,7 @@ async function loadMySessions(){
 }
 
 async function openInsights(){
-  const modal = document.getElementById('insights-modal');
   const body = document.getElementById('insights-body');
-  modal.classList.add('open');
   body.innerHTML = '<div class="empty">Loading...</div>';
   const myId = getMyFishermanId();
   if(!myId){
@@ -6561,13 +6580,7 @@ document.getElementById('past-catch-save-btn').addEventListener('click', async (
   }
 });
 
-document.getElementById('open-insights-btn').addEventListener('click', openInsights);
-document.getElementById('insights-modal-x').addEventListener('click', ()=>{
-  document.getElementById('insights-modal').classList.remove('open');
-});
-document.getElementById('insights-close').addEventListener('click', ()=>{
-  document.getElementById('insights-modal').classList.remove('open');
-});
+document.getElementById('open-insights-btn').addEventListener('click', ()=> goToTab('insights'));
 
 // Shows the actual people behind a follower/following count. idType is
 // 'user' for follower_user_id values, 'fisherman' for followed_fisherman_id
@@ -7292,50 +7305,60 @@ function renderCatchList(rod){
   });
 }
 
-// Tabs
+// Tabs. Panels reachable from the More menu (feed, tackle, competitions,
+// admin) have no bottom-bar button of their own, so the More tab stays
+// highlighted while you're in them.
+const MORE_TABS = ['feed','tackle','competitions','admin'];
+
+function goToTab(tabName){
+  const panel = document.getElementById('panel-'+tabName);
+  if(!panel) return;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  panel.classList.add('active');
+
+  const highlight = MORE_TABS.includes(tabName) ? 'more' : tabName;
+  const navBtn = document.querySelector('nav.tabs button[data-tab="'+highlight+'"]');
+  if(navBtn) navBtn.classList.add('active');
+
+  try{ localStorage.setItem('pk_fishing_active_tab', tabName); }catch(e){}
+  window.scrollTo({top: 0, behavior: 'smooth'});
+
+  if(tabName==='home') renderHome();
+  if(tabName==='insights' && isSignedIn()) openInsights();
+  if(tabName==='timers'){
+    updateTimersVisibility();
+    loadKnownRigs().then(()=>{ if(currentPerson) renderAll(); });
+    loadActiveSession().then(renderSessionUi);
+    renderActiveCompetitionsBar();
+  }
+  if(tabName==='feed') renderFeed();
+  if(tabName==='competitions') renderCompetitions();
+  if(tabName==='tackle'){
+    updateTackleVisibility();
+    if(isSignedIn()){
+      renderTackleList();
+      renderTackleSharePicker();
+      renderTackleBoxSharePicker();
+      const hookSel = document.getElementById('rig-hook-count');
+      if(hookSel && !hookSel.options.length) hookSel.innerHTML = hookCountOptionsHtml(2);
+      renderRigsList();
+      makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
+    }
+  }
+  if(tabName==='admin') renderAdminTab();
+}
+
 document.querySelectorAll('nav.tabs button').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
-    // Remember where you were, so a refresh doesn't bounce you to Profile
-    try{ localStorage.setItem('pk_fishing_active_tab', btn.dataset.tab); }catch(e){}
-    document.getElementById('nav-tabs').classList.remove('open');
-    document.getElementById('nav-hamburger').setAttribute('aria-expanded', 'false');
-    window.scrollTo({top: 0, behavior: 'smooth'});
-    if(btn.dataset.tab==='timers'){
-      updateTimersVisibility();
-      loadKnownRigs().then(()=>{ if(currentPerson) renderAll(); });
-      loadActiveSession().then(renderSessionUi);
-      renderActiveCompetitionsBar();
-    }
-    if(btn.dataset.tab==='feed') renderFeed();
-    if(btn.dataset.tab==='competitions') renderCompetitions();
-    if(btn.dataset.tab==='tackle'){
-      updateTackleVisibility();
-      if(isSignedIn()){
-        renderTackleList();
-        renderTackleSharePicker();
-        renderTackleBoxSharePicker();
-        const hookSel = document.getElementById('rig-hook-count');
-        if(hookSel && !hookSel.options.length) hookSel.innerHTML = hookCountOptionsHtml(2);
-        renderRigsList();
-        makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
-      }
-    }
-    if(btn.dataset.tab==='admin') renderAdminTab();
-  });
+  btn.addEventListener('click', ()=> goToTab(btn.dataset.tab));
+});
+document.querySelectorAll('.more-link').forEach(btn=>{
+  btn.addEventListener('click', ()=> goToTab(btn.dataset.goto));
 });
 document.getElementById('angler-select').addEventListener('change', e=> setActivePerson(e.target.value));
 setInterval(renderTimers, 1000);
 setInterval(()=>{ if(isSignedIn()) refreshNotifBadge(); }, 60000);
 
-document.getElementById('nav-hamburger').addEventListener('click', ()=>{
-  const nav = document.getElementById('nav-tabs');
-  const isOpen = nav.classList.toggle('open');
-  document.getElementById('nav-hamburger').setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-});
 
 document.getElementById('notif-bell').addEventListener('click', ()=>{
   document.getElementById('notif-modal').classList.add('open');
@@ -7591,6 +7614,122 @@ function feedRodLabel(it){
   if(RID_LABEL[it.rod]) return ' · ' + RID_LABEL[it.rod];
   return '';
 }
+
+// ---------- Home ----------
+// Answers "what's happening right now" in one place, so you don't have to
+// check three tabs to find out nothing's changed.
+async function renderHome(){
+  const startBtn = document.getElementById('home-start-session');
+  const activeWrap = document.getElementById('home-active-session');
+  const weatherWrap = document.getElementById('home-weather');
+  const compWrap = document.getElementById('home-competitions');
+  const feedWrap = document.getElementById('home-feed');
+
+  if(!isSignedIn()){
+    startBtn.style.display = 'none';
+    activeWrap.style.display = 'none';
+    weatherWrap.style.display = 'none';
+    compWrap.innerHTML = '';
+    feedWrap.innerHTML = '<div class="empty">Sign in to see what your mates are catching.</div>';
+    return;
+  }
+
+  await loadActiveSession();
+
+  if(activeSession){
+    // A session's running — that's the most important thing on the screen
+    startBtn.style.display = 'none';
+    activeWrap.style.display = 'block';
+    const started = new Date(activeSession.started_at);
+    const elapsed = Date.now() - started;
+    activeWrap.innerHTML = `
+      <div style="background:var(--dam);color:#fff;border-radius:12px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;opacity:.85;">Session running</div>
+        <div style="font-size:18px;font-weight:700;margin:4px 0;">${escapeHtml(activeSession.venue_name || 'Session')}</div>
+        <div style="font-size:13px;opacity:.9;">${fmtDuration(elapsed)} · ${normalizeRodsCount(activeSession.rods)} rod${normalizeRodsCount(activeSession.rods)===1?'':'s'}</div>
+        <button type="button" class="mini-btn" id="home-goto-timers" style="margin-top:10px;background:#fff;">Go to Timers</button>
+      </div>`;
+    const gotoBtn = document.getElementById('home-goto-timers');
+    if(gotoBtn) gotoBtn.addEventListener('click', ()=> goToTab('timers'));
+  }else{
+    startBtn.style.display = 'block';
+    activeWrap.style.display = 'none';
+  }
+
+  // Current conditions where you are — useful for deciding whether to go
+  renderHomeWeather();
+
+  // Any competitions you're in that are live right now
+  try{
+    const myId = getMyFishermanId();
+    const today = new Date().toISOString().slice(0,10);
+    let comps = await sbGet('competitions?select=id,name,dam,metric,fish_type_filter,start_date,start_time,end_date,end_time&start_date=lte.'+today+'&end_date=gte.'+today);
+    comps = comps.filter(c=> competitionIsLive(c));
+    const mine = [];
+    for(const c of comps){
+      const participants = await loadCompetitionParticipants(c.id);
+      if(participants.length === 0 || participants.includes(myId)) mine.push(c);
+    }
+    compWrap.innerHTML = mine.map(c=>{
+      const metricLabel = c.metric==='catch_count' ? 'most catches'
+        : (c.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
+      return `<button type="button" class="home-comp-link" data-comp="${c.id}"
+        style="display:block;width:100%;text-align:left;background:var(--dam-deep);color:#fff;border:none;border-radius:10px;padding:10px 12px;margin-bottom:8px;font-family:inherit;font-size:13px;cursor:pointer;">
+        🏆 <b>${escapeHtml(c.name)}</b> is running — ${metricLabel}
+      </button>`;
+    }).join('');
+    compWrap.querySelectorAll('.home-comp-link').forEach(b=>{
+      b.addEventListener('click', ()=> goToTab('competitions'));
+    });
+  }catch(e){ console.error('home competitions failed', e); compWrap.innerHTML = ''; }
+
+  // Latest catches from you and anyone you follow
+  try{
+    await loadFollowedIds();
+    const myId = getMyFishermanId();
+    const ids = [...followedIds];
+    if(myId) ids.push(myId);
+    const items = await loadFeedItems(ids);
+    const recent = items.filter(it=>it.caught).slice(0, 5);
+    feedWrap.innerHTML = recent.length
+      ? recent.map(it=>`
+        <div class="profile-catch" style="display:flex;gap:10px;align-items:center;">
+          ${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 34)}
+          <div style="flex:1;">
+            <div class="pc-line"><b>${escapeHtml(it.fishermanName)}</b> · ${escapeHtml(it.type||'Fish')}</div>
+            <div class="pc-line muted">${it.weight}kg · ${formatTimeAgo(it.time)}</div>
+          </div>
+          ${it.likes ? `<span class="pc-line muted">👌${it.likes}</span>` : ''}
+        </div>`).join('')
+      : '<div class="empty">No catches yet — follow some mates on the Friends tab.</div>';
+  }catch(e){
+    console.error('home feed failed', e);
+    feedWrap.innerHTML = '<div class="empty">Could not load recent catches.</div>';
+  }
+}
+
+async function renderHomeWeather(){
+  const el = document.getElementById('home-weather');
+  if(!el || !navigator.onLine){ el.style.display = 'none'; return; }
+  try{
+    const coords = lastKnownPosition || await capturePosition();
+    if(!coords){ el.style.display = 'none'; return; }
+    const w = await fetchWeather(coords.lat, coords.lng);
+    if(!w){ el.style.display = 'none'; return; }
+    const m = moonPhase();
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px;">Right now, where you are</div>
+      <div style="font-size:14px;color:var(--ink);">
+        ${w.temp != null ? Math.round(w.temp)+'°C' : ''}
+        ${w.windSpeed != null ? ' · 💨 '+Math.round(w.windSpeed)+'km/h '+windDirLabel(w.windDir) : ''}
+        ${w.pressure != null ? ' · '+Math.round(w.pressure)+'hPa' : ''}
+        · ${m.emoji} ${m.label}
+      </div>`;
+  }catch(e){ console.error('home weather failed', e); el.style.display = 'none'; }
+}
+
+document.getElementById('home-start-session').addEventListener('click', ()=> goToTab('timers'));
 
 async function renderFeed(refetch){
   renderMyFriendsList();
@@ -8397,15 +8536,23 @@ await loadTackleCategoryOptions();
   makeCardCollapsible('appearance-card', 'appearance-body', 'pk_fishing_collapse_appearance');
 
   // Return to whichever tab you were last on. Done last, so tabs hidden by
-  // sign-in state (Timers, Admin) have already been resolved.
+  // sign-in state (Timers, Insights) have already been resolved.
   try{
     const lastTab = localStorage.getItem('pk_fishing_active_tab');
-    if(lastTab){
-      const btn = document.querySelector('nav.tabs button[data-tab="'+lastTab+'"]');
-      // Only if that tab is actually available to this person right now
-      if(btn && btn.style.display !== 'none') btn.click();
+    if(lastTab && document.getElementById('panel-'+lastTab)){
+      if(MORE_TABS.includes(lastTab)){
+        // These live behind More and have no nav button of their own
+        if(lastTab !== 'admin' || isSuperUser()) goToTab(lastTab);
+        else goToTab('home');
+      }else{
+        const btn = document.querySelector('nav.tabs button[data-tab="'+lastTab+'"]');
+        if(btn && btn.style.display !== 'none') goToTab(lastTab);
+        else goToTab('home');
+      }
+    }else{
+      renderHome();
     }
-  }catch(e){}
+  }catch(e){ renderHome(); }
 })();
 
 // ---------- Add to home screen ----------
