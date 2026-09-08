@@ -461,6 +461,9 @@
   .modal-card{
     background:var(--card-bg);border-radius:16px;padding:24px 22px;max-width:320px;width:100%;
     text-align:center;border:1px solid var(--line);
+    /* Long content (the help walkthroughs especially) was overflowing off
+       the bottom of the screen with no way to reach it */
+    max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
   }
   .modal-card h3{margin:0 0 10px;font-size:18px;color:var(--ink);}
   .modal-card p{margin:4px 0;font-size:14px;color:var(--muted);}
@@ -1888,7 +1891,7 @@ function multiPickerFieldHtml(rod, key, label){
   return `<div class="field">
     <label>${escapeHtml(label)}</label>
     ${typeFilter}
-    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search name or brand — add as many as you like" autocomplete="pk-field-19" autocorrect="off" autocapitalize="off" spellcheck="false" name="search-${rod}-${key}">
+    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search name or brand — add as many as you like" autocomplete="pk-bait-search" autocorrect="off" autocapitalize="off" spellcheck="false" name="pk-bait-${rod}-${key}" role="presentation" data-form-type="other">
     <div class="multi-picker-results" data-rod="${rod}" data-key="${key}"></div>
     <div class="multi-picker-pills" data-rod="${rod}" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
   </div>`;
@@ -1922,8 +1925,8 @@ function renderMultiPickerResults(rod, key){
   if(!searchEl || !resultsEl || !currentPerson) return;
   const term = searchEl.value.trim().toLowerCase();
   const typeFilter = typeEl ? typeEl.value : '';
-  // Nothing to go on — wait for a search term or a chosen type
-  if(!term && !typeFilter){ resultsEl.innerHTML = ''; return; }
+  // Show the whole list by default — hiding it until someone typed made it
+  // look like there was no picker at all, especially on mobile
 
   const current = parseMultiValue(currentPerson.notes[rod][key]);
   const matches = multiPickerSourceList(key)
@@ -2010,8 +2013,16 @@ function renderRigFields(rod){
   }
   container.innerHTML = html;
 
-  if(rigDef.usesBom) renderMultiPickerPills(rod, 'bom');
-  for(let n=1; n<=rigDef.hookCount; n++){ renderMultiPickerPills(rod, 'hook'+n); }
+  // Populate both the chosen-item pills and the picker dropdown itself,
+  // so the list is there immediately rather than only after typing
+  if(rigDef.usesBom){
+    renderMultiPickerPills(rod, 'bom');
+    renderMultiPickerResults(rod, 'bom');
+  }
+  for(let n=1; n<=rigDef.hookCount; n++){
+    renderMultiPickerPills(rod, 'hook'+n);
+    renderMultiPickerResults(rod, 'hook'+n);
+  }
 }
 
 function getRodFieldValue(rod, key){
@@ -4631,9 +4642,12 @@ function attachRodCardHandlers(){
       inp.value = ''; // clear so the same or another photo can be added again
     });
   });
-  document.querySelectorAll('.catch-toggle button').forEach(btn=>{
+  // Scoped to rod cards — a bare '.catch-toggle button' also matches the
+  // admin and edit-catch toggles, which have no data-rod and would throw
+  document.querySelectorAll('.catch-toggle button[data-rod]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const rod = btn.dataset.rod;
+      if(!rod) return;
       const yes = btn.dataset.yn === 'yes';
       catchToggle[rod] = yes;
       document.querySelectorAll('.catch-toggle[data-rod="'+rod+'"] button').forEach(b=>b.classList.remove('active'));
@@ -5263,6 +5277,33 @@ async function refreshVenueSuggestions(){
       if(el) el.innerHTML = options;
     });
   }catch(e){ console.error('refreshVenueSuggestions failed', e); }
+}
+
+// Clears venues nothing references any more. Deleting one session at a time
+// can't always catch these — a venue can be orphaned by deleting catches, or
+// by edits that repoint a session elsewhere — so this sweeps up whatever's
+// left rather than relying on each delete to tidy after itself.
+async function cleanOrphanVenues(){
+  if(!isSignedIn() || !navigator.onLine) return;
+  try{
+    const venues = await sbGet('venues?select=id&owner_user_id=eq.'+session.user.id);
+    if(!venues.length) return;
+    const [sessions, catches] = await Promise.all([
+      sbGet('sessions?select=venue_id'),
+      sbGet('catches?select=venue_id')
+    ]);
+    const inUse = new Set([
+      ...sessions.map(s=>s.venue_id),
+      ...catches.map(c=>c.venue_id)
+    ].filter(Boolean));
+
+    for(const v of venues){
+      if(!inUse.has(v.id)){
+        try{ await sbDelete('venues', 'id=eq.'+v.id); }
+        catch(e){ console.error('orphan venue cleanup failed', v.id, e); }
+      }
+    }
+  }catch(e){ console.error('cleanOrphanVenues failed', e); }
 }
 
 async function loadMyVenues(){
@@ -5917,6 +5958,9 @@ async function openInsights(){
     body.innerHTML = '<div class="empty">Could not find your angler profile.</div>';
     return;
   }
+  // Clear any venues nothing references before loading, so the map can't
+  // show a pin for a water with no sessions or catches behind it
+  await cleanOrphanVenues();
   const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
   body.innerHTML = buildInsightsHtml(rec && rec.catches ? rec.catches : [], venues, sessions);
   renderVenueMap(venues, rec && rec.catches ? rec.catches : []);
