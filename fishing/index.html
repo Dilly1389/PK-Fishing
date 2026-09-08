@@ -154,6 +154,31 @@
   nav.tabs button .tab-icon{font-size:19px;line-height:1;}
   nav.tabs button .tab-label{font-size:10px;font-weight:600;letter-spacing:0.02em;}
   nav.tabs button.active{color:#fff;border-top-color:var(--rust);}
+
+  /* Desktop: a bottom bar is a phone convention and looks odd on a wide
+     screen, so the nav moves to the top and content gets a readable width */
+  @media (min-width: 800px){
+    nav.tabs{
+      position:sticky;top:0;bottom:auto;
+      box-shadow:0 2px 10px rgba(0,0,0,0.25);
+      justify-content:center;gap:8px;padding:0;
+    }
+    nav.tabs button{
+      flex:0 0 auto;flex-direction:row;gap:8px;
+      padding:14px 22px;border-top:none;border-bottom:3px solid transparent;
+    }
+    nav.tabs button.active{border-top-color:transparent;border-bottom-color:var(--rust);}
+    nav.tabs button .tab-icon{font-size:16px;}
+    nav.tabs button .tab-label{font-size:13px;}
+    main{max-width:900px;margin:0 auto;padding:20px 20px 40px;}
+    .app-footer{padding-bottom:24px;}
+    /* The More menu is a set of equal cards, so two columns suits it.
+       Home is a stacked narrative, so it stays single-column. */
+    #panel-more.active{
+      display:grid;grid-template-columns:1fr 1fr;gap:0 12px;align-items:start;
+    }
+    .more-link{margin-bottom:12px;}
+  }
   /* Room at the bottom so the fixed bar never covers content */
   main{padding:16px 14px 86px;}
   .app-footer{
@@ -7718,14 +7743,24 @@ async function renderHomeWeather(){
     if(!w){ el.style.display = 'none'; return; }
     const m = moonPhase();
     el.style.display = 'block';
+    el.style.cursor = 'pointer';
     el.innerHTML = `
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:6px;">Right now, where you are</div>
-      <div style="font-size:14px;color:var(--ink);">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);">Right now, where you are</div>
+        <div style="font-size:12px;color:var(--muted);">Forecast ›</div>
+      </div>
+      <div style="font-size:14px;color:var(--ink);margin-top:6px;">
         ${w.temp != null ? Math.round(w.temp)+'°C' : ''}
         ${w.windSpeed != null ? ' · 💨 '+Math.round(w.windSpeed)+'km/h '+windDirLabel(w.windDir) : ''}
         ${w.pressure != null ? ' · '+Math.round(w.pressure)+'hPa' : ''}
         · ${m.emoji} ${m.label}
       </div>`;
+    // Same forecast view as the session weather bar — the coordinates are
+    // stashed so openForecast has something to work with
+    el.onclick = ()=>{
+      weatherCache = {sessionId: weatherCache.sessionId, weather: w, moon: m, coords};
+      openForecast();
+    };
   }catch(e){ console.error('home weather failed', e); el.style.display = 'none'; }
 }
 
