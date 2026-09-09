@@ -555,6 +555,26 @@
         <span class="more-icon">⚙️</span>
         <span><b>Admin</b><br><span class="pc-line muted">Manage anglers, tackle, rigs and catches</span></span>
       </button>
+      <button type="button" class="more-link" data-goto="whatsnew">
+        <span class="more-icon">✨</span>
+        <span><b>What's New</b><br><span class="pc-line muted">Recent changes and additions to the app</span></span>
+      </button>
+      <button type="button" class="more-link" data-goto="privacy">
+        <span class="more-icon">🔒</span>
+        <span><b>Privacy Policy</b><br><span class="pc-line muted">What we store, why, and your rights</span></span>
+      </button>
+    </div>
+
+    <!-- WHAT'S NEW -->
+    <div class="panel" id="panel-whatsnew">
+      <h2>What's New</h2>
+      <div id="whatsnew-body"></div>
+    </div>
+
+    <!-- PRIVACY POLICY -->
+    <div class="panel" id="panel-privacy">
+      <h2>Privacy Policy</h2>
+      <div id="privacy-body"></div>
     </div>
 
     <!-- INSIGHTS -->
@@ -582,8 +602,8 @@
           <input type="hidden" id="session-competition" value="">
           <div class="field">
             <label>Venue</label>
-            <input type="text" maxlength="100" id="session-venue" list="venue-suggestions" placeholder="Where are you fishing?" autocomplete="pk-venue-1" name="pk-venue-field-1" readonly onfocus="if(!document.getElementById('session-competition').value){ this.removeAttribute('readonly'); }">
-            <datalist id="venue-suggestions"></datalist>
+            <input type="text" maxlength="100" id="session-venue" placeholder="Where are you fishing?" autocomplete="pk-venue-1" name="pk-venue-field-1" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+            <div id="venue-suggestion-list" style="display:none;border:1px solid var(--line);border-radius:8px;margin-top:4px;overflow:hidden;"></div>
           </div>
           <div class="field">
             <label>How many rods?</label>
@@ -795,8 +815,8 @@
         </div>
         <div class="field">
           <label>Venue (optional)</label>
-          <input type="text" maxlength="100" id="past-catch-venue" list="venue-suggestions-past" placeholder="Where was it caught?" autocomplete="pk-venue-2" name="pk-venue-field-2">
-          <datalist id="venue-suggestions-past"></datalist>
+          <input type="text" maxlength="100" id="past-catch-venue" placeholder="Where was it caught?" autocomplete="pk-venue-2" name="pk-venue-field-2" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <div id="venue-suggestion-list-past" style="display:none;border:1px solid var(--line);border-radius:8px;margin-top:4px;overflow:hidden;"></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
             <button type="button" class="mini-btn" id="past-catch-venue-lookup">📍 Search for it</button>
             <button type="button" class="mini-btn" id="past-catch-venue-pin">🗺️ Drop a pin</button>
@@ -1291,7 +1311,11 @@
     </div>
 
   </main>
-  <footer class="app-footer">© 2026 PK Fishing. All rights reserved.</footer>
+  <footer class="app-footer">
+    © 2026 PK Fishing. All rights reserved.
+    <br>
+    <button type="button" id="footer-privacy-link" style="background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-family:inherit;font-size:11px;padding:6px 0 0;">Privacy Policy</button>
+  </footer>
 </div>
 
 <div class="modal-overlay" id="confirm-modal">
@@ -1341,7 +1365,7 @@
     <h3 style="margin-top:0;">Edit session</h3>
     <div class="field">
       <label>Venue</label>
-      <input type="text" maxlength="100" id="session-edit-venue" list="venue-suggestions-past" placeholder="Where was it fished?" autocomplete="pk-edit-venue">
+      <input type="text" maxlength="100" id="session-edit-venue" placeholder="Where was it fished?" autocomplete="pk-edit-venue" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
     </div>
     <p class="pc-line muted" id="session-edit-coords" style="margin-bottom:6px;"></p>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
@@ -2526,6 +2550,8 @@ function buildCatchPayload(personId, entry){
     bom: entry.bom,
     rig: entry.rig || '',
     rod_identifier: entry.rodIdentifier || '',
+    cast_distance: entry.castDistance ?? null,
+    rod_note: entry.rodNote || null,
     photos: JSON.stringify(entry.photos || []),
     latitude: entry.latitude != null ? entry.latitude : null,
     longitude: entry.longitude != null ? entry.longitude : null,
@@ -2887,6 +2913,8 @@ function renderAccountArea(){
     makeCardCollapsible('reel-records-settings-card', 'reel-records-settings-body', 'pk_fishing_collapse_reelrecords');
     makeCardCollapsible('past-catch-card', 'past-catch-body', 'pk_fishing_collapse_pastcatch');
     refreshVenueSuggestions();
+    wireVenueSuggestions('session-venue', 'venue-suggestion-list');
+    wireVenueSuggestions('past-catch-venue', 'venue-suggestion-list-past');
   }else{
     if(authForms) authForms.style.display = 'block';
     if(signedInArea) signedInArea.style.display = 'none';
@@ -4354,7 +4382,9 @@ async function loadPerson(id){
         rig: row ? (row.rig||'') : '',
         hookCount: row ? (row.hook_count||2) : 2,
         rodItemId: row ? (row.rod_item_id||'') : '',
-        reelItemId: row ? (row.reel_item_id||'') : ''
+        reelItemId: row ? (row.reel_item_id||'') : '',
+        castDistance: row ? (row.cast_distance ?? '') : '',
+        rodNote: row ? (row.rod_note||'') : ''
       };
       for(let n=1; n<=MAX_HOOKS; n++){
         noteObj['hook'+n] = row ? (row['hook'+n+'_note']||'') : '';
@@ -4368,6 +4398,8 @@ async function loadPerson(id){
         bom:c.bom||'',
         rig: c.rig || '',
         rodIdentifier: c.rod_identifier || '',
+        castDistance: c.cast_distance ?? null,
+        rodNote: c.rod_note || '',
         venueId: c.venue_id || null,
         hasKnownTime: c.has_known_time !== false,
         moonPhase: c.moon_phase || null,
@@ -4402,7 +4434,9 @@ async function saveRodState(personId, rod){
     running: t.running, start_ts: t.startTs, accumulated_ms: t.accumulatedMs,
     bom: n.bom,
     identifier: n.identifier, dot_color: n.dotColor, rig: n.rig, hook_count: n.hookCount,
-    rod_item_id: n.rodItemId || null, reel_item_id: n.reelItemId || null
+    rod_item_id: n.rodItemId || null, reel_item_id: n.reelItemId || null,
+    cast_distance: n.castDistance ? parseFloat(n.castDistance) : null,
+    rod_note: n.rodNote || null
   };
   for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = n['hook'+i] || ''; }
 
@@ -4505,6 +4539,16 @@ function rodCardHtml(r){
         <select class="rod-select" data-rod="${r}" data-key="rig">${buildRigOptionsHtml()}</select>
       </div>
       <div id="rig-fields-${r}"></div>
+      <div class="row2">
+        <div class="field">
+          <label>Distance (m)</label>
+          <input type="number" step="1" min="0" max="500" class="rod-field" data-rod="${r}" data-key="castDistance" placeholder="e.g. 45" autocomplete="pk-rod-distance-${r}">
+        </div>
+        <div class="field">
+          <label>Rod note</label>
+          <input type="text" maxlength="200" class="rod-field" data-rod="${r}" data-key="rodNote" placeholder="Margin, near the reeds..." autocomplete="pk-rod-note-${r}">
+        </div>
+      </div>
       <hr class="divider">
       <p class="sub-heading">Record a catch</p>
       <div class="catch-toggle" data-rod="${r}">
@@ -4953,6 +4997,8 @@ async function renderSessionUi(){
     if(rodsSel && !rodsSel.options.length) rodsSel.innerHTML = rodsOptionsHtml(1);
     await renderActiveCompetitionsBar();
     refreshVenueSuggestions();
+    wireVenueSuggestions('session-venue', 'venue-suggestion-list');
+    wireVenueSuggestions('past-catch-venue', 'venue-suggestion-list-past');
   }
 }
 
@@ -5262,21 +5308,56 @@ async function searchPlaces(query){
   }catch(e){ console.error('searchPlaces failed', e); return []; }
 }
 
+// Venue names already saved, used for the custom suggestion lists below
+let knownVenueNames = [];
+
 async function refreshVenueSuggestions(){
   if(!isSignedIn()) return;
   try{
     const venues = await loadMyVenues();
-    const options = venues
+    knownVenueNames = venues
       .map(v=>v.name)
       .filter(Boolean)
-      .sort((a,b)=> a.localeCompare(b))
-      .map(n=>`<option value="${escapeHtml(n)}"></option>`)
-      .join('');
-    ['venue-suggestions','venue-suggestions-past'].forEach(id=>{
-      const el = document.getElementById(id);
-      if(el) el.innerHTML = options;
-    });
+      .sort((a,b)=> a.localeCompare(b));
   }catch(e){ console.error('refreshVenueSuggestions failed', e); }
+}
+
+// A hand-rolled suggestion list rather than a native <datalist>. Chrome
+// merges its own saved logins into a datalist popup, which is why sign-in
+// details kept appearing over the venue field no matter what autocomplete
+// value we set. This popup is ours, so nothing can be injected into it.
+function wireVenueSuggestions(inputId, listId){
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  if(!input || !list || input.dataset.suggestWired) return;
+  input.dataset.suggestWired = 'true';
+
+  function render(){
+    // While a competition has locked the venue, there's nothing to choose
+    if(input.readOnly){ list.style.display = 'none'; return; }
+    const term = input.value.trim().toLowerCase();
+    const matches = knownVenueNames
+      .filter(n=> !term || n.toLowerCase().includes(term))
+      .filter(n=> n.toLowerCase() !== term)
+      .slice(0, 6);
+    if(!matches.length){ list.style.display = 'none'; return; }
+    list.innerHTML = matches.map(n=>
+      `<button type="button" class="venue-suggest-item" data-name="${escapeHtml(n)}"
+        style="display:block;width:100%;text-align:left;background:var(--card-bg);border:none;border-bottom:1px solid var(--line);padding:10px 12px;font-family:inherit;font-size:14px;color:var(--ink);cursor:pointer;">${escapeHtml(n)}</button>`
+    ).join('');
+    list.style.display = 'block';
+    list.querySelectorAll('.venue-suggest-item').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        input.value = btn.dataset.name;
+        list.style.display = 'none';
+      });
+    });
+  }
+
+  input.addEventListener('focus', render);
+  input.addEventListener('input', render);
+  // Delay so a tap on a suggestion registers before the list closes
+  input.addEventListener('blur', ()=>{ setTimeout(()=>{ list.style.display = 'none'; }, 180); });
 }
 
 // Clears venues nothing references any more. Deleting one session at a time
@@ -5374,6 +5455,8 @@ function buildCatchEntry(rod){
     bom: bomVal,
     rig: rigVal,
     rodIdentifier: rodIdentifier,
+    castDistance: notes.castDistance ? parseFloat(notes.castDistance) : null,
+    rodNote: notes.rodNote || '',
     photos: caught ? (pendingPhotos[rod] || []).slice() : []
   };
   for(let n=1; n<=MAX_HOOKS; n++){
@@ -5435,7 +5518,10 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
     dotColor: currentPerson.notes[rod].dotColor,
     hookCount: currentPerson.notes[rod].hookCount,
     rodItemId: currentPerson.notes[rod].rodItemId,
-    reelItemId: currentPerson.notes[rod].reelItemId
+    reelItemId: currentPerson.notes[rod].reelItemId,
+    // The rod's still in the same spot, so distance and note carry over
+    castDistance: currentPerson.notes[rod].castDistance,
+    rodNote: currentPerson.notes[rod].rodNote
   };
   for(let n=1; n<=MAX_HOOKS; n++){ clearedNotes['hook'+n] = ''; }
   currentPerson.notes[rod] = clearedNotes;
@@ -5472,11 +5558,17 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   pendingEntry = null;
   await saveRodState(currentPersonId, rod);
 
+  // Session info belongs on blanks too — they're part of the session, count
+  // toward blank-session badges, and the rod list filters by session, so a
+  // blank without one saves invisibly and looks like nothing happened
+  if(activeSession){
+    entry.sessionId = activeSession.id;
+    entry.competitionId = activeSession.competition_id || null;
+  }
+
   // Capture where this was caught (private — powers venue insights only)
   if(entry.caught){
     if(activeSession){
-      entry.sessionId = activeSession.id;
-      entry.competitionId = activeSession.competition_id || null;
       // Reuse whatever we already fetched for the session bar — no need
       // for a second weather API call just to log the catch
       if(weatherCache.sessionId === activeSession.id){
@@ -5499,6 +5591,9 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   }
 
   await insertCatch(currentPersonId, entry);
+  // Re-render now the entry has its session attached — the earlier render
+  // ran before that, so the list would have filtered it out
+  renderCatchList(rod);
   await checkAndUpdatePersonalBest(entry);
   if(entry.caught && entry.type){
     await ensureSpeciesInRecords(currentPersonId, entry.type);
@@ -5707,6 +5802,18 @@ function buildInsightsHtml(catches, venues, sessions){
   // By moon phase — only catches logged since this feature was added will
   // have this, so it'll fill in gradually rather than showing everything
   html += statTable('By moon phase', groupStats(c=> c.moonPhase ? [c.moonPhase] : []), 'No moon phase data yet — this fills in as you log new catches.');
+
+  // Distance — banded rather than exact, so 42m and 45m group together
+  // instead of each becoming its own meaningless row
+  html += statTable('By distance', groupStats(c=>{
+    if(c.castDistance == null || c.castDistance <= 0) return [];
+    const d = c.castDistance;
+    if(d < 20) return ['Under 20m'];
+    if(d < 40) return ['20–40m'];
+    if(d < 60) return ['40–60m'];
+    if(d < 80) return ['60–80m'];
+    return ['80m+'];
+  }), 'No distances recorded yet — add one on a rod when you cast.');
 
   // Best time of day — only catches with a real time count here. A past
   // catch logged with just a date defaults to noon internally so the date
@@ -7348,6 +7455,10 @@ function renderNotes(){
 
     const idEl = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="identifier"]');
     if(idEl) idEl.value = currentPerson ? currentPerson.notes[r].identifier : '';
+    const distEl = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="castDistance"]');
+    if(distEl) distEl.value = currentPerson ? (currentPerson.notes[r].castDistance ?? '') : '';
+    const noteEl = document.querySelector('.rod-field[data-rod="'+r+'"][data-key="rodNote"]');
+    if(noteEl) noteEl.value = currentPerson ? (currentPerson.notes[r].rodNote || '') : '';
     const dotEl = document.querySelector('.rod-dot[data-rod="'+r+'"]');
     if(dotEl) dotEl.value = (currentPerson && currentPerson.notes[r].dotColor) || '#C1440E';
     ['rodItemId','reelItemId'].forEach(k=>{
@@ -7392,7 +7503,7 @@ function renderCatchList(rod){
 // Tabs. Panels reachable from the More menu (feed, tackle, competitions,
 // admin) have no bottom-bar button of their own, so the More tab stays
 // highlighted while you're in them.
-const MORE_TABS = ['feed','tackle','competitions','admin'];
+const MORE_TABS = ['feed','tackle','competitions','admin','whatsnew','privacy'];
 
 function goToTab(tabName){
   const panel = document.getElementById('panel-'+tabName);
@@ -7409,6 +7520,8 @@ function goToTab(tabName){
   window.scrollTo({top: 0, behavior: 'smooth'});
 
   if(tabName==='home') renderHome();
+  if(tabName==='whatsnew') renderWhatsNew();
+  if(tabName==='privacy') renderPrivacy();
   if(tabName==='insights' && isSignedIn()) openInsights();
   if(tabName==='timers'){
     updateTimersVisibility();
@@ -7657,6 +7770,8 @@ async function loadFeedItems(fishermanIds){
         dam: p ? p.dam : '',
         rod: c.rod,
         rodIdentifier: c.rod_identifier || '',
+        castDistance: c.cast_distance ?? null,
+        rodNote: c.rod_note || '',
         type: c.fish_type,
         weight: c.weight,
         time: new Date(c.time).getTime(),
@@ -7697,6 +7812,140 @@ function feedRodLabel(it){
   if(it.rodIdentifier) return ' · ' + escapeHtml(it.rodIdentifier);
   if(RID_LABEL[it.rod]) return ' · ' + RID_LABEL[it.rod];
   return '';
+}
+
+// ---------- What's New ----------
+// Newest first. Add an entry here when shipping something people would
+// notice — not every fix, just what's worth knowing about.
+const CHANGELOG = [
+  {version:'1.4', date:'September 2026', changes:[
+    'New Home screen showing live conditions, your running session, competitions and recent catches from mates',
+    'Bottom navigation bar, and My Insights is now a full tab rather than a popup',
+    'Session Log for notes as you fish, and Local Knowledge saved against each venue',
+    'Distance and a short note on each rod, with a new "By distance" breakdown in Insights',
+    'Recast button to restart a rod\'s clock without logging anything',
+    'Tap a map pin to see everything caught at that water'
+  ]},
+  {version:'1.3', date:'September 2026', changes:[
+    'Badges — fifteen to earn, some repeatable, shown on your profile',
+    'Follower and following counts on profiles, tappable to see who',
+    'Weather and moon phase recorded automatically with every catch',
+    'Tap the weather bar for a full forecast including pressure trend',
+    'Venue search, drop-a-pin, and manual coordinates for past catches'
+  ]},
+  {version:'1.2', date:'September 2026', changes:[
+    'Soak time distribution and rig + bait combinations in Insights',
+    'Optional time on past catches, so time-of-day stats stay honest',
+    'Whole tackle box sharing, and "Add all" for items shared with you',
+    'Photos and filters in the admin tackle view'
+  ]},
+  {version:'1.1', date:'September 2026', changes:[
+    'Competitions with live standings and a shareable spectator link',
+    'Reel Records for your personal bests by species',
+    'Profile pictures, and a redesigned sign-in with Google',
+    'Offline support — log catches with no signal, syncs when you reconnect'
+  ]}
+];
+
+function renderWhatsNew(){
+  const el = document.getElementById('whatsnew-body');
+  if(!el) return;
+  el.innerHTML = CHANGELOG.map(v=>`
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+        <b style="font-size:15px;">Version ${escapeHtml(v.version)}</b>
+        <span class="pc-line muted">${escapeHtml(v.date)}</span>
+      </div>
+      <ul style="margin:0;padding-left:18px;">
+        ${v.changes.map(c=>`<li class="pc-line" style="margin-bottom:5px;">${escapeHtml(c)}</li>`).join('')}
+      </ul>
+    </section>`).join('');
+}
+
+// ---------- Privacy Policy ----------
+function renderPrivacy(){
+  const el = document.getElementById('privacy-body');
+  if(!el) return;
+  el.innerHTML = `
+    <section class="card">
+      <p class="pc-line muted">Last updated: September 2026</p>
+      <p class="pc-line">This policy explains what personal information PK Fishing collects, why we collect it, how it is used and stored, and what rights you have over it. It is written to comply with the Protection of Personal Information Act, 2013 (POPIA).</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">1. Who is responsible for your information</p>
+      <p class="pc-line">PK Fishing is operated privately. For any question about this policy, or to exercise any of the rights described below, contact the operator at the email address shown at the end of this policy.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">2. What we collect</p>
+      <p class="pc-line"><b>Account information:</b> your email address, display name, and optionally your first name, surname, country and a profile photograph.</p>
+      <p class="pc-line"><b>Fishing records:</b> catches and blanks you log, including species, weight, photographs, times, rigs, baits, hooks, distances and any notes you write.</p>
+      <p class="pc-line"><b>Location information:</b> the GPS coordinates of a catch, and the coordinates of any venue you save, search for, or place on the map. Location is only captured when you log a catch or deliberately set a venue location.</p>
+      <p class="pc-line"><b>Conditions:</b> weather and moon phase at the time of a catch, obtained from a third-party weather service using the coordinates described above.</p>
+      <p class="pc-line"><b>Social activity:</b> who you follow, likes and comments you leave, competitions you enter, and tackle you share with others.</p>
+      <p class="pc-line">We do not collect payment information, identity numbers, or any special personal information as defined in POPIA.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">3. Why we collect it</p>
+      <p class="pc-line">Your information is processed solely to operate the app: to keep your fishing records, produce your personal statistics and insights, run competitions you enter, and allow the sharing features you choose to use. We do not use your information for advertising, we do not profile you for marketing, and we do not sell or rent it to anyone.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">4. Who can see what</p>
+      <p class="pc-line"><b>Private to you:</b> your venue locations and map pins, the GPS coordinates of your catches, your Local Knowledge notes, and your Session Logs. These are never shown to other users, and there is no public map of fishing spots.</p>
+      <p class="pc-line"><b>Visible to anglers who follow you:</b> your catches, photographs, species, weights, badges, Reel Records, and your display name and profile picture.</p>
+      <p class="pc-line"><b>Visible to competition participants:</b> catches you tag to a competition appear in that competition's standings. If you share a spectator link, anyone holding that link can view those standings without signing in.</p>
+      <p class="pc-line"><b>Tackle:</b> items are private unless you share them with a specific angler, share your whole tackle box, or mark an item as shared with everyone.</p>
+      <p class="pc-line"><b>Administrators:</b> a designated administrator can view and manage records in order to maintain the app.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">5. Where your information is stored</p>
+      <p class="pc-line">Your information is stored using Supabase, a third-party hosted database and authentication provider, on servers which may be located outside South Africa. Transfers of personal information across borders are made on the basis that the recipient is subject to laws or binding agreements providing an adequate level of protection, as required by section 72 of POPIA.</p>
+      <p class="pc-line">Photographs you upload are stored in that same hosted storage service.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">6. Third-party services</p>
+      <p class="pc-line"><b>Supabase</b> — database, authentication and photograph storage.</p>
+      <p class="pc-line"><b>Google Sign-In</b> — used only if you choose to sign in with Google. Google receives that you signed in to this app; we receive your email address and name.</p>
+      <p class="pc-line"><b>Open-Meteo</b> — weather data. Coordinates are sent to retrieve conditions; no account or identifying information accompanies the request.</p>
+      <p class="pc-line"><b>OpenStreetMap and Nominatim</b> — map tiles and place lookup. Coordinates or a search term are sent when you view a map or search for a venue.</p>
+      <p class="pc-line">These providers process information under their own privacy policies.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">7. How long we keep it</p>
+      <p class="pc-line">Your records are kept for as long as your account exists, because the value of a fishing logbook lies in its history. If you delete your data, it is removed from the live database and is not recoverable.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">8. Your rights</p>
+      <p class="pc-line">Under POPIA you have the right to be told what personal information we hold about you, to have inaccurate information corrected, to have your information deleted, to object to its processing, and to complain to the Information Regulator of South Africa.</p>
+      <p class="pc-line">You can delete your own data at any time using the "Delete my data" option on the Profile tab. You can correct your details there as well. For anything else, contact the operator.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">9. Security</p>
+      <p class="pc-line">Access to records is controlled at database level so that anglers can only reach information they are entitled to see. Connections are encrypted. No system can be guaranteed completely secure, and you are responsible for keeping your password confidential.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">10. Children</p>
+      <p class="pc-line">The app is not directed at children under 18. Where a child uses the app, the consent of a parent or legal guardian is required, as provided for in POPIA.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">11. Changes to this policy</p>
+      <p class="pc-line">This policy may be updated as the app develops. Material changes will be noted on the What's New page, and the date at the top of this policy will be revised.</p>
+    </section>
+
+    <section class="card">
+      <p class="sub-heading">12. Contact</p>
+      <p class="pc-line">Questions, corrections, deletion requests or complaints: <b>admin@pksport.co.za</b></p>
+    </section>`;
 }
 
 // ---------- Home ----------
@@ -7824,6 +8073,20 @@ async function renderHomeWeather(){
 }
 
 document.getElementById('home-start-session').addEventListener('click', ()=> goToTab('timers'));
+
+// Reachable from the footer even when signed out, since that's exactly when
+// someone deciding whether to sign up would want to read it
+document.getElementById('footer-privacy-link').addEventListener('click', ()=>{
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-privacy').classList.add('active');
+  renderPrivacy();
+  const navBtn = document.querySelector('nav.tabs button[data-tab="more"]');
+  if(navBtn){
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    navBtn.classList.add('active');
+  }
+  window.scrollTo({top: 0, behavior: 'smooth'});
+});
 
 async function renderFeed(refetch){
   renderMyFriendsList();
