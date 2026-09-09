@@ -640,7 +640,7 @@
         <div id="session-log-card" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;">
           <h2 style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;color:var(--muted);margin:0 0 5px;">Session Log</h2>
           <div id="session-log-body">
-            <textarea maxlength="2000" id="session-log-text" placeholder="How's it going? Water colour, wind, what's working, anything worth remembering..." autocomplete="pk-session-log" style="width:100%;min-height:60px;padding:8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;background:var(--paper);color:var(--ink);resize:vertical;"></textarea>
+            <textarea maxlength="2000" id="session-log-text" placeholder="How's it going? Water colour, wind, what's working, anything worth remembering..." autocomplete="pk-session-log" style="width:100%;min-height:60px;padding:8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;background:var(--paper);color:var(--ink);resize:vertical;" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
               <span class="pc-line muted" id="session-log-status"></span>
               <button type="button" class="mini-btn" id="session-log-save">Save note</button>
@@ -667,7 +667,7 @@
             </div>
             <div class="field">
               <label>Display Name / Nickname</label>
-              <input type="text" maxlength="100" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call" autocomplete="pk-field-2">
+              <input type="text" maxlength="100" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call" autocomplete="pk-field-2" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
             <div class="field">
               <label>Country</label>
@@ -763,16 +763,16 @@
           </div>
           <div class="field">
             <label>Display Name / Nickname</label>
-            <input type="text" maxlength="100" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call" autocomplete="pk-field-3">
+            <input type="text" maxlength="100" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call" autocomplete="pk-field-3" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="row2">
             <div class="field">
               <label>Name</label>
-              <input type="text" maxlength="100" id="details-first-name" placeholder="First name" autocomplete="pk-field-4">
+              <input type="text" maxlength="100" id="details-first-name" placeholder="First name" autocomplete="pk-field-4" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
             <div class="field">
               <label>Surname</label>
-              <input type="text" maxlength="100" id="details-last-name" placeholder="Surname" autocomplete="pk-field-5">
+              <input type="text" maxlength="100" id="details-last-name" placeholder="Surname" autocomplete="pk-field-5" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
           </div>
           <div class="field">
@@ -782,7 +782,7 @@
           <p class="pc-line muted" style="margin-top:-6px;margin-bottom:12px;">Name, surname, and country are private — only you can see them here, never shown publicly.</p>
           <div class="field">
             <label>Email</label>
-            <input type="email" maxlength="120" id="details-email" placeholder="you@example.com" autocomplete="pk-field-6">
+            <input type="email" maxlength="120" id="details-email" placeholder="you@example.com" autocomplete="pk-field-6" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <button class="primary-btn" id="details-save-btn">Save details</button>
           <div class="status" id="details-save-status"></div>
@@ -810,17 +810,17 @@
           </div>
           <div class="field">
             <label>Weight (kg)</label>
-            <input type="number" step="0.01" min="0" max="500" id="past-catch-weight" placeholder="e.g. 12.4" autocomplete="pk-x1">
+            <input type="number" step="0.01" min="0" max="500" id="past-catch-weight" placeholder="e.g. 12.4" autocomplete="pk-x1" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
         <div class="row2">
           <div class="field">
             <label>When</label>
-            <input type="date" id="past-catch-date" autocomplete="pk-x2">
+            <input type="date" id="past-catch-date" autocomplete="pk-x2" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="field">
             <label>Time (optional, if you remember roughly)</label>
-            <input type="time" id="past-catch-time" autocomplete="pk-x3">
+            <input type="time" id="past-catch-time" autocomplete="pk-x3" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
         <div class="field">
@@ -836,7 +836,7 @@
           <div id="past-catch-coord-entry" style="display:none;margin-top:6px;">
             <p class="pc-line muted" style="margin-bottom:4px;">Paste coordinates, e.g. -26.7145, 28.0912</p>
             <div style="display:flex;gap:6px;">
-              <input type="text" maxlength="60" id="past-catch-coord-input" placeholder="-26.7145, 28.0912" autocomplete="pk-coords" style="flex:1;">
+              <input type="text" maxlength="60" id="past-catch-coord-input" placeholder="-26.7145, 28.0912" autocomplete="pk-coords" style="flex:1;" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
               <button type="button" class="mini-btn" id="past-catch-coord-apply">Set</button>
             </div>
           </div>
@@ -881,7 +881,7 @@
         <button class="mini-btn danger" id="delete-account-btn">Delete everything</button>
         <div id="delete-account-confirm" style="display:none;margin-top:10px;">
           <p class="pc-line" style="color:#c04;">Type <b>DELETE</b> below to confirm.</p>
-          <input type="text" maxlength="100" id="delete-account-confirm-input" placeholder="DELETE" style="margin-bottom:8px;" autocomplete="pk-field-7">
+          <input type="text" maxlength="100" id="delete-account-confirm-input" placeholder="DELETE" style="margin-bottom:8px;" autocomplete="pk-field-7" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           <div class="row2">
             <button class="mini-btn" id="delete-account-cancel-btn">Cancel</button>
             <button class="mini-btn danger" id="delete-account-final-btn">Permanently delete</button>
@@ -933,7 +933,7 @@
         <p class="pc-line muted" style="margin-bottom:10px;">The latest catches from you and everyone you follow, newest first.</p>
         <div class="field">
           <label>Search by name (optional)</label>
-          <input type="text" maxlength="100" id="feed-search-input" placeholder="Narrow down to one angler..." autocomplete="pk-field-8" name="friend-search">
+          <input type="text" maxlength="100" id="feed-search-input" placeholder="Narrow down to one angler..." autocomplete="pk-field-8" name="friend-search" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div id="feed-list"><div class="empty">No catches yet — this is where recent catches from you and your friends will appear.</div></div>
       </section>
@@ -951,31 +951,31 @@
         <div class="row2">
           <div class="field">
             <label>Name</label>
-            <input type="text" maxlength="100" id="competition-name" placeholder="e.g. October Weekend" autocomplete="pk-field-9">
+            <input type="text" maxlength="100" id="competition-name" placeholder="e.g. October Weekend" autocomplete="pk-field-9" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="field">
             <label>Venue</label>
-            <input type="text" maxlength="100" id="competition-dam" placeholder="Where is it being fished?" autocomplete="pk-venue-3" name="pk-venue-field-3">
+            <input type="text" maxlength="100" id="competition-dam" placeholder="Where is it being fished?" autocomplete="pk-venue-3" name="pk-venue-field-3" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
         <div class="row2">
           <div class="field">
             <label>Start date</label>
-            <input type="date" id="competition-start" autocomplete="pk-x4">
+            <input type="date" id="competition-start" autocomplete="pk-x4" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="field">
             <label>Start time</label>
-            <input type="time" id="competition-start-time" value="00:00" autocomplete="pk-x5">
+            <input type="time" id="competition-start-time" value="00:00" autocomplete="pk-x5" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
         <div class="row2">
           <div class="field">
             <label>End date</label>
-            <input type="date" id="competition-end" autocomplete="pk-x6">
+            <input type="date" id="competition-end" autocomplete="pk-x6" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="field">
             <label>End time</label>
-            <input type="time" id="competition-end-time" value="23:59" autocomplete="pk-x7">
+            <input type="time" id="competition-end-time" value="23:59" autocomplete="pk-x7" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
         <div class="row2">
@@ -1007,7 +1007,7 @@
         <p class="sub-heading">Add anglers</p>
         <div class="field">
           <label>Search by name or email</label>
-          <input type="text" maxlength="100" id="competition-angler-search" placeholder="Type a name or email..." autocomplete="pk-field-10" name="angler-search">
+          <input type="text" maxlength="100" id="competition-angler-search" placeholder="Type a name or email..." autocomplete="pk-field-10" name="angler-search" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div id="competition-angler-search-results"></div>
         <div id="competition-selected-anglers" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
@@ -1087,7 +1087,7 @@
           </div>
           <div class="field">
             <label>Search by name or brand</label>
-            <input type="text" maxlength="100" id="admin-tackle-search" placeholder="Type to filter..." autocomplete="pk-admin-tackle-search">
+            <input type="text" maxlength="100" id="admin-tackle-search" placeholder="Type to filter..." autocomplete="pk-admin-tackle-search" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div id="admin-tackle-list"><div class="empty">Loading...</div></div>
         </div>
@@ -1119,11 +1119,11 @@
             <div class="row2">
               <div class="field">
                 <label>Type</label>
-                <input type="text" maxlength="100" id="admin-catch-type" placeholder="e.g. Carp" autocomplete="pk-field-11">
+                <input type="text" maxlength="100" id="admin-catch-type" placeholder="e.g. Carp" autocomplete="pk-field-11" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
               </div>
               <div class="field">
                 <label>Weight (kg)</label>
-                <input type="number" step="0.01" min="0" max="500" id="admin-catch-weight" autocomplete="pk-x8">
+                <input type="number" step="0.01" min="0" max="500" id="admin-catch-weight" autocomplete="pk-x8" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
               </div>
             </div>
             <button class="primary-btn" id="admin-catch-save-btn">Save changes</button>
@@ -1156,7 +1156,7 @@
           <div class="row2">
             <div class="field">
               <label>Name</label>
-              <input type="text" maxlength="100" id="tackle-name" list="tackle-name-suggestions" placeholder="e.g. Size 6 Barbel hook" autocomplete="pk-field-12">
+              <input type="text" maxlength="100" id="tackle-name" list="tackle-name-suggestions" placeholder="e.g. Size 6 Barbel hook" autocomplete="pk-field-12" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
               <datalist id="tackle-name-suggestions"></datalist>
             </div>
             <div class="field">
@@ -1177,7 +1177,7 @@
           </div>
           <div class="field">
             <label>Brand (optional)</label>
-            <input type="text" maxlength="100" id="tackle-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Nash, Dynamite" autocomplete="pk-field-13">
+            <input type="text" maxlength="100" id="tackle-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Nash, Dynamite" autocomplete="pk-field-13" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             <datalist id="tackle-brand-suggestions"></datalist>
           </div>
           <div class="field" id="tackle-baittype-wrap" style="display:none;">
@@ -1211,7 +1211,7 @@
           </div>
           <div class="field">
             <label>Notes (optional)</label>
-            <input type="text" maxlength="100" id="tackle-notes" placeholder="e.g. brand, size, qty" autocomplete="pk-field-14">
+            <input type="text" maxlength="100" id="tackle-notes" placeholder="e.g. brand, size, qty" autocomplete="pk-field-14" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="field">
             <label>Photo (optional)</label>
@@ -1290,11 +1290,11 @@
           <h2>Build a rig</h2>
           <div class="field">
             <label>Type of rig</label>
-            <input type="text" maxlength="100" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo..." autocomplete="pk-field-15">
+            <input type="text" maxlength="100" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo..." autocomplete="pk-field-15" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="field">
             <label>Brand (optional)</label>
-            <input type="text" maxlength="100" id="rig-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Gardner, ESP..." autocomplete="pk-field-16">
+            <input type="text" maxlength="100" id="rig-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Gardner, ESP..." autocomplete="pk-field-16" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="row2">
             <div class="field">
@@ -1354,7 +1354,7 @@
     <h3 style="margin-top:0;">Edit venue</h3>
     <div class="field">
       <label>Venue name</label>
-      <input type="text" maxlength="100" id="venue-edit-name" placeholder="Name of the water" autocomplete="pk-venue-edit">
+      <input type="text" maxlength="100" id="venue-edit-name" placeholder="Name of the water" autocomplete="pk-venue-edit" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
     </div>
     <p class="pc-line muted" id="venue-edit-coords" style="margin-bottom:6px;"></p>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
@@ -1364,7 +1364,7 @@
     <div id="venue-edit-results" style="margin-bottom:10px;"></div>
     <div class="field">
       <label>Local Knowledge</label>
-      <textarea maxlength="2000" id="venue-edit-knowledge" placeholder="Gate codes, best swims, where to park, bailiff habits — anything you'd want to know next time." autocomplete="pk-local-knowledge" style="min-height:80px;"></textarea>
+      <textarea maxlength="2000" id="venue-edit-knowledge" placeholder="Gate codes, best swims, where to park, bailiff habits — anything you'd want to know next time." autocomplete="pk-local-knowledge" style="min-height:80px;" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
     </div>
     <button class="primary-btn" id="venue-edit-save">Save changes</button>
     <div class="status" id="venue-edit-status"></div>
@@ -1387,7 +1387,7 @@
     <div id="session-edit-results" style="margin-bottom:10px;"></div>
     <div class="field">
       <label>Session Log</label>
-      <textarea maxlength="2000" id="session-edit-log" placeholder="How did the session go?" autocomplete="pk-session-edit-log" style="min-height:80px;"></textarea>
+      <textarea maxlength="2000" id="session-edit-log" placeholder="How did the session go?" autocomplete="pk-session-edit-log" style="min-height:80px;" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
     </div>
     <button class="primary-btn" id="session-edit-save">Save changes</button>
     <div class="status" id="session-edit-status"></div>
@@ -1608,10 +1608,10 @@
     <div id="photo-comment-section" style="text-align:left;margin-top:14px;display:none;">
       <p class="sub-heading" style="margin-bottom:8px;">Comments on this catch</p>
       <div class="field" id="photo-comment-author-wrap">
-        <input type="text" maxlength="100" id="photo-comment-author" placeholder="Your name (optional)" autocomplete="pk-field-17">
+        <input type="text" maxlength="100" id="photo-comment-author" placeholder="Your name (optional)" autocomplete="pk-field-17" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="field">
-        <textarea maxlength="500" id="photo-comment-message" placeholder="Comment on this catch..." autocomplete="pk-x9"></textarea>
+        <textarea maxlength="500" id="photo-comment-message" placeholder="Comment on this catch..." autocomplete="pk-x9" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
       </div>
       <button class="primary-btn" id="photo-comment-post-btn">Post comment</button>
       <div class="status" id="photo-comment-status"></div>
@@ -1652,11 +1652,11 @@
             <option value="Eel">Eel</option>
             <option value="Other">Other</option>
           </select>
-          <input type="text" maxlength="100" id="edit-catch-type-other" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-18">
+          <input type="text" maxlength="100" id="edit-catch-type-other" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-18" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="field">
           <label>Weight (kg)</label>
-          <input type="number" step="0.01" min="0" max="500" id="edit-catch-weight" placeholder="e.g. 2.4" autocomplete="pk-x10">
+          <input type="number" step="0.01" min="0" max="500" id="edit-catch-weight" placeholder="e.g. 2.4" autocomplete="pk-x10" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
       </div>
       <div class="field">
@@ -3597,7 +3597,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
     <div class="row2">
       <div class="field">
         <label>Name</label>
-        <input type="text" maxlength="100" class="tackle-edit-name" value="${escapeHtml(item.name)}" autocomplete="pk-field-21">
+        <input type="text" maxlength="100" class="tackle-edit-name" value="${escapeHtml(item.name)}" autocomplete="pk-field-21" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="field">
         <label>Category</label>
@@ -3637,11 +3637,11 @@ async function renderTackleItemEditForm(itemId, containerEl){
     </div>
     <div class="field">
       <label>Brand</label>
-      <input type="text" maxlength="100" class="tackle-edit-brand" list="tackle-brand-suggestions" value="${escapeHtml(item.brand||'')}" autocomplete="pk-field-22">
+      <input type="text" maxlength="100" class="tackle-edit-brand" list="tackle-brand-suggestions" value="${escapeHtml(item.brand||'')}" autocomplete="pk-field-22" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
     </div>
     <div class="field">
       <label>Notes</label>
-      <input type="text" maxlength="100" class="tackle-edit-notes" value="${escapeHtml(item.notes||'')}" autocomplete="pk-field-23">
+      <input type="text" maxlength="100" class="tackle-edit-notes" value="${escapeHtml(item.notes||'')}" autocomplete="pk-field-23" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
     </div>
     <div class="field">
       <label>Replace photo (optional)</label>
@@ -3910,11 +3910,11 @@ async function renderRigsList(){
           <div class="row2">
             <div class="field">
               <label>Rig name (admin)</label>
-              <input type="text" maxlength="100" class="rig-edit-name" value="${escapeHtml(rig ? rig.name : '')}" autocomplete="pk-field-24">
+              <input type="text" maxlength="100" class="rig-edit-name" value="${escapeHtml(rig ? rig.name : '')}" autocomplete="pk-field-24" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
             <div class="field">
               <label>Brand (admin)</label>
-              <input type="text" maxlength="100" class="rig-edit-brand" value="${escapeHtml(rig && rig.brand ? rig.brand : '')}" autocomplete="pk-field-25">
+              <input type="text" maxlength="100" class="rig-edit-brand" value="${escapeHtml(rig && rig.brand ? rig.brand : '')}" autocomplete="pk-field-25" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
           </div>` : ''}
         <div class="field">
@@ -4519,7 +4519,7 @@ function rodCardHtml(r){
     <section class="card rod-card" id="rodcard-${r}">
       <div class="rod-title-row">
         <input type="color" class="rod-dot" data-rod="${r}" value="#C1440E" title="Rod color">
-        <input type="text" maxlength="100" class="rod-field rod-name-input" data-rod="${r}" data-key="identifier" placeholder="${RID_LABEL[r]}" title="Tap to rename this rod" autocomplete="pk-field-26">
+        <input type="text" maxlength="100" class="rod-field rod-name-input" data-rod="${r}" data-key="identifier" placeholder="${RID_LABEL[r]}" title="Tap to rename this rod" autocomplete="pk-field-26" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="bobber-row" id="bobber-row-${r}">
         <div class="bobber" id="bobber-${r}"><div class="time mono" id="time-${r}">00:00:00</div></div>
@@ -4554,11 +4554,11 @@ function rodCardHtml(r){
       <div class="row2">
         <div class="field">
           <label>Distance (m)</label>
-          <input type="number" step="1" min="0" max="500" class="rod-field" data-rod="${r}" data-key="castDistance" placeholder="e.g. 45" autocomplete="pk-rod-distance-${r}">
+          <input type="number" step="1" min="0" max="500" class="rod-field" data-rod="${r}" data-key="castDistance" placeholder="e.g. 45" autocomplete="pk-rod-distance-${r}" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="field">
           <label>Rod note</label>
-          <input type="text" maxlength="200" class="rod-field" data-rod="${r}" data-key="rodNote" placeholder="Margin, near the reeds..." autocomplete="pk-rod-note-${r}">
+          <input type="text" maxlength="200" class="rod-field" data-rod="${r}" data-key="rodNote" placeholder="Margin, near the reeds..." autocomplete="pk-rod-note-${r}" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
       </div>
       <hr class="divider">
@@ -4589,16 +4589,16 @@ function rodCardHtml(r){
               <option value="Eel">Eel</option>
               <option value="Other">Other</option>
             </select>
-            <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-27">
+            <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-27" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="field">
             <label>Weight (kg)</label>
-            <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4" autocomplete="pk-x11">
+            <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4" autocomplete="pk-x11" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
         <div class="field">
           <label>Date caught (leave blank for now)</label>
-          <input type="datetime-local" class="catch-date" data-rod="${r}" autocomplete="pk-x12">
+          <input type="datetime-local" class="catch-date" data-rod="${r}" autocomplete="pk-x12" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="field">
           <label>Photos (optional — add as many as you like)</label>
@@ -6898,11 +6898,11 @@ async function openProfile(personId){
       <p class="sub-heading">Admin: edit this angler</p>
       <div class="field">
         <label>Display Name</label>
-        <input type="text" maxlength="100" id="admin-edit-name" value="${escapeHtml(p.name)}" autocomplete="pk-field-28">
+        <input type="text" maxlength="100" id="admin-edit-name" value="${escapeHtml(p.name)}" autocomplete="pk-field-28" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="field">
         <label>Email</label>
-        <input type="email" maxlength="120" id="admin-edit-email" value="${escapeHtml(p.email||'')}" autocomplete="pk-field-29">
+        <input type="email" maxlength="120" id="admin-edit-email" value="${escapeHtml(p.email||'')}" autocomplete="pk-field-29" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <button class="primary-btn" id="admin-edit-save-btn">Save changes</button>
       <div class="status" id="admin-edit-status"></div>
@@ -7368,7 +7368,7 @@ async function renderPhotoComments(){
       const original = rows.find(r=>r.id===id).message;
       msgEl.dataset.editing = 'true';
       msgEl.innerHTML = `
-        <textarea maxlength="500" class="comment-edit-input" style="width:100%;margin-bottom:6px;" autocomplete="pk-x13">${escapeHtml(original)}</textarea>
+        <textarea maxlength="500" class="comment-edit-input" style="width:100%;margin-bottom:6px;" autocomplete="pk-x13" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">${escapeHtml(original)}</textarea>
         <button type="button" class="mini-btn comment-edit-save" data-comment-save="${id}">Save</button>
         <button type="button" class="mini-btn comment-edit-cancel" data-comment-cancel="${id}">Cancel</button>
       `;
@@ -8364,31 +8364,31 @@ function renderCompetitionEditForm(comp, containerEl){
     <div class="row2">
       <div class="field">
         <label>Name</label>
-        <input type="text" maxlength="100" class="comp-edit-name" value="${escapeHtml(comp.name||'')}" autocomplete="pk-field-30">
+        <input type="text" maxlength="100" class="comp-edit-name" value="${escapeHtml(comp.name||'')}" autocomplete="pk-field-30" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="field">
         <label>Venue</label>
-        <input type="text" maxlength="100" class="comp-edit-venue" value="${escapeHtml(comp.dam||'')}" autocomplete="pk-field-31">
+        <input type="text" maxlength="100" class="comp-edit-venue" value="${escapeHtml(comp.dam||'')}" autocomplete="pk-field-31" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
     </div>
     <div class="row2">
       <div class="field">
         <label>Start date</label>
-        <input type="date" class="comp-edit-start" value="${escapeHtml(comp.start_date||'')}" autocomplete="pk-x14">
+        <input type="date" class="comp-edit-start" value="${escapeHtml(comp.start_date||'')}" autocomplete="pk-x14" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="field">
         <label>Start time</label>
-        <input type="time" class="comp-edit-start-time" value="${escapeHtml(String(comp.start_time||'00:00').slice(0,5))}" autocomplete="pk-x15">
+        <input type="time" class="comp-edit-start-time" value="${escapeHtml(String(comp.start_time||'00:00').slice(0,5))}" autocomplete="pk-x15" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
     </div>
     <div class="row2">
       <div class="field">
         <label>End date</label>
-        <input type="date" class="comp-edit-end" value="${escapeHtml(comp.end_date||'')}" autocomplete="pk-x16">
+        <input type="date" class="comp-edit-end" value="${escapeHtml(comp.end_date||'')}" autocomplete="pk-x16" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="field">
         <label>End time</label>
-        <input type="time" class="comp-edit-end-time" value="${escapeHtml(String(comp.end_time||'23:59').slice(0,5))}" autocomplete="pk-x17">
+        <input type="time" class="comp-edit-end-time" value="${escapeHtml(String(comp.end_time||'23:59').slice(0,5))}" autocomplete="pk-x17" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
     </div>
     <div class="row2">
@@ -8498,7 +8498,7 @@ async function renderCompetitions(){
         ${canManage ? `
           <div class="field" style="margin-top:10px;">
             <label>Add angler (admin) — search name or email</label>
-            <input type="text" maxlength="100" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email..." autocomplete="pk-field-32" name="comp-add-${c.id}">
+            <input type="text" maxlength="100" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email..." autocomplete="pk-field-32" name="comp-add-${c.id}" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             <div class="competition-add-results" data-competition="${c.id}" style="margin-top:6px;"></div>
           </div>` : ''}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
