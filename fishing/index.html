@@ -1146,12 +1146,6 @@
       <div id="tackle-content" style="display:none;">
         <button type="button" class="mini-btn" id="tackle-help-btn" style="margin-bottom:14px;">❓ How the Tackle Box works</button>
 
-        <section class="card">
-          <h2>Share my whole tackle box</h2>
-          <p class="pc-line muted">Anyone you tick here sees your entire tackle box, including anything you add later. You can still share individual items separately.</p>
-          <div id="tackle-box-share-picker"><div class="empty">No mutual friends yet — you both need to follow each other.</div></div>
-        </section>
-
         <section class="card" id="add-tackle-card">
           <h2>Add tackle item</h2>
           <div id="add-tackle-body">
@@ -1231,8 +1225,49 @@
           </div>
         </section>
 
-        <section class="card">
+        <section class="card" id="build-rig-card">
+          <h2>Build a rig</h2>
+          <div id="build-rig-body">
+          <div class="field">
+            <label>Type of rig</label>
+            <input type="text" maxlength="100" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo..." autocomplete="pk-field-15" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label>Brand (optional)</label>
+            <input type="text" maxlength="100" id="rig-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Gardner, ESP..." autocomplete="pk-field-16" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label>Feed method (tick any you use)</label>
+            <div id="rig-feed-methods"></div>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label>Number of hooks</label>
+              <select id="rig-hook-count"></select>
+            </div>
+            <div class="field"></div>
+          </div>
+          <div class="field">
+            <label>Photo (optional)</label>
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="rig-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="rig-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="rig-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="rig-photo" style="display:none;">
+          </div>
+          <button class="primary-btn" id="rig-create-btn">Create rig</button>
+          <div class="status" id="rig-create-status"></div>
+          <div id="rigs-list" style="margin-top:14px;"><div class="empty">No rigs built yet — build one above, then tick "Use" to see it on your Timers.</div></div>
+          </div>
+        </section>
+
+        <section class="card" id="tackle-share-box-card">
+          <h2>Share my whole tackle box</h2>
+          <div id="tackle-share-box-body">
+          <p class="pc-line muted">Anyone you tick here sees your entire tackle box, including anything you add later. You can still share individual items separately.</p>
+          <div id="tackle-box-share-picker"><div class="empty">No mutual friends yet — you both need to follow each other.</div></div>
+          </div>
+        </section>
+
+        <section class="card" id="tackle-list-card">
           <h2>Tackle Box</h2>
+          <div id="tackle-list-body">
           <div class="row2">
             <div class="field">
               <label>Category</label>
@@ -1286,38 +1321,10 @@
             </select>
           </div>
           <div id="tackle-list"><div class="empty">No tackle added yet — add your rods, reels, bait and dips above.</div></div>
-        </section>
-
-        <section class="card">
-          <h2>Build a rig</h2>
-          <div class="field">
-            <label>Type of rig</label>
-            <input type="text" maxlength="100" id="rig-name" placeholder="e.g. Hair Rig, Chod Rig, my own combo..." autocomplete="pk-field-15" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
-          <div class="field">
-            <label>Brand (optional)</label>
-            <input type="text" maxlength="100" id="rig-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Gardner, ESP..." autocomplete="pk-field-16" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
-          </div>
-          <div class="field">
-            <label>Feed method (tick any you use)</label>
-            <div id="rig-feed-methods"></div>
-          </div>
-          <div class="row2">
-            <div class="field">
-              <label>Number of hooks</label>
-              <select id="rig-hook-count"></select>
-            </div>
-            <div class="field"></div>
-          </div>
-          <div class="field">
-            <label>Photo (optional)</label>
-            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="rig-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="rig-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="rig-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="rig-photo" style="display:none;">
-          </div>
-          <button class="primary-btn" id="rig-create-btn">Create rig</button>
-          <div class="status" id="rig-create-status"></div>
-          <div id="rigs-list" style="margin-top:14px;"><div class="empty">No rigs built yet — build one above, then tick "Use" to see it on your Timers.</div></div>
         </section>
       </div>
+
     </div>
 
   </main>
@@ -2345,7 +2352,7 @@ function elapsedMs(t){
 // something other people are relying on.
 // Makes a card's body collapsible via a toggle next to its heading.
 // Remembers the person's choice per card, so it stays how they left it.
-function makeCardCollapsible(cardId, bodyId, storageKey){
+function makeCardCollapsible(cardId, bodyId, storageKey, defaultOpen){
   const card = document.getElementById(cardId);
   const body = document.getElementById(bodyId);
   if(!card || !body || card.dataset.collapsibleReady) return;
@@ -2361,10 +2368,15 @@ function makeCardCollapsible(cardId, bodyId, storageKey){
   toggleBtn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);padding:0;font-weight:700;text-transform:none;letter-spacing:normal;';
   h2.appendChild(toggleBtn);
 
-  // Default to collapsed on a person's first visit — they can expand
-  // whichever cards they actually want, and that choice is remembered
-  let collapsed = true;
-  try{ collapsed = localStorage.getItem(storageKey) !== 'false'; }catch(e){}
+  // Settings-like cards default to collapsed on first visit. But a card
+  // that IS the content someone came to see — a browsable list, not a
+  // form or a setting — should default open, same reasoning as why
+  // tackle categories themselves start open rather than folded away.
+  let collapsed = !defaultOpen;
+  try{
+    const stored = localStorage.getItem(storageKey);
+    if(stored !== null) collapsed = stored !== 'false';
+  }catch(e){}
   function apply(){
     body.style.display = collapsed ? 'none' : 'block';
     toggleBtn.textContent = collapsed ? '▸ Show' : '▾ Hide';
@@ -7867,6 +7879,9 @@ function goToTab(tabName){
       if(feedWrap && !feedWrap.innerHTML) feedWrap.innerHTML = feedMethodChecksHtml([], 'rig-feed');
       renderRigsList();
       makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
+      makeCardCollapsible('build-rig-card', 'build-rig-body', 'pk_fishing_collapse_buildrig', true);
+      makeCardCollapsible('tackle-share-box-card', 'tackle-share-box-body', 'pk_fishing_collapse_sharebox');
+      makeCardCollapsible('tackle-list-card', 'tackle-list-body', 'pk_fishing_collapse_tacklelist', true);
     }
   }
   if(tabName==='admin') renderAdminTab();
