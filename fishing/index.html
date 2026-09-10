@@ -1298,18 +1298,16 @@
             <label>Brand (optional)</label>
             <input type="text" maxlength="100" id="rig-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Gardner, ESP..." autocomplete="pk-field-16" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
+          <div class="field">
+            <label>Feed method (tick any you use)</label>
+            <div id="rig-feed-methods"></div>
+          </div>
           <div class="row2">
-            <div class="field">
-              <label>Bom</label>
-              <select id="rig-uses-bom">
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-            </div>
             <div class="field">
               <label>Number of hooks</label>
               <select id="rig-hook-count"></select>
             </div>
+            <div class="field"></div>
           </div>
           <div class="field">
             <label>Photo (optional)</label>
@@ -1494,6 +1492,7 @@
     </div>
     <div class="field">
       <label>Confirm password</label>
+      <input type="text" name="username" autocomplete="username" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;" tabindex="-1" aria-hidden="true">
       <input type="password" maxlength="200" class="auth-input" id="reset-password-confirm" placeholder="Type it again">
     </div>
     <button class="primary-btn" id="reset-password-save-btn">Save new password</button>
@@ -1690,6 +1689,17 @@ RODS.forEach((r, i) => { RID_LABEL[r] = 'Rod ' + (i+1); });
 // Master species list for Reel Records. Each angler picks which of these
 // they want shown — this doesn't limit what you can log a catch as.
 // Bait sub-types, shared by the tackle box forms and the Timers hook picker
+// How feed gets near the hook. These are genuinely different approaches —
+// a method feeder needs bait that binds, while a solid PVA bag needs dry or
+// oil-based bait — and anglers do combine them, so a rig can use several.
+// "Bom" stays first and named, since that's what this group actually says.
+const FEED_METHODS = [
+  'Bom (method feeder)',
+  'Solid PVA bag',
+  'PVA mesh / stick',
+  'Stringer'
+];
+
 const ALL_BAIT_TYPES = [
   'Big hard floats','Big soft floats','Boilies','Groundbait','Mielies','Oozer',
   'Other','Particles/Seeds','Paste','Pellets','Pop-ups','Small hard floats',
@@ -1828,9 +1838,19 @@ function hookCountOptionsHtml(selected){
   }
   return html;
 }
-function catchHookOptionsHtml(hookCount){
+// What to call a given hook on a given rig. Falls back to "Hook 1" etc when
+// the rig's owner hasn't named them. The stored value stays "Hook N" so
+// existing catches and insights keep working — only the display changes.
+function hookDisplayName(rigDef, n){
+  const custom = rigDef && rigDef.hookLabels ? rigDef.hookLabels[n-1] : '';
+  return custom && custom.trim() ? custom.trim() : ('Hook ' + n);
+}
+
+function catchHookOptionsHtml(hookCount, rigDef){
   let html = '';
-  for(let n=1; n<=hookCount; n++){ html += `<option value="Hook ${n}">Hook ${n}</option>`; }
+  for(let n=1; n<=hookCount; n++){
+    html += `<option value="Hook ${n}">${escapeHtml(hookDisplayName(rigDef, n))}</option>`;
+  }
   return html;
 }
 
@@ -1866,12 +1886,16 @@ async function loadMyRigUseIds(){
 
 async function loadKnownRigs(){
   try{
-    const rows = await sbGet('rigs?select=id,name,uses_bom,hook_count&order=name.asc');
+    const rows = await sbGet('rigs?select=id,name,uses_bom,hook_count,hook_labels&order=name.asc');
     // The Timers dropdown only shows rigs you've ticked as "in use"
     const inUse = await loadMyRigUseIds();
     knownRigsFull = rows
       .filter(r=>inUse.has(r.id))
-      .map(r=>({id:r.id, name:r.name, usesBom:!!r.uses_bom, hookCount:r.hook_count||0}));
+      .map(r=>{
+        let hookLabels = [];
+        try{ hookLabels = r.hook_labels ? JSON.parse(r.hook_labels) : []; }catch(e){}
+        return {id:r.id, name:r.name, usesBom:!!r.uses_bom, hookCount:r.hook_count||0, hookLabels};
+      });
     clearDbError();
   }catch(e){
     console.error('loadKnownRigs failed', e);
@@ -1879,6 +1903,23 @@ async function loadKnownRigs(){
     showDbError('Could not load rigs: ' + (e.message || 'unknown error'));
   }
 }
+// Hook names for every rig that exists, keyed by rig name. knownRigsFull
+// only holds rigs you've ticked "in use", which isn't enough for Insights
+// looking back over old catches.
+let allRigHookLabels = {};
+async function loadAllRigHookLabels(){
+  if(!isSignedIn() || !navigator.onLine) return;
+  try{
+    const rows = await sbGet('rigs?select=name,hook_labels');
+    const map = {};
+    rows.forEach(r=>{
+      if(!r.hook_labels) return;
+      try{ map[r.name] = JSON.parse(r.hook_labels); }catch(e){}
+    });
+    allRigHookLabels = map;
+  }catch(e){ console.error('loadAllRigHookLabels failed', e); }
+}
+
 function findRigDef(name){
   return knownRigsFull.find(r=>r.name === name) || null;
 }
@@ -2030,7 +2071,7 @@ function renderRigFields(rod){
   if(catchHookSel){
     const hookCount = rigDef ? rigDef.hookCount : MAX_HOOKS;
     const prevValue = catchHookSel.value;
-    catchHookSel.innerHTML = catchHookOptionsHtml(hookCount);
+    catchHookSel.innerHTML = catchHookOptionsHtml(hookCount, rigDef);
     if([...catchHookSel.options].some(o=>o.value===prevValue)) catchHookSel.value = prevValue;
   }
 
@@ -2046,7 +2087,7 @@ function renderRigFields(rod){
   if(rigDef.hookCount > 0){
     html += '<div class="hooks-row">';
     for(let n=1; n<=rigDef.hookCount; n++){
-      html += multiPickerFieldHtml(rod, 'hook'+n, 'Hook '+n);
+      html += multiPickerFieldHtml(rod, 'hook'+n, hookDisplayName(rigDef, n));
     }
     html += '</div>';
   }
@@ -3823,7 +3864,7 @@ async function deleteRig(id){ await sbDelete('rigs', 'id=eq.'+id); }
 async function loadRigsFull(){
   try{
     // Keep the list fetch light: never pull the photo blob here, only whether one exists
-    const rows = await sbGet('rigs?select=id,name,brand,uses_bom,hook_count,creator_user_id,has_photo&order=name.asc');
+    const rows = await sbGet('rigs?select=id,name,brand,uses_bom,hook_count,creator_user_id,has_photo,copied_from,hook_labels&order=name.asc');
     clearDbError();
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
@@ -3834,35 +3875,88 @@ async function viewRigPhoto(id){
     if(rows[0] && rows[0].photo){ openPhotoModal(rows[0].photo, null); }
   }catch(e){ console.error(e); showDbError('Could not load photo.'); }
 }
+// Shows the actual feed methods rather than a bare Bom yes/no
+function feedMethodPills(r){
+  let methods = [];
+  try{ methods = r.feed_methods ? JSON.parse(r.feed_methods) : []; }catch(e){}
+  if(!methods.length && r.uses_bom) methods = ['Bom (method feeder)'];
+  if(!methods.length) return '';
+  return methods.map(m=>`<span class="pill">${escapeHtml(m)}</span>`).join('');
+}
+
 async function renderRigsList(){
   const el = document.getElementById('rigs-list');
   if(!el) return;
   el.innerHTML = '<div class="empty">Loading...</div>';
   const rigs = await loadRigsFull();
-  if(rigs.length===0){ el.innerHTML = '<div class="empty">No rigs built yet — build one above, then tick "Use" to see it on your Timers.</div>'; return; }
-  const inUse = await loadMyRigUseIds();
-  const rows = rigs.map(r=>{
-    const canManage = isSuperUser() || (isSignedIn() && session.user.id === r.creator_user_id);
-    const canEditHooks = isSignedIn();
-    return `<li>
-      <div class="who">
-        <b>${escapeHtml(r.name)}</b>
-        ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
-        <span class="pill">Bom: ${r.uses_bom ? 'Yes' : 'No'}</span>
-        <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
-      </div>
-      ${isSignedIn() ? `<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);margin-top:4px;">
-        <input type="checkbox" class="rig-use-toggle" data-rig="${r.id}" ${inUse.has(r.id) ? 'checked' : ''}> Use (show in my Timers rig list)
-      </label>` : ''}
-      <div class="actions">
-        ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}">📷</button>` : ''}
-        ${canEditHooks ? `<button class="mini-btn" data-rig-edit="${r.id}">Edit</button>` : ''}
-        ${canManage ? `<button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>` : ''}
-      </div>
-      ${canEditHooks ? `<div class="rig-edit-manager" data-rig="${r.id}" data-hooks="${r.hook_count}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
-    </li>`;
-  }).join('');
-  el.innerHTML = '<ul class="people-list">' + rows + '</ul>';
+  const myId = isSignedIn() ? session.user.id : null;
+
+  // Two views. "My rigs" is everything that's actually yours — built from
+  // scratch or copied from the library and made your own. The library is a
+  // catalogue of rig types, so it only holds originals: a copy never goes
+  // back in, which is what stops it filling with near-identical variants.
+  const mine = rigs.filter(r=> myId && r.creator_user_id === myId);
+  const myCopiedFrom = new Set(mine.map(r=>r.copied_from).filter(Boolean));
+  const library = rigs.filter(r=> !r.copied_from && (!myId || r.creator_user_id !== myId));
+
+  let html = '';
+
+  // ---- My rigs ----
+  html += '<p class="sub-heading">My rigs</p>';
+  if(!mine.length){
+    html += '<div class="empty">None yet — build one above, or add one from the library below.</div>';
+  }else{
+    const inUse = await loadMyRigUseIds();
+    html += '<ul class="people-list">' + mine.map(r=>`
+      <li>
+        <div class="who">
+          <b>${escapeHtml(r.name)}</b>
+          ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
+          ${feedMethodPills(r)}
+          <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);margin-top:4px;">
+          <input type="checkbox" class="rig-use-toggle" data-rig="${r.id}" ${inUse.has(r.id) ? 'checked' : ''}> Use (show in my Timers rig list)
+        </label>
+        <div class="actions">
+          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}">📷</button>` : ''}
+          <button class="mini-btn" data-rig-edit="${r.id}">Edit</button>
+          <button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>
+        </div>
+        <div class="rig-edit-manager" data-rig="${r.id}" data-hooks="${r.hook_count}" style="display:none;flex-basis:100%;padding-top:8px;"></div>
+      </li>`).join('') + '</ul>';
+  }
+
+  // ---- Library ----
+  html += '<p class="sub-heading" style="margin-top:18px;">Rig library</p>';
+  if(!library.length){
+    html += '<div class="empty">Nothing in the library yet.</div>';
+  }else{
+    html += '<p class="pc-line muted" style="margin-bottom:8px;">Add one to your rigs to get your own copy — rename it, change the hooks, make it yours. The original stays untouched.</p>';
+    html += '<ul class="people-list">' + library.map(r=>{
+      const already = myCopiedFrom.has(r.id);
+      return `<li>
+        <div class="who">
+          <b>${escapeHtml(r.name)}</b>
+          ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
+          ${feedMethodPills(r)}
+          <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
+        </div>
+        <div class="actions">
+          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}">📷</button>` : ''}
+          ${isSignedIn()
+            ? (already
+                ? `<span class="pc-line muted">Already in your rigs</span>`
+                : `<button class="mini-btn" data-rig-copy="${r.id}">Add to my rigs</button>`)
+            : ''}
+          ${isSuperUser() ? `<button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>` : ''}
+        </div>
+      </li>`;
+    }).join('') + '</ul>';
+  }
+
+  el.innerHTML = html;
+
   el.querySelectorAll('.rig-use-toggle').forEach(cb=>{
     cb.addEventListener('change', async ()=>{
       cb.disabled = true;
@@ -3882,6 +3976,52 @@ async function renderRigsList(){
       cb.disabled = false;
     });
   });
+
+  // Taking a library rig gives you your own copy rather than sharing the
+  // original, so editing it can never affect anyone else
+  el.querySelectorAll('[data-rig-copy]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const source = rigs.find(x=>x.id===btn.dataset.rigCopy);
+      if(!source) return;
+      btn.disabled = true;
+      btn.textContent = 'Adding...';
+      try{
+        // The list deliberately doesn't carry photo blobs, so fetch this
+        // one's photo only now that it's actually being copied
+        let sourcePhoto = null;
+        if(source.has_photo){
+          try{
+            const full = await sbGet('rigs?select=photo&id=eq.'+source.id);
+            sourcePhoto = full.length ? full[0].photo : null;
+          }catch(e){ console.error('rig photo fetch failed', e); }
+        }
+        const newId = uid();
+        await sbPost('rigs', {
+          id: newId,
+          name: source.name,
+          brand: source.brand || '',
+          uses_bom: source.uses_bom,
+          hook_count: source.hook_count,
+          hook_labels: source.hook_labels || null,
+          photo: sourcePhoto,
+          has_photo: !!sourcePhoto,
+          creator_user_id: session.user.id,
+          copied_from: source.id
+        });
+        // Ticked on by default — you added it because you intend to fish it
+        await sbPost('rig_uses', {id: uid(), user_id: session.user.id, rig_id: newId});
+        await loadKnownRigs();
+        renderRigsList();
+        if(currentPerson) renderAll();
+      }catch(e){
+        console.error(e);
+        alert('Could not add: ' + (e.message || 'unknown error'));
+        btn.disabled = false;
+        btn.textContent = 'Add to my rigs';
+      }
+    });
+  });
+
   el.querySelectorAll('[data-rig-remove]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const rig = rigs.find(x=>x.id===btn.dataset.rigRemove);
@@ -3907,37 +4047,89 @@ async function renderRigsList(){
       }
       const currentHooks = parseInt(manager.dataset.hooks, 10) || 2;
       const rig = rigs.find(x=>x.id===rigId);
+      let labels = [];
+      try{ labels = rig && rig.hook_labels ? JSON.parse(rig.hook_labels) : []; }catch(e){ labels = []; }
+      let currentFeed = [];
+      try{ currentFeed = rig && rig.feed_methods ? JSON.parse(rig.feed_methods) : []; }catch(e){ currentFeed = []; }
+      // Rigs created before feed methods existed just had a bom yes/no
+      if(!currentFeed.length && rig && rig.uses_bom) currentFeed = ['Bom (method feeder)'];
+
+      function hookLabelFields(count){
+        let out = '';
+        for(let i=1; i<=count; i++){
+          out += `<div class="field" style="margin-bottom:8px;">
+            <label>Hook ${i} name</label>
+            <input type="text" maxlength="30" class="rig-hook-label" data-hook="${i}"
+              value="${escapeHtml(labels[i-1] || '')}" placeholder="Hook ${i}"
+              autocomplete="pk-hook-label-${i}" role="presentation" data-form-type="other"
+              autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>`;
+        }
+        return out;
+      }
+
       manager.style.display = 'block';
+      // A rig in "My rigs" is genuinely yours now, so everything about it
+      // is editable — no more admin-only restrictions on your own gear
       manager.innerHTML = `
-        ${isSuperUser() ? `
-          <div class="row2">
-            <div class="field">
-              <label>Rig name (admin)</label>
-              <input type="text" maxlength="100" class="rig-edit-name" value="${escapeHtml(rig ? rig.name : '')}" autocomplete="pk-field-24" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
-            </div>
-            <div class="field">
-              <label>Brand (admin)</label>
-              <input type="text" maxlength="100" class="rig-edit-brand" value="${escapeHtml(rig && rig.brand ? rig.brand : '')}" autocomplete="pk-field-25" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
-            </div>
-          </div>` : ''}
+        <div class="row2">
+          <div class="field">
+            <label>Rig name</label>
+            <input type="text" maxlength="100" class="rig-edit-name" value="${escapeHtml(rig ? rig.name : '')}" autocomplete="pk-field-24" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label>Brand</label>
+            <input type="text" maxlength="100" class="rig-edit-brand" value="${escapeHtml(rig && rig.brand ? rig.brand : '')}" autocomplete="pk-field-25" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>
+        </div>
+        <div class="field">
+          <label>Feed method (tick any you use)</label>
+          <div class="rig-edit-feed-wrap">${feedMethodChecksHtml(currentFeed, 'rig-edit-feed')}</div>
+        </div>
         <div class="field">
           <label>Number of hooks</label>
           <select class="rig-edit-hook-select" data-rig="${rigId}">${hookCountOptionsHtml(currentHooks)}</select>
         </div>
+        <p class="sub-heading" style="margin-top:6px;">Name your hooks</p>
+        <p class="pc-line muted" style="margin-bottom:8px;">Call them what you actually call them — Top, Bottom, Middle. Leave blank to keep Hook 1, Hook 2, and so on.</p>
+        <div class="rig-hook-labels">${hookLabelFields(currentHooks)}</div>
         <button class="mini-btn" data-rig-save="${rigId}">Save</button>
-        ${isSuperUser() ? '' : '<span class="pc-line muted">Only the hook count can be edited after a rig is created.</span>'}
       `;
+
+      // Changing the hook count rebuilds the name fields to match, keeping
+      // whatever's already been typed
+      const hookSel = manager.querySelector('.rig-edit-hook-select');
+      hookSel.addEventListener('change', ()=>{
+        manager.querySelectorAll('.rig-hook-label').forEach(inp=>{
+          labels[parseInt(inp.dataset.hook,10)-1] = inp.value;
+        });
+        manager.querySelector('.rig-hook-labels').innerHTML =
+          hookLabelFields(parseInt(hookSel.value, 10) || 2);
+      });
+
       manager.querySelector('[data-rig-save]').addEventListener('click', async ()=>{
-        const sel = manager.querySelector('.rig-edit-hook-select');
-        const patch = {hook_count: parseInt(sel.value, 10) || 2};
-        if(isSuperUser()){
-          const nameEl = manager.querySelector('.rig-edit-name');
-          const brandEl = manager.querySelector('.rig-edit-brand');
-          const newName = nameEl ? nameEl.value.trim() : '';
-          if(!newName){ alert('Enter a rig name.'); return; }
-          patch.name = newName;
-          patch.brand = brandEl ? (brandEl.value.trim() || null) : null;
-        }
+        const nameEl = manager.querySelector('.rig-edit-name');
+        const newName = nameEl ? nameEl.value.trim() : '';
+        if(!newName){ alert('Enter a rig name.'); return; }
+        const brandEl = manager.querySelector('.rig-edit-brand');
+        const feedMethods = readFeedMethodChecks('rig-edit-feed', manager);
+        const count = parseInt(hookSel.value, 10) || 2;
+
+        const newLabels = [];
+        manager.querySelectorAll('.rig-hook-label').forEach(inp=>{
+          newLabels[parseInt(inp.dataset.hook,10)-1] = inp.value.trim();
+        });
+        // Only store labels if at least one was actually named
+        const anyNamed = newLabels.some(l=>l);
+
+        const patch = {
+          name: newName,
+          brand: brandEl ? (brandEl.value.trim() || null) : null,
+          uses_bom: feedMethods.length > 0,
+          feed_methods: feedMethods.length ? JSON.stringify(feedMethods) : null,
+          hook_count: count,
+          hook_labels: anyNamed ? JSON.stringify(newLabels) : null
+        };
         try{
           await sbPatch('rigs', 'id=eq.'+rigId, patch);
           await loadKnownRigs();
@@ -3951,15 +4143,30 @@ async function renderRigsList(){
     });
   });
 }
+// Feed method checkboxes — used on both the create form and the rig editor
+function feedMethodChecksHtml(selected, idPrefix){
+  const chosen = selected || [];
+  return FEED_METHODS.map((m,i)=>
+    `<label class="check-row">
+      <input type="checkbox" class="${idPrefix}-check" value="${escapeHtml(m)}" ${chosen.includes(m) ? 'checked' : ''}>
+      ${escapeHtml(m)}
+    </label>`).join('');
+}
+function readFeedMethodChecks(idPrefix, root){
+  const scope = root || document;
+  return [...scope.querySelectorAll('.'+idPrefix+'-check')]
+    .filter(cb=>cb.checked).map(cb=>cb.value);
+}
+
 document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
   const nameEl = document.getElementById('rig-name');
   const brandEl = document.getElementById('rig-brand');
-  const bomEl = document.getElementById('rig-uses-bom');
   const hookEl = document.getElementById('rig-hook-count');
   const photoEl = document.getElementById('rig-photo');
   const st = document.getElementById('rig-create-status');
   const name = nameEl.value.trim();
   if(!name){ st.textContent = 'Enter a type of rig.'; return; }
+  const feedMethods = readFeedMethodChecks('rig-feed');
   st.textContent = 'Creating...';
   try{
     let photo = null;
@@ -3971,7 +4178,8 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
       id: newRigId,
       name,
       brand: brandEl.value.trim() || null,
-      uses_bom: bomEl.value === 'yes',
+      uses_bom: feedMethods.length > 0,
+      feed_methods: feedMethods.length ? JSON.stringify(feedMethods) : null,
       hook_count: parseInt(hookEl.value, 10) || 2,
       creator_user_id: isSignedIn() ? session.user.id : null,
       photo,
@@ -3985,7 +4193,8 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
     }
     nameEl.value = '';
     brandEl.value = '';
-    bomEl.value = 'no';
+    const feedWrap = document.getElementById('rig-feed-methods');
+    if(feedWrap) feedWrap.innerHTML = feedMethodChecksHtml([], 'rig-feed');
     photoEl.value = '';
     st.textContent = 'Created.';
     setTimeout(()=> st.textContent='', 1200);
@@ -5638,7 +5847,7 @@ function renderProfilePhotoGrid(entries, filterType){
   ).join('');
 }
 
-function catchDetailHtml(c, editable){
+function catchDetailHtml(c, editable, removable){
   const timeStr = c.hasKnownTime === false
     ? 'not recorded'
     : new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -5648,7 +5857,10 @@ function catchDetailHtml(c, editable){
   let html = `<div class="profile-catch">
     <div class="pc-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <span>${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</span>
-      ${editable ? `<button type="button" class="mini-btn profile-edit-catch" data-catch-id="${c.id}" style="text-transform:none;letter-spacing:normal;">Edit</button>` : ''}
+      <span style="display:flex;gap:6px;">
+        ${editable ? `<button type="button" class="mini-btn profile-edit-catch" data-catch-id="${c.id}" style="text-transform:none;letter-spacing:normal;">Edit</button>` : ''}
+        ${removable ? `<button type="button" class="mini-btn danger profile-remove-catch" data-catch-id="${c.id}" style="text-transform:none;letter-spacing:normal;">Remove</button>` : ''}
+      </span>
     </div>`;
   if(c.caught){
     html += `<div class="pc-line">${escapeHtml(c.type||'Fish')} — ${c.weight}kg</div>`;
@@ -5795,6 +6007,23 @@ function buildInsightsHtml(catches, venues, sessions){
 
   // Which rig performs
   html += statTable('Which rig lands fish', groupStats(c=>[c.rig]), 'No rigs recorded on your catches yet.');
+
+  // Which hook position produces. Only meaningful once hooks are named —
+  // "Top vs Bottom" tells you something, "Hook 1 vs Hook 2" doesn't. Names
+  // are looked up live, so renaming a hook updates past catches too.
+  html += statTable('Which hook lands fish', groupStats(c=>{
+    const hookMatch = /Hook (\d+)/.exec(c.hook||'');
+    if(!hookMatch) return [];
+    const n = parseInt(hookMatch[1], 10);
+    const rigDef = c.rig ? findRigDef(c.rig) : null;
+    // Prefer the live rig if it's in use, otherwise fall back to the full
+    // map so catches on retired rigs still show their proper hook names
+    const fallback = c.rig && allRigHookLabels[c.rig]
+      ? {hookLabels: allRigHookLabels[c.rig]} : null;
+    const label = hookDisplayName(rigDef || fallback, n);
+    // Qualify with the rig, since "Top" on one rig isn't "Top" on another
+    return [c.rig ? `${c.rig} — ${label}` : label];
+  }), 'No hooks recorded on your catches yet.');
 
   // Which bait performs
   html += statTable('Which bait lands fish', groupStats(catchingBaits), 'No baits recorded on your catches yet.');
@@ -6083,6 +6312,9 @@ async function openInsights(){
   // Clear any venues nothing references before loading, so the map can't
   // show a pin for a water with no sessions or catches behind it
   await cleanOrphanVenues();
+  // Hook names for every rig, not just ones currently ticked "in use" —
+  // otherwise a catch on a rig you've since un-ticked would lose its names
+  await loadAllRigHookLabels();
   const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
   body.innerHTML = buildInsightsHtml(rec && rec.catches ? rec.catches : [], venues, sessions);
   renderVenueMap(venues, rec && rec.catches ? rec.catches : []);
@@ -6094,11 +6326,32 @@ async function openInsights(){
   body.querySelectorAll('[data-delete-session]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       const id = btn.dataset.deleteSession;
-      if(!confirmDelete('this session (the catches logged in it are kept)')) return;
-      try{
-        // Note which venue this session used, so we can tidy up after
-        const goingVenueId = (sessions.find(s=>s.id===id) || {}).venue_id;
+      const sessionObj = sessions.find(s=>s.id===id);
+      if(!window.confirm('Delete this session?\n\nThis cannot be undone.')) return;
 
+      try{
+        // Ask separately whether the catches logged in it should go too —
+        // they're real fish caught, so keeping them is the safer default,
+        // but a test session's catches are usually junk you want gone too
+        let catchCount = 0;
+        try{
+          const rows = await sbGet('catches?select=id&session_id=eq.'+id);
+          catchCount = rows.length;
+        }catch(e){ console.error(e); }
+
+        let deleteCatchesToo = false;
+        if(catchCount > 0){
+          deleteCatchesToo = window.confirm(
+            `This session has ${catchCount} catch${catchCount===1?'':'es'} logged in it.\n\n` +
+            `OK — delete those catches too\nCancel — keep them, just remove the session`
+          );
+        }
+
+        const goingVenueId = (sessionObj || {}).venue_id;
+
+        if(deleteCatchesToo){
+          await sbDelete('catches', 'session_id=eq.'+id);
+        }
         await sbDelete('sessions', 'id=eq.'+id);
         // If that was the session currently showing on Timers, clear it too
         if(activeSession && activeSession.id === id){
@@ -6972,12 +7225,14 @@ async function openProfile(personId){
     }
     html += `<div id="profile-photo-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;"></div>`;
   }
-  // Only catches added via "Log a past catch" are editable here — those have
-  // no session behind them. Live session catches are part of a real timed
-  // session, so they're left alone.
+  // Editing details stays limited to "Log a past catch" entries — a real
+  // timed session shouldn't have its record quietly rewritten. But removing
+  // a catch that shouldn't exist (a mistake, test data) is different: it's
+  // not distorting what happened, it's correcting whether it happened at
+  // all, so that's allowed on any catch you own.
   const canEditCatches = (myFishermanId && myFishermanId === p.id) || isSuperUser();
   html += catches.length
-    ? catches.map(c=>catchDetailHtml(c, canEditCatches && !c.sessionId)).join('')
+    ? catches.map(c=>catchDetailHtml(c, canEditCatches && !c.sessionId, canEditCatches)).join('')
     : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>';
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
@@ -6986,6 +7241,21 @@ async function openProfile(personId){
     btn.addEventListener('click', ()=>{
       const c = catches.find(x=>x.id === btn.dataset.catchId);
       openEditCatch(btn.dataset.catchId, c);
+    });
+  });
+
+  document.querySelectorAll('.profile-remove-catch').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const c = catches.find(x=>x.id === btn.dataset.catchId);
+      const desc = c && c.caught ? `this ${c.type||'catch'}` : 'this entry';
+      if(!confirmDelete(desc)) return;
+      try{
+        await sbDelete('catches', 'id=eq.'+btn.dataset.catchId);
+        openProfile(personId);
+      }catch(e){
+        console.error(e);
+        alert('Could not remove: ' + (e.message || 'unknown error'));
+      }
     });
   });
 
@@ -7555,6 +7825,8 @@ function goToTab(tabName){
       renderTackleBoxSharePicker();
       const hookSel = document.getElementById('rig-hook-count');
       if(hookSel && !hookSel.options.length) hookSel.innerHTML = hookCountOptionsHtml(2);
+      const feedWrap = document.getElementById('rig-feed-methods');
+      if(feedWrap && !feedWrap.innerHTML) feedWrap.innerHTML = feedMethodChecksHtml([], 'rig-feed');
       renderRigsList();
       makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
     }
@@ -7860,6 +8132,11 @@ const CHANGELOG = [
     'Reel Records for your personal bests by species',
     'Profile pictures, and a redesigned sign-in with Google',
     'Offline support — log catches with no signal, syncs when you reconnect'
+  ]},
+  {version:'1.0', date:'August 2026', changes:[
+    'The original launch, as "Dam Log" — per-rod timers, catch and blank logging',
+    'A basic leaderboard',
+    'Sign-in, sign-up and notifications'
   ]}
 ];
 
@@ -8707,7 +8984,7 @@ async function renderAdminRigsList(){
         <div class="who">
           <b>${escapeHtml(r.name)}</b>
           ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
-          <span class="pill">Bom: ${r.uses_bom ? 'Yes' : 'No'}</span>
+          ${feedMethodPills(r)}
           <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
         </div>
         <div class="actions">
