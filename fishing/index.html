@@ -4319,6 +4319,9 @@ async function renderTackleList(){
     byCategory[cat].push(it);
   });
   const catNames = Object.keys(byCategory).sort((a,b)=>a.localeCompare(b));
+  catNames.forEach(cat=>{
+    byCategory[cat].sort((a,b)=> a.name.localeCompare(b.name));
+  });
   const catHtml = catNames.map(cat=>{
     const rows = byCategory[cat].map(it=>{
       const baitTag = it.bait_type ? `<span class="pill" style="background:var(--khaki);color:var(--ink);">${escapeHtml(it.bait_type)}</span>` : '';
@@ -4372,9 +4375,36 @@ async function renderTackleList(){
         ${canManageShare ? `<div class="tackle-share-manager" data-item="${it.id}" style="display:none;flex-basis:100%;padding-top:8px;"></div>` : ''}
       </li>`;
     }).join('');
-    return `<h2 style="font-size:14px;color:var(--khaki);margin:14px 0 6px;">${escapeHtml(cat)}</h2><ul class="people-list">${rows}</ul>`;
+    return `<div class="tackle-cat-section">
+      <button type="button" class="tackle-cat-toggle" data-cat="${escapeHtml(cat)}"
+        style="display:flex;justify-content:space-between;align-items:center;width:100%;background:none;border:none;
+        padding:10px 0 6px;cursor:pointer;font-family:inherit;text-align:left;border-bottom:1px solid var(--line);margin-top:8px;">
+        <span style="font-size:14px;color:var(--khaki);font-weight:700;">${escapeHtml(cat)} <span class="pc-line muted" style="font-weight:400;">(${byCategory[cat].length})</span></span>
+        <span class="tackle-cat-arrow" data-cat-arrow="${escapeHtml(cat)}" style="color:var(--muted);font-size:12px;">▾</span>
+      </button>
+      <ul class="people-list tackle-cat-body" data-cat-body="${escapeHtml(cat)}">${rows}</ul>
+    </div>`;
   }).join('');
   el.innerHTML = addAllHtml + catHtml;
+
+  // Categories start open — this is content people are actively browsing,
+  // not a settings screen — but collapsing one (and it staying collapsed
+  // next time) is handy for categories you rarely touch
+  el.querySelectorAll('.tackle-cat-toggle').forEach(btn=>{
+    const cat = btn.dataset.cat;
+    const body = el.querySelector('.tackle-cat-body[data-cat-body="'+CSS.escape(cat)+'"]');
+    const arrow = el.querySelector('.tackle-cat-arrow[data-cat-arrow="'+CSS.escape(cat)+'"]');
+    let collapsed = false;
+    try{ collapsed = localStorage.getItem('pk_fishing_tackle_cat_'+cat) === 'closed'; }catch(e){}
+    if(collapsed && body){ body.style.display = 'none'; if(arrow) arrow.textContent = '▸'; }
+    btn.addEventListener('click', ()=>{
+      if(!body) return;
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : '';
+      if(arrow) arrow.textContent = isOpen ? '▸' : '▾';
+      try{ localStorage.setItem('pk_fishing_tackle_cat_'+cat, isOpen ? 'closed' : 'open'); }catch(e){}
+    });
+  });
 
   const useAllBtn = document.getElementById('tackle-use-all-btn');
   if(useAllBtn){
