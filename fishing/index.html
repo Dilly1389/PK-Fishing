@@ -1253,7 +1253,13 @@
           </div>
           <button class="primary-btn" id="rig-create-btn">Create rig</button>
           <div class="status" id="rig-create-status"></div>
-          <div id="rigs-list" style="margin-top:14px;"><div class="empty">No rigs built yet — build one above, then tick "Use" to see it on your Timers.</div></div>
+          </div>
+        </section>
+
+        <section class="card" id="my-rigs-card">
+          <h2>My Rigs</h2>
+          <div id="my-rigs-body">
+          <div id="rigs-list"><div class="empty">No rigs built yet — build one above, then tick "Use" to see it on your Timers.</div></div>
           </div>
         </section>
 
@@ -7879,7 +7885,8 @@ function goToTab(tabName){
       if(feedWrap && !feedWrap.innerHTML) feedWrap.innerHTML = feedMethodChecksHtml([], 'rig-feed');
       renderRigsList();
       makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
-      makeCardCollapsible('build-rig-card', 'build-rig-body', 'pk_fishing_collapse_buildrig', true);
+      makeCardCollapsible('build-rig-card', 'build-rig-body', 'pk_fishing_collapse_buildrig');
+      makeCardCollapsible('my-rigs-card', 'my-rigs-body', 'pk_fishing_collapse_myrigs', true);
       makeCardCollapsible('tackle-share-box-card', 'tackle-share-box-body', 'pk_fishing_collapse_sharebox');
       makeCardCollapsible('tackle-list-card', 'tackle-list-body', 'pk_fishing_collapse_tacklelist', true);
     }
