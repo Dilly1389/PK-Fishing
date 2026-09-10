@@ -4349,12 +4349,20 @@ async function renderTackleList(){
       // Fill level only makes sense for consumables
       const isConsumable = it.category === 'Bait' || it.category === 'Dips';
       const level = (it.fill_level === null || it.fill_level === undefined) ? 100 : it.fill_level;
-      const fillHtml = (isConsumable && canEdit) ? `
+      // Anyone with access to this item can see how much is left — useful
+      // to know before relying on a friend's shared bait for a trip. Only
+      // the owner (or admin) can actually change the level.
+      const canSeeThisItem = isMine || isSuperUser() || sharedWithMeIds.has(it.id) || boxSharedOwners.has(it.owner_user_id) || it.is_shared;
+      const fillHtml = (isConsumable && canSeeThisItem) ? (canEdit ? `
         <div class="fill-level-wrap" style="flex-basis:100%;">
           <div class="fill-level-bar"><span data-fill-bar="${it.id}" style="height:${level}%;"></span></div>
           <input type="range" class="fill-level-slider" data-fill-slider="${it.id}" min="0" max="100" step="5" value="${level}">
           <span class="fill-level-readout" data-fill-readout="${it.id}">${level}% left</span>
-        </div>` : '';
+        </div>` : `
+        <div class="fill-level-wrap" style="flex-basis:100%;">
+          <div class="fill-level-bar"><span style="height:${level}%;"></span></div>
+          <span class="fill-level-readout">${level}% left</span>
+        </div>`) : '';
       return `<li>
         <div class="who">
           <b>${escapeHtml(it.name)}</b>
