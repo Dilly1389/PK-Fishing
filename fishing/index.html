@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>PK Fishing</title>
+<meta name="description" content="A private fishing logbook for South African anglers — session timers, tackle sharing, competitions and catch insights.">
+<meta property="og:title" content="PK Fishing">
+<meta property="og:description" content="A private fishing logbook for South African anglers — session timers, tackle sharing, competitions and catch insights.">
+<meta property="og:image" content="https://pksport.co.za/fishing/icon-512.png">
+<meta property="og:url" content="https://pksport.co.za/fishing/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="PK Fishing">
+<meta name="twitter:description" content="A private fishing logbook for South African anglers — session timers, tackle sharing, competitions and catch insights.">
+<meta name="twitter:image" content="https://pksport.co.za/fishing/icon-512.png">
 <meta name="theme-color" content="#B3121F">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -44,6 +54,10 @@
     --muted:#9C6B6B;
     --line:#F0D6D6;
     --catch-green:#A61B2B;
+    /* --khaki reads fine as light text on the dark red header, but at
+       1.7:1 it's nearly invisible as heading text on a white card — this
+       is what card headings actually use, tuned per theme to pass contrast */
+    --card-heading:#8A0E1A;
     --radius:14px;
   }
   /* Dark palette, shared by the system preference and the manual toggle */
@@ -60,6 +74,7 @@
       --muted:#C79999;
       --line:#3A2323;
       --catch-green:#C83244;
+      --card-heading:#E8AFAF;
     }
   }
   :root[data-theme="dark"]{
@@ -73,6 +88,7 @@
     --ink:#F5EAEA;
     --muted:#C79999;
     --line:#3A2323;
+    --card-heading:#E8AFAF;
     --catch-green:#C83244;
   }
   *{box-sizing:border-box;}
@@ -212,7 +228,7 @@
     background:var(--card-bg);border:1px solid var(--line);border-radius:var(--radius);
     padding:16px 14px 16px;margin-bottom:14px;
   }
-  section.card h2{font-size:15px;margin:0 0 12px;color:var(--khaki);}
+  section.card h2{font-size:15px;margin:0 0 12px;color:var(--card-heading);}
   .rod-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
   .rod-card h3{
     font-size:17px;margin:0;color:var(--ink);flex-shrink:0;
@@ -231,7 +247,16 @@
     background:transparent;color:var(--ink);
   }
   .rod-name-input:hover{border-color:var(--line);}
-  .rod-name-input:focus{border-color:var(--dam);background:var(--card-bg);outline:none;}
+  /* Visible keyboard focus, app-wide. :focus-visible specifically means
+     this only shows for keyboard navigation (Tab), not for a mouse click
+     or a finger tap — so it fixes real keyboard accessibility without
+     putting a ring around every button someone touches on mobile. */
+  button:focus-visible, input:focus-visible, select:focus-visible,
+  textarea:focus-visible, a:focus-visible, [tabindex]:focus-visible{
+    outline:2px solid var(--dam);outline-offset:2px;
+  }
+  .rod-name-input:focus{border-color:var(--dam);background:var(--card-bg);}
+  .rod-name-input:focus-visible{outline:2px solid var(--dam);outline-offset:2px;}
   .rod-name-input::placeholder{color:var(--ink);opacity:1;font-weight:700;}
 
   .bobber-row{display:flex;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap;}
@@ -312,7 +337,7 @@
   .catch-toggle button{
     flex:1;padding:10px;border-radius:8px;border:1.5px solid var(--line);
     background:var(--card-bg);font-weight:700;font-family:inherit;cursor:pointer;
-    color:var(--muted);font-size:13.5px;
+    color:var(--muted);font-size:13.5px;min-height:44px;
   }
   .catch-toggle button.sel-yes.active{background:var(--catch-green);color:#fff;border-color:var(--catch-green);}
   .catch-toggle button.sel-no.active{background:var(--muted);color:var(--card-bg);border-color:var(--muted);}
@@ -362,7 +387,12 @@
   }
   .mini-btn{
     border:1px solid var(--line);background:var(--card-bg);color:var(--ink);border-radius:7px;
-    padding:7px 9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+    padding:9px 13px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;
+    /* This app is used outdoors, often one-handed, often in wind or cold —
+       the previous 7px/9px padding fell well under the 44px minimum tap
+       target both Apple and Google recommend. min-height guarantees the
+       real target regardless of how the text inside happens to measure. */
+    min-height:44px;display:inline-flex;align-items:center;justify-content:center;
   }
   .mini-btn.danger{color:#c04;}
   .mini-btn.liked{background:var(--dam);color:#fff;border-color:var(--dam);}
@@ -811,7 +841,7 @@
             <select id="past-catch-species"></select>
           </div>
           <div class="field">
-            <label>Weight (kg)</label>
+            <label>Weight</label>
             <input type="number" step="0.01" min="0" max="500" id="past-catch-weight" placeholder="e.g. 12.4" autocomplete="pk-x1" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
@@ -872,6 +902,13 @@
               <option value="system">Match my device</option>
               <option value="light">Light</option>
               <option value="dark">Dark</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Weight unit</label>
+            <select id="weight-unit-select">
+              <option value="kg">Kilograms (kg)</option>
+              <option value="lb">Pounds & ounces (lb/oz)</option>
             </select>
           </div>
         </div>
@@ -991,19 +1028,7 @@
           </div>
           <div class="field">
             <label>Species (optional)</label>
-            <select id="competition-fishtype">
-              <option value="">Any species</option>
-              <option value="Carp">Carp</option>
-              <option value="Mirror Carp">Mirror Carp</option>
-              <option value="Grass Carp">Grass Carp</option>
-              <option value="Barbel">Barbel</option>
-              <option value="Yellowfish">Yellowfish</option>
-              <option value="Bass">Bass</option>
-              <option value="Tilapia">Tilapia</option>
-              <option value="Koi">Koi</option>
-              <option value="Mudfish">Mudfish</option>
-              <option value="Eel">Eel</option>
-            </select>
+            <select id="competition-fishtype"></select>
           </div>
         </div>
         <p class="sub-heading">Add anglers</p>
@@ -1024,6 +1049,17 @@
 
     <!-- ADMIN -->
     <div class="panel" id="panel-admin">
+      <section class="card" id="admin-overview-card">
+        <h2>Overview</h2>
+        <div id="admin-overview-body">
+          <div class="profile-summary" id="admin-overview-stats"></div>
+          <p class="sub-heading" style="margin-top:14px;">Recent signups</p>
+          <div id="admin-overview-signups"><div class="empty">Loading...</div></div>
+          <p class="sub-heading" style="margin-top:14px;">Recent catches</p>
+          <div id="admin-overview-catches"><div class="empty">Loading...</div></div>
+        </div>
+      </section>
+
       <section class="card" id="admin-users-card">
         <h2>Admin: Users</h2>
         <div id="admin-users-body">
@@ -1045,7 +1081,7 @@
             <select id="admin-competition-select"><option value="">Choose...</option></select>
           </div>
           <div id="admin-competition-info" class="pc-line muted"></div>
-          <button class="mini-btn danger" id="admin-competition-delete-btn" style="display:none;margin-top:8px;">Delete competition</button>
+          <button class="mini-btn danger" id="admin-competition-delete-btn" style="display:none;margin-top:8px;">Remove competition</button>
         </div>
       </section>
 
@@ -1124,13 +1160,13 @@
                 <input type="text" maxlength="100" id="admin-catch-type" placeholder="e.g. Carp" autocomplete="pk-field-11" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
               </div>
               <div class="field">
-                <label>Weight (kg)</label>
+                <label>Weight</label>
                 <input type="number" step="0.01" min="0" max="500" id="admin-catch-weight" autocomplete="pk-x8" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
               </div>
             </div>
             <button class="primary-btn" id="admin-catch-save-btn">Save changes</button>
             <div class="status" id="admin-catch-status"></div>
-            <button class="mini-btn danger" id="admin-catch-delete-btn" style="margin-top:10px;">Delete this catch</button>
+            <button class="mini-btn danger" id="admin-catch-delete-btn" style="margin-top:10px;">Remove this catch</button>
           </div>
         </div>
       </section>
@@ -1470,7 +1506,7 @@
     <p class="pc-line">Here's how it works:</p>
     <div class="profile-catch">
       <div class="pc-head">1. Build your rigs</div>
-      <div class="pc-line muted">On the Tackle Box tab, add your gear and build the rigs you fish. Tick "Use" on a rig to make it show up on your Timers.</div>
+      <div class="pc-line muted">On the Tackle Box tab, add your gear and build the rigs you fish — name your hooks whatever you actually call them, Top or Bottom rather than Hook 1 and Hook 2. Tick "Use" on a rig to make it show up on your Timers, or grab one from the Rig Library and make it your own.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">2. Start a session</div>
@@ -1478,7 +1514,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">3. Run your timers</div>
-      <div class="pc-line muted">Start a timer when a rod goes out. Pick the rig, bait and bom you're using for that rod.</div>
+      <div class="pc-line muted">Start a timer when a rod goes out. Pick the rig, feed method and baits you're using for that rod, and jot a distance or a quick note if it's worth remembering.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">4. Log your catches</div>
@@ -1486,7 +1522,11 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">5. See what's working</div>
-      <div class="pc-line muted">Over time, My Insights on the Profile tab shows which rigs and baits actually land fish for you. Your Reel Records and badges build up on your profile as you go.</div>
+      <div class="pc-line muted">The Insights tab shows which rigs and baits actually land fish for you. Your Reel Records and badges build up on your profile as you go.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">6. Home is your landing spot</div>
+      <div class="pc-line muted">Current conditions, your running session, live competitions, and the latest catches from your mates — all in one place, so you don't need to check three tabs to see what's happening.</div>
     </div>
     <button class="primary-btn" id="onboarding-close" style="margin-top:14px;">Got it</button>
   </div>
@@ -1521,8 +1561,12 @@
       <div class="pc-line muted">Set your venue and how many rods you're on before your rods appear. If you're taking part in a competition that's running today, a banner shows above — tap it to fish that competition, which locks in the venue and tags every catch to it.</div>
     </div>
     <div class="profile-catch">
+      <div class="pc-head">Conditions and Session Log</div>
+      <div class="pc-line muted">Once a session starts, current weather and moon phase show above your rods — tap it for a full forecast. Below that, Session Log is somewhere to jot how the trip's going as you fish; it's collapsed by default, tap to open it.</div>
+    </div>
+    <div class="profile-catch">
       <div class="pc-head">Your rods</div>
-      <div class="pc-line muted">Tap a rod's name to rename it. Pick a colour, a rig, a bom, and baits for each hook — all pulled from your tackle box, so tick "Use" on gear back there if it's missing here.</div>
+      <div class="pc-line muted">Tap a rod's name to rename it. Pick a colour, a rig, a feed method, and baits for each hook — all pulled from your tackle box, so tick "Use" on gear back there if it's missing here. If you've named your hooks (Top, Bottom, whatever you call them), those names show up here too. There's also a spot for the distance you're casting and a quick note on that rod's spot.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Running a timer</div>
@@ -1548,6 +1592,10 @@
   <div class="modal-card">
     <h3 style="margin-top:0;">👤 How the Profile works</h3>
     <div class="profile-catch">
+      <div class="pc-head">Followers, following, and badges</div>
+      <div class="pc-line muted">Both counts are tappable — see who follows you or who you follow. Badges appear as a row below; tap any one for its full description and when you earned it. Some can be earned more than once, shown as a small number on the badge.</div>
+    </div>
+    <div class="profile-catch">
       <div class="pc-head">My details</div>
       <div class="pc-line muted">Your display name, real name, country and email. Name, surname and country stay private to you — only your display name is ever shown to others.</div>
     </div>
@@ -1557,15 +1605,15 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Log a past catch</div>
-      <div class="pc-line muted">For fish you caught before you had the app. No rod or timer needed — just species, weight, date, and optionally a venue and photo. It counts toward your Reel Records and insights exactly like any other catch.</div>
+      <div class="pc-line muted">For fish you caught before you had the app. No rod or timer needed — just species, weight, date, and optionally a venue and photo. It counts toward your Reel Records and insights exactly like any other catch. These are the only catches you can edit or remove afterward, since a real timed session shouldn't have its record quietly rewritten.</div>
     </div>
     <div class="profile-catch">
-      <div class="pc-head">Badges</div>
-      <div class="pc-line muted">Earned automatically as you fish — milestones, rare species, night and full-moon catches, competitions. They appear on your profile and you'll get a notification when you unlock one.</div>
+      <div class="pc-head">Your catch history</div>
+      <div class="pc-line muted">Every catch and blank you've logged, newest first. You can remove any of your own entries here — handy for cleaning up a test catch or a genuine mistake.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">My insights</div>
-      <div class="pc-line muted">Which rigs and baits actually land fish for you, average soak times, your best venues, and how your sessions have gone — all calculated from your own catch history.</div>
+      <div class="pc-line muted">Has its own tab at the bottom now — which rigs and baits actually land fish for you, average soak times, your best venues, soak time distribution, and how your sessions have gone, all calculated from your own catch history.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Appearance</div>
@@ -1596,15 +1644,19 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">"Use" ticks what's actually yours</div>
-      <div class="pc-line muted">Something shared with you doesn't show up on Timers until you tick "Use" on it. That keeps your Rig, Bom and Hook pickers to just the gear you actually fish with — not everything anyone's ever shared.</div>
-    </div>
-    <div class="profile-catch">
-      <div class="pc-head">Build rigs from your gear</div>
-      <div class="pc-line muted">Once you've added bait, dips and hooks, use them to build a rig further down. Tick "Use" on the rig too, so it shows up when you're logging on Timers.</div>
+      <div class="pc-line muted">Something shared with you doesn't show up on Timers until you tick "Use" on it. That keeps your Rig, Feed method and Hook pickers to just the gear you actually fish with — not everything anyone's ever shared.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Fill level for bait and dips</div>
-      <div class="pc-line muted">Bait and dip items get a slider showing how much you've got left — a quick way to see what's running low before your next trip.</div>
+      <div class="pc-line muted">Bait and dip items get a bar showing how much is left. Anyone with access to the item can see it — worth knowing before relying on a friend's shared bait for a trip — but only the owner can actually change it.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Build a rig, then find it in My Rigs</div>
+      <div class="pc-line muted">Fill in the type, brand, feed method and hook count, and it lands in My Rigs below — fully yours to edit, including naming each hook whatever you actually call it (Top, Bottom, whatever fits). Tick "Use" so it shows up when logging on Timers.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">The Rig Library</div>
+      <div class="pc-line muted">A catalogue of rig types other anglers have built. Tap "Add to my rigs" and you get your own independent copy to rename and adjust however you like — the original stays untouched, and your copy never goes back into the Library, so it doesn't fill up with near-identical variants.</div>
     </div>
     <button class="primary-btn" id="tackle-help-close" style="margin-top:14px;">Got it</button>
   </div>
@@ -1653,24 +1705,11 @@
       <div class="row2">
         <div class="field">
           <label>Type of fish</label>
-          <select id="edit-catch-type">
-            <option value="">Select type</option>
-            <option value="Carp">Carp</option>
-            <option value="Mirror Carp">Mirror Carp</option>
-            <option value="Grass Carp">Grass Carp</option>
-            <option value="Bass">Bass</option>
-            <option value="Barbel">Barbel (Catfish)</option>
-            <option value="Tilapia">Tilapia (Bream)</option>
-            <option value="Yellowfish">Yellowfish</option>
-            <option value="Mudfish">Mudfish (Moggel)</option>
-            <option value="Koi">Koi</option>
-            <option value="Eel">Eel</option>
-            <option value="Other">Other</option>
-          </select>
+          <select id="edit-catch-type"></select>
           <input type="text" maxlength="100" id="edit-catch-type-other" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-18" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="field">
-          <label>Weight (kg)</label>
+          <label>Weight</label>
           <input type="number" step="0.01" min="0" max="500" id="edit-catch-weight" placeholder="e.g. 2.4" autocomplete="pk-x10" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
       </div>
@@ -1712,6 +1751,37 @@ const FEED_METHODS = [
   'PVA mesh / stick',
   'Stringer'
 ];
+
+// ---------- Weight units ----------
+// Weight is always stored in kg — this is purely a display/input preference,
+// same as theme, so it lives in localStorage rather than the database.
+function getWeightUnit(){
+  try{ return localStorage.getItem('pk_fishing_weight_unit') || 'kg'; }catch(e){ return 'kg'; }
+}
+function setWeightUnit(unit){
+  try{ localStorage.setItem('pk_fishing_weight_unit', unit); }catch(e){}
+}
+function kgToLbOz(kg){
+  const totalOz = (kg || 0) * 35.27396195;
+  let lb = Math.floor(totalOz / 16);
+  let oz = Math.round(totalOz - lb*16);
+  if(oz === 16){ oz = 0; lb += 1; }
+  return {lb, oz};
+}
+function lbOzToKg(lb, oz){
+  const totalOz = (parseFloat(lb)||0)*16 + (parseFloat(oz)||0);
+  return totalOz / 35.27396195;
+}
+// The one function to use anywhere a weight is shown — formats according
+// to the person's own preference, whatever unit the number is stored in
+function formatWeight(kg){
+  if(kg == null || isNaN(kg)) return '';
+  if(getWeightUnit() === 'lb'){
+    const {lb, oz} = kgToLbOz(kg);
+    return `${lb}lb ${oz}oz`;
+  }
+  return `${(Math.round(kg*100)/100)}kg`;
+}
 
 const ALL_BAIT_TYPES = [
   'Big hard floats','Big soft floats','Boilies','Groundbait','Mielies','Oozer',
@@ -1758,7 +1828,7 @@ const BADGE_DEFS = [
    count: s=> s.competitionCount},
   {key:'grand_slam',     emoji:'🎖️', name:'Grand Slam',        desc:'Caught every species in your Reel Records',
    test: s=> s.recordSpeciesTotal > 0 && s.recordSpeciesCaught >= s.recordSpeciesTotal},
-  {key:'rare_catch',     emoji:'🦄', name:'Rare Catch',        desc:'Landed one of the uncommon ones — Eel, Mudfish or Koi',
+  {key:'rare_catch',     emoji:'🦄', name:'Rare Catch',        desc:'Landed one of the uncommon ones — Eel, Koi or a Largemouth Yellowfish',
    count: s=> s.rareCatchCount},
   {key:'beat_your_best', emoji:'📈', name:'Personal Best',     desc:'Beat your own record for a species',
    count: s=> s.beatenOwnPbCount}
@@ -1766,20 +1836,68 @@ const BADGE_DEFS = [
 
 // The uncommon species — catching one of these is a genuine achievement,
 // unlike carp which is routine on most SA dams
-const RARE_SPECIES = ['Eel','Mudfish','Koi'];
+// A genuine rarity, not just an inconvenient one to catch. Largemouth
+// Yellowfish specifically is Threatened/Protected under SA law with
+// mandatory catch-and-release — Smallmouth and Scaly are common by
+// comparison, which is exactly why they're kept as separate species
+// rather than one generic "Yellowfish" that would wrongly badge both.
+const RARE_SPECIES = ['Eel','Koi','Largemouth Yellowfish'];
 
 const ALL_TROPHY_SPECIES = [
-  'Carp','Mirror Carp','Grass Carp','Barbel','Yellowfish',
-  'Bass','Tilapia','Koi','Mudfish','Eel'
+  'Carp','Mirror Carp','Grass Carp','Barbel','Largemouth Yellowfish','Smallmouth Yellowfish','Scaly Yellowfish',
+  'Bass','Tilapia','Koi','Mudfish','Eel',
+  'Tench','Bream','Roach','Rudd','Perch','Pike','Crucian Carp','Catfish'
 ];
-const DEFAULT_TROPHY_SPECIES = ['Carp','Mirror Carp','Grass Carp','Barbel','Yellowfish'];
+const DEFAULT_TROPHY_SPECIES = ['Carp','Mirror Carp','Grass Carp','Barbel','Largemouth Yellowfish'];
+
+// Species lists differ by country — "Barbel" in this app specifically means
+// the SA catfish (a slang usage), which would collide confusingly with the
+// real, distinct UK Barbel species, so the two lists are kept separate
+// rather than one being a subset of the other.
+const SPECIES_BY_COUNTRY = {
+  'South Africa': [
+    {v:'Carp', l:'Carp'}, {v:'Mirror Carp', l:'Mirror Carp'}, {v:'Grass Carp', l:'Grass Carp'},
+    {v:'Bass', l:'Bass'}, {v:'Barbel', l:'Barbel (Catfish)'}, {v:'Tilapia', l:'Tilapia (Bream)'},
+    {v:'Largemouth Yellowfish', l:'Largemouth Yellowfish'}, {v:'Smallmouth Yellowfish', l:'Smallmouth Yellowfish'},
+    {v:'Scaly Yellowfish', l:'Scaly Yellowfish'},
+    {v:'Mudfish', l:'Mudfish (Moggel)'}, {v:'Koi', l:'Koi'}, {v:'Eel', l:'Eel'}
+  ],
+  'United Kingdom': [
+    {v:'Carp', l:'Common Carp'}, {v:'Mirror Carp', l:'Mirror Carp'}, {v:'Grass Carp', l:'Grass Carp'},
+    {v:'Tench', l:'Tench'}, {v:'Bream', l:'Bream'}, {v:'Roach', l:'Roach'}, {v:'Rudd', l:'Rudd'},
+    {v:'Perch', l:'Perch'}, {v:'Pike', l:'Pike'}, {v:'Crucian Carp', l:'Crucian Carp'}, {v:'Catfish', l:'Catfish (Wels)'}
+  ]
+};
+// This app's home base — used for anyone whose country isn't in the map
+// above yet, rather than showing them nothing
+const SPECIES_DEFAULT_COUNTRY = 'South Africa';
+
+function getSpeciesListFor(person){
+  const country = person && person.country;
+  return SPECIES_BY_COUNTRY[country] || SPECIES_BY_COUNTRY[SPECIES_DEFAULT_COUNTRY];
+}
+
+// Builds the <option> list for a species dropdown, tailored to a person's
+// country. `lead` is an optional first option ("Any species", "Select type"),
+// `withOther` adds the "Other" catch-all at the end for catch logging.
+function speciesOptionsHtml(person, lead, withOther){
+  const list = getSpeciesListFor(person);
+  let html = lead ? `<option value="">${escapeHtml(lead)}</option>` : '';
+  html += list.map(s=>`<option value="${escapeHtml(s.v)}">${escapeHtml(s.l)}</option>`).join('');
+  if(withOther) html += '<option value="Other">Other</option>';
+  return html;
+}
 
 function getTrophySpeciesFor(person){
-  if(!person || !person.trophy_species) return DEFAULT_TROPHY_SPECIES;
+  // Default when nobody's chosen anything yet: the first handful of species
+  // for that person's own country, not a hardcoded SA list regardless of
+  // where they actually fish
+  const countryDefault = getSpeciesListFor(person).slice(0, 5).map(s=>s.v);
+  if(!person || !person.trophy_species) return countryDefault;
   try{
     const arr = JSON.parse(person.trophy_species);
-    return (Array.isArray(arr) && arr.length) ? arr : DEFAULT_TROPHY_SPECIES;
-  }catch(e){ return DEFAULT_TROPHY_SPECIES; }
+    return (Array.isArray(arr) && arr.length) ? arr : countryDefault;
+  }catch(e){ return countryDefault; }
 }
 
 // Someone caught something outside the standard list (typed via "Other") —
@@ -2229,6 +2347,11 @@ function openEditCatch(catchId, catchObj){
   editCaught = !!c.caught;
   editPhotos = (c.photos || []).slice();
 
+  // Use whoever actually owns this catch's species list, not the editor's —
+  // matters when an admin is editing someone else's catch
+  const owner = people.find(p=>p.id === c.fishermanId) || (currentPerson && people.find(p=>p.id===currentPersonId));
+  document.getElementById('edit-catch-type').innerHTML = speciesOptionsHtml(owner, 'Select type', true);
+
   document.querySelectorAll('#edit-catch-toggle button').forEach(b=>{
     b.classList.toggle('active', (b.dataset.yn === 'yes') === editCaught);
   });
@@ -2397,7 +2520,7 @@ function makeCardCollapsible(cardId, bodyId, storageKey, defaultOpen){
 }
 
 function confirmDelete(what){
-  return window.confirm('Delete ' + what + '?\n\nThis cannot be undone.');
+  return window.confirm('Remove ' + what + '?\n\nThis cannot be undone.');
 }
 
 // A small circular avatar for an angler — their photo if they've set one,
@@ -2762,6 +2885,20 @@ async function sbGet(path){
   if(!res.ok) throw new Error('GET ' + path + ' failed: ' + res.status);
   return res.json();
 }
+// A genuine COUNT — transfers zero rows no matter how large the table gets,
+// via PostgREST's exact-count header rather than fetching everything just
+// to read .length. Built specifically so admin stats don't become one of
+// the things that slows down as the group grows.
+async function sbCount(path){
+  const res = await sbFetch(SUPABASE_URL + '/rest/v1/' + path, {
+    headers: sbHeaders({'Prefer':'count=exact', 'Range':'0-0'})
+  });
+  if(!res.ok) throw new Error('COUNT ' + path + ' failed: ' + res.status);
+  const range = res.headers.get('content-range'); // format: "0-0/123"
+  if(!range) return 0;
+  const total = range.split('/')[1];
+  return total === '*' ? 0 : parseInt(total, 10) || 0;
+}
 async function sbPost(table, body){
   const res = await sbFetch(SUPABASE_URL + '/rest/v1/' + table, {
     method:'POST',
@@ -3066,9 +3203,9 @@ function populateMyDetails(){
   const selected = getTrophySpeciesFor(p);
   const speciesEl = document.getElementById('details-trophy-species');
   if(speciesEl){
-    speciesEl.innerHTML = ALL_TROPHY_SPECIES.map(s=>`
+    speciesEl.innerHTML = getSpeciesListFor(p).map(s=>`
       <label class="check-row" style="flex-basis:calc(50% - 5px);">
-        <input type="checkbox" class="trophy-species-check" value="${escapeHtml(s)}" ${selected.includes(s) ? 'checked' : ''}> ${escapeHtml(s)}
+        <input type="checkbox" class="trophy-species-check" value="${escapeHtml(s.v)}" ${selected.includes(s.v) ? 'checked' : ''}> ${escapeHtml(s.l)}
       </label>`).join('');
   }
 }
@@ -3261,6 +3398,10 @@ document.getElementById('signup-btn').addEventListener('click', async ()=>{
       });
       st.textContent = 'Account created!';
     }
+    // Let admins know someone new has actually joined, rather than this
+    // only being discoverable by manually checking Admin: Users
+    try{ await sbRpc('notify_admins_new_signup', {p_fisherman_id: id}); }
+    catch(e){ console.error('admin signup notify failed', e); }
 
     renderAccountArea();
     await loadGearOptions();
@@ -4843,24 +4984,11 @@ function rodCardHtml(r){
         <div class="row2">
           <div class="field">
             <label>Type of fish</label>
-            <select class="catch-type" data-rod="${r}">
-              <option value="">Select type</option>
-              <option value="Carp">Carp</option>
-              <option value="Mirror Carp">Mirror Carp</option>
-              <option value="Grass Carp">Grass Carp</option>
-              <option value="Bass">Bass</option>
-              <option value="Barbel">Barbel (Catfish)</option>
-              <option value="Tilapia">Tilapia (Bream)</option>
-              <option value="Yellowfish">Yellowfish</option>
-              <option value="Mudfish">Mudfish (Moggel)</option>
-              <option value="Koi">Koi</option>
-              <option value="Eel">Eel</option>
-              <option value="Other">Other</option>
-            </select>
+            <select class="catch-type" data-rod="${r}">${speciesOptionsHtml(people.find(p=>p.id===currentPersonId), 'Select type', true)}</select>
             <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-27" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="field">
-            <label>Weight (kg)</label>
+            <label>Weight</label>
             <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4" autocomplete="pk-x11" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
@@ -4893,6 +5021,7 @@ function buildRodCards(){
 }
 
 function attachRodCardHandlers(){
+  document.querySelectorAll('.catch-weight').forEach(setupWeightUnitInput);
   document.querySelectorAll('[data-action]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       if(!currentPerson) return;
@@ -5172,12 +5301,23 @@ async function renderActiveCompetitionsBar(){
     comps = comps.filter(c=> competitionIsLive(c));
     if(!comps.length){ bar.style.display = 'none'; return; }
 
-    // Only the ones I'm actually in (or that are open to everyone)
-    const mine = [];
-    for(const c of comps){
-      const participants = await loadCompetitionParticipants(c.id);
-      if(participants.length === 0 || participants.includes(myId)) mine.push(c);
-    }
+    // One batched fetch for every live competition's participants, rather
+    // than a separate round-trip per competition — the Home screen loads
+    // every time the app opens, so this was the single most-hit N+1 in
+    // the app even at a handful of users
+    const compIds = comps.map(c=>c.id);
+    const participantRows = compIds.length
+      ? await sbGet('competition_participants?select=competition_id,fisherman_id&competition_id=in.('+compIds.join(',')+')')
+      : [];
+    const participantsByComp = {};
+    participantRows.forEach(r=>{
+      if(!participantsByComp[r.competition_id]) participantsByComp[r.competition_id] = [];
+      participantsByComp[r.competition_id].push(r.fisherman_id);
+    });
+    const mine = comps.filter(c=>{
+      const participants = participantsByComp[c.id] || [];
+      return participants.length === 0 || participants.includes(myId);
+    });
     if(!mine.length){ bar.style.display = 'none'; return; }
 
     // While a session is running the choice is locked, so just show status
@@ -5754,7 +5894,7 @@ function showConfirmation(entry){
   let html = `<h3>${entry.caught ? 'Caught a fish?' : 'No catch?'}</h3>`;
   html += `<p><b>${RID_LABEL[entry.rod]}</b>${entry.caught ? ' · '+escapeHtml(entry.hook) : ''}${entry.rodIdentifier ? ' · '+escapeHtml(entry.rodIdentifier) : ''}</p>`;
   if(entry.caught){
-    html += `<p>${escapeHtml(entry.type||'Fish')} — <b>${entry.weight}kg</b></p>`;
+    html += `<p>${escapeHtml(entry.type||'Fish')} — <b>${formatWeight(entry.weight)}</b></p>`;
   }
   // Make it obvious when a catch has been backdated rather than logged now
   const entryDate = new Date(entry.time);
@@ -5919,7 +6059,7 @@ function catchDetailHtml(c, editable, removable){
       </span>
     </div>`;
   if(c.caught){
-    html += `<div class="pc-line">${escapeHtml(c.type||'Fish')} — ${c.weight}kg</div>`;
+    html += `<div class="pc-line">${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}</div>`;
   }
   html += `<div class="pc-line muted">${escapeHtml(dateStr)} &middot; Time of day: ${timeStr} &middot; Rod timer: ${timerStr}</div>`;
   if(c.rig){
@@ -5977,7 +6117,7 @@ function buildInsightsHtml(catches, venues, sessions){
   const avgSoak = withTimer.length ? withTimer.reduce((s,c)=>s+c.timerElapsed,0)/withTimer.length : 0;
   html += `<div class="profile-summary">
       <div><b>${caught.length}</b>catches</div>
-      <div><b>${totalWeight.toFixed(1)}kg</b>total</div>
+      <div><b>${formatWeight(totalWeight)}</b>total</div>
       <div><b>${biggest ? biggest.weight+'kg' : '—'}</b>biggest</div>
       <div><b>${fmtDuration(avgSoak)}</b>avg soak</div>
     </div>`;
@@ -6044,7 +6184,7 @@ function buildInsightsHtml(catches, venues, sessions){
         <div class="who"><b>${escapeHtml(r.key)}</b></div>
         <div class="actions">
           <span class="pill">${r.count} fish</span>
-          <span class="pill">${r.weight.toFixed(1)}kg</span>
+          <span class="pill">${formatWeight(r.weight)}</span>
           ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
         </div>
       </li>`;
@@ -6166,7 +6306,7 @@ function buildInsightsHtml(catches, venues, sessions){
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div style="display:flex;gap:4px;flex-wrap:wrap;">
             <span class="pill">${r.count} fish</span>
-            <span class="pill">${r.weight.toFixed(1)}kg</span>
+            <span class="pill">${formatWeight(r.weight)}</span>
             ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
           </div>
           ${venueObj ? `<div style="display:flex;gap:6px;">
@@ -6221,12 +6361,12 @@ function buildInsightsHtml(catches, venues, sessions){
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div style="display:flex;gap:4px;flex-wrap:wrap;">
             <span class="pill">${s.count} fish</span>
-            ${s.weight ? `<span class="pill">${s.weight.toFixed(1)}kg</span>` : ''}
+            ${s.weight ? `<span class="pill">${formatWeight(s.weight)}</span>` : ''}
             <span class="pill">${fmtDuration(s.duration)}</span>
           </div>
           <div style="display:flex;gap:6px;">
             <button type="button" class="mini-btn" data-edit-session="${s.id}">Edit</button>
-            <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Delete</button>
+            <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Remove</button>
           </div>
         </div>
         ${s.log ? `<div class="pc-line muted" style="margin-top:6px;white-space:pre-wrap;">📝 ${escapeHtml(s.log)}</div>` : ''}
@@ -6470,8 +6610,8 @@ function openVenueCatches(venue, venueCatches){
 
   let html = `<div class="profile-summary">
       <div><b>${sorted.length}</b>fish</div>
-      <div><b>${total.toFixed(1)}kg</b>total</div>
-      <div><b>${avg.toFixed(1)}kg</b>average</div>
+      <div><b>${formatWeight(total)}</b>total</div>
+      <div><b>${formatWeight(avg)}</b>average</div>
     </div>`;
   html += sorted.map(c=>catchDetailHtml(c, false)).join('');
   body.innerHTML = html;
@@ -6508,8 +6648,8 @@ function renderVenueMap(venues, allCatches){
 
     const summary = here.length
       ? `<div style="font-size:12px;margin-top:4px;">
-           <b>${here.length}</b> fish · <b>${total.toFixed(1)}kg</b>
-           ${pb ? `<br>PB: <b>${pb.weight}kg</b> ${escapeHtml(pb.type||'')}` : ''}
+           <b>${here.length}</b> fish · <b>${formatWeight(total)}</b>
+           ${pb ? `<br>PB: <b>${formatWeight(pb.weight)}</b> ${escapeHtml(pb.type||'')}` : ''}
            ${bestRig ? `<br>Best rig: ${escapeHtml(bestRig)}` : ''}
          </div>`
       : `<div style="font-size:12px;margin-top:4px;color:#666;">No fish logged here yet.</div>`;
@@ -6521,11 +6661,11 @@ function renderVenueMap(venues, allCatches){
         ${summary}
         <div style="display:flex;gap:6px;margin-top:8px;justify-content:center;flex-wrap:wrap;">
           ${here.length ? `<button type="button" class="map-venue-catches" data-venue-id="${v.id}"
-            style="border:1px solid #999;background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">View catches</button>` : ''}
+            style="border:1px solid #999;background:#fff;border-radius:6px;padding:10px 14px;font-size:13px;cursor:pointer;">View catches</button>` : ''}
           <button type="button" class="map-venue-edit" data-venue-id="${v.id}"
-            style="border:1px solid #999;background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Edit</button>
+            style="border:1px solid #999;background:#fff;border-radius:6px;padding:10px 14px;font-size:13px;cursor:pointer;">Edit</button>
           <button type="button" class="map-venue-remove" data-venue-id="${v.id}"
-            style="border:1px solid #c33;background:#fff;color:#c33;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Remove</button>
+            style="border:1px solid #c33;background:#fff;color:#c33;border-radius:6px;padding:10px 14px;font-size:13px;cursor:pointer;">Remove</button>
         </div>
       </div>`;
     return L.marker([v.latitude, v.longitude]).bindPopup(popupHtml);
@@ -6631,8 +6771,69 @@ function applyTheme(theme){
   }
   try{ localStorage.setItem('pk_fishing_theme', theme); }catch(e){}
 }
+// Pairs a kg input with an lb/oz pair shown instead of it when that's the
+// preferred unit. Works on any weight input, ID-based or one of several
+// dynamically-created ones sharing a class. The kg field stays the real
+// value everywhere else in the app reads from — this only changes what's
+// visible and editable, converting live as you type.
+function setupWeightUnitInput(kgInput){
+  if(!kgInput || kgInput.dataset.weightUnitReady) return;
+  kgInput.dataset.weightUnitReady = 'true';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'weight-lboz-wrap';
+  wrap.style.cssText = 'display:none;gap:8px;margin-top:6px;';
+  wrap.innerHTML = `
+    <input type="number" step="1" min="0" max="200" class="weight-lb-input" placeholder="lb" autocomplete="pk-lb" role="presentation" style="flex:1;">
+    <input type="number" step="1" min="0" max="15" class="weight-oz-input" placeholder="oz" autocomplete="pk-oz" role="presentation" style="flex:1;">
+  `;
+  kgInput.insertAdjacentElement('afterend', wrap);
+  const lbInput = wrap.querySelector('.weight-lb-input');
+  const ozInput = wrap.querySelector('.weight-oz-input');
+
+  function syncFromLbOz(){
+    if(lbInput.value === '' && ozInput.value === ''){ kgInput.value = ''; return; }
+    const kg = lbOzToKg(lbInput.value, ozInput.value);
+    kgInput.value = kg ? (Math.round(kg*1000)/1000) : '';
+  }
+  lbInput.addEventListener('input', syncFromLbOz);
+  ozInput.addEventListener('input', syncFromLbOz);
+
+  function applyMode(){
+    if(getWeightUnit() === 'lb'){
+      kgInput.style.display = 'none';
+      wrap.style.display = 'flex';
+      if(kgInput.value){
+        const {lb, oz} = kgToLbOz(parseFloat(kgInput.value));
+        lbInput.value = lb; ozInput.value = oz;
+      }
+    }else{
+      kgInput.style.display = '';
+      wrap.style.display = 'none';
+    }
+  }
+  applyMode();
+  kgInput._applyWeightUnitMode = applyMode;
+}
+// Re-applies to every weight input currently on the page — call this
+// whenever the unit preference changes, or whenever a form that contains
+// one of these fields gets freshly rendered (a reset can leave old lb/oz
+// values sitting there if we don't clear them here too)
+function refreshAllWeightUnitInputs(){
+  document.querySelectorAll('[data-weight-unit-ready="true"]').forEach(kgInput=>{
+    if(kgInput._applyWeightUnitMode) kgInput._applyWeightUnitMode();
+  });
+}
+
 document.getElementById('theme-select').addEventListener('change', (e)=>{
   applyTheme(e.target.value);
+});
+document.getElementById('weight-unit-select').addEventListener('change', (e)=>{
+  setWeightUnit(e.target.value);
+  refreshAllWeightUnitInputs();
+  // Anything already rendered showing a weight (Insights, profile, feed)
+  // needs to re-render to pick up the new format
+  if(currentPerson) renderAll();
 });
 
 // ---------- Onboarding ----------
@@ -7231,7 +7432,7 @@ async function openProfile(personId){
   const biggestCatch = caughtOnly.reduce((b,c)=> (!b || (c.weight||0) > (b.weight||0)) ? c : b, null);
   html += `<div class="profile-summary">
       <div><b>${caughtOnly.length}</b>catches</div>
-      <div><b>${totalWeight.toFixed(2)}kg</b>total</div>
+      <div><b>${formatWeight(totalWeight)}</b>total</div>
       <div><b>${biggestCatch ? biggestCatch.weight+'kg' : '—'}</b>biggest</div>
     </div>`;
   const trophySpecies = getTrophySpeciesFor(p);
@@ -7259,8 +7460,8 @@ async function openProfile(personId){
           ${pbPhoto ? `<img src="${escapeHtml(pbPhoto)}" alt="${escapeHtml(s.species)} PB" class="pb-thumb" data-pb-photo="${escapeHtml(pbPhoto)}" style="width:100%;height:90px;object-fit:cover;border-radius:8px;margin-bottom:6px;cursor:pointer;">` : ''}
           <div class="pc-head">${escapeHtml(s.species)}</div>
           <div class="pc-line"><b>${s.count}</b> caught</div>
-          <div class="pc-line muted">${s.totalWeight.toFixed(1)}kg total · ${s.avgWeight.toFixed(1)}kg avg</div>
-          ${s.pb ? `<button type="button" class="mini-btn pb-toggle-btn" data-pb-catch="${s.pb.id}" style="margin-top:6px;">PB: ${s.pb.weight}kg</button>
+          <div class="pc-line muted">${formatWeight(s.totalWeight)} total · ${formatWeight(s.avgWeight)} avg</div>
+          ${s.pb ? `<button type="button" class="mini-btn pb-toggle-btn" data-pb-catch="${s.pb.id}" style="margin-top:6px;">PB: ${formatWeight(s.pb.weight)}</button>
           <div class="pc-line muted" style="margin-top:2px;">${escapeHtml(pbDate)}</div>` : ''}
         </div>
       `;
@@ -7580,7 +7781,7 @@ function showNewPBFlash(typeLabel, weight){
   el.innerHTML = `<div class="pb-flash-inner">
       <div class="pb-flash-trophy">🏆</div>
       <div class="pb-flash-title">NEW PERSONAL BEST!</div>
-      <div class="pb-flash-detail">${escapeHtml(typeLabel)} — ${weight}kg</div>
+      <div class="pb-flash-detail">${escapeHtml(typeLabel)} — ${formatWeight(weight)}</div>
     </div>`;
   document.body.appendChild(el);
   setTimeout(()=> el.remove(), 2800);
@@ -7671,7 +7872,7 @@ async function renderPhotoComments(){
       <div class="comment-msg" data-comment-msg="${c.id}">${escapeHtml(c.message)}</div>
       ${canManage ? `<div style="display:flex;gap:10px;margin-top:4px;">
         ${isMine ? `<button type="button" class="comment-edit-link" data-comment-edit="${c.id}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">Edit</button>` : ''}
-        <button type="button" class="comment-delete-link" data-comment-delete="${c.id}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">Delete</button>
+        <button type="button" class="comment-delete-link" data-comment-delete="${c.id}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">Remove</button>
       </div>` : ''}
     </div>`;
   }).join('');
@@ -7820,7 +8021,7 @@ function renderCatchList(rod){
     : [];
   if(entries.length===0){ el.innerHTML = '<div class="empty">No entries yet this session.</div>'; return; }
   el.innerHTML = entries.slice().reverse().map(c=>{
-    const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${c.weight}kg (${escapeHtml(c.hook||'')})` : `No catch`;
+    const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)} (${escapeHtml(c.hook||'')})` : `No catch`;
     const time = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     const photoCount = (c.photos && c.photos.length) || 0;
     if(photoCount) photoGalleryCache[c.id] = c.photos;
@@ -8058,7 +8259,7 @@ async function renderLeaderboard(){
       : '';
     const statLine = sortMode === 'fish'
       ? `${s.biggest? '<b>'+s.biggest.weight+'kg</b> '+escapeHtml(s.biggest.type||'') : 'No fish yet'}`
-      : `<b>${s.totalWeight.toFixed(2)}kg</b> total`;
+      : `<b>${formatWeight(s.totalWeight)}</b> total`;
     return `
     <div class="lb-item">
       <div class="lb-rank">${i+1}</div>
@@ -8467,7 +8668,7 @@ async function renderHome(){
           ${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 34)}
           <div style="flex:1;">
             <div class="pc-line"><b>${escapeHtml(it.fishermanName)}</b> · ${escapeHtml(it.type||'Fish')}</div>
-            <div class="pc-line muted">${it.weight}kg · ${formatTimeAgo(it.time)}</div>
+            <div class="pc-line muted">${formatWeight(it.weight)} · ${formatTimeAgo(it.time)}</div>
           </div>
           ${it.likes ? `<span class="pc-line muted">👌${it.likes}</span>` : ''}
         </div>`).join('')
@@ -8576,7 +8777,7 @@ async function renderFeed(refetch){
       : '';
     return `<div class="profile-catch">
       <div class="pc-head" style="display:flex;align-items:center;gap:8px;">${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 24)}${escapeHtml(it.fishermanName)}${feedRodLabel(it)}</div>
-      <div class="pc-line">${escapeHtml(it.type||'Fish')} — <b>${it.weight}kg</b></div>
+      <div class="pc-line">${escapeHtml(it.type||'Fish')} — <b>${formatWeight(it.weight)}</b></div>
       <div class="pc-line muted">${escapeHtml(it.dam||'')} · ${formatTimeAgo(it.time)}${it.likes ? ' · 👌'+it.likes : ''}</div>
       ${photoHtml}
     </div>`;
@@ -8785,6 +8986,11 @@ async function renderCompetitions(){
   if(isSignedIn()){
     gate.style.display = 'none';
     createCard.style.display = 'block';
+    const fishtypeSel = document.getElementById('competition-fishtype');
+    if(fishtypeSel && !fishtypeSel.options.length){
+      const me = people.find(p=>p.user_id === session.user.id);
+      fishtypeSel.innerHTML = speciesOptionsHtml(me, 'Any species', false);
+    }
     renderCompetitionSelectedPills();
     renderCompetitionAnglerSearch();
   }else{
@@ -8918,14 +9124,72 @@ async function renderCompetitions(){
 }
 
 // ---------- Admin tab ----------
+async function renderAdminOverview(){
+  const statsEl = document.getElementById('admin-overview-stats');
+  const signupsEl = document.getElementById('admin-overview-signups');
+  const catchesEl = document.getElementById('admin-overview-catches');
+  if(!statsEl) return;
+
+  try{
+    const weekAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+    // Real counts, not full-table fetches — none of these transfer a
+    // single row of data no matter how large the group gets
+    const [totalAnglers, catchesThisWeek, activeSessions] = await Promise.all([
+      sbCount('fishermen?select=id'),
+      sbCount('catches?select=id&caught=eq.true&time=gte.'+weekAgo),
+      sbCount('sessions?select=id&ended_at=is.null')
+    ]);
+    statsEl.innerHTML = `
+      <div><b>${totalAnglers}</b>anglers</div>
+      <div><b>${catchesThisWeek}</b>catches this week</div>
+      <div><b>${activeSessions}</b>session${activeSessions===1?'':'s'} running now</div>`;
+  }catch(e){
+    console.error('admin overview stats failed', e);
+    statsEl.innerHTML = '<div class="empty">Could not load stats.</div>';
+  }
+
+  try{
+    // Nulls (anyone who signed up before this feature existed) sort last,
+    // so genuinely recent joins always show first regardless of table size
+    const rows = await sbGet('fishermen?select=id,name,created_at&order=created_at.desc.nullslast&limit=5');
+    signupsEl.innerHTML = rows.length ? rows.map(r=>{
+      const when = r.created_at ? new Date(r.created_at).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}) : 'Before join dates were tracked';
+      return `<div class="profile-catch"><div class="pc-head">${escapeHtml(r.name)}</div><div class="pc-line muted">${escapeHtml(when)}</div></div>`;
+    }).join('') : '<div class="empty">No anglers yet.</div>';
+  }catch(e){
+    console.error('admin overview signups failed', e);
+    signupsEl.innerHTML = '<div class="empty">Could not load recent signups.</div>';
+  }
+
+  try{
+    const rows = await sbGet('catches?select=id,fisherman_id,fish_type,weight,time&caught=eq.true&order=time.desc&limit=5');
+    // Names come from the people array already in memory — no second
+    // round of queries needed just to label who caught what
+    catchesEl.innerHTML = rows.length ? rows.map(c=>{
+      const angler = people.find(p=>p.id===c.fisherman_id);
+      const when = new Date(c.time).toLocaleDateString([], {day:'numeric', month:'short'});
+      return `<div class="profile-catch">
+        <div class="pc-head">${escapeHtml(angler ? angler.name : 'Unknown')} — ${escapeHtml(c.fish_type||'Fish')}</div>
+        <div class="pc-line muted">${formatWeight(c.weight)} · ${escapeHtml(when)}</div>
+      </div>`;
+    }).join('') : '<div class="empty">No catches logged yet.</div>';
+  }catch(e){
+    console.error('admin overview catches failed', e);
+    catchesEl.innerHTML = '<div class="empty">Could not load recent catches.</div>';
+  }
+}
+
 async function renderAdminTab(){
   if(!isSuperUser()) return;
 
+  makeCardCollapsible('admin-overview-card', 'admin-overview-body', 'pk_fishing_collapse_admin_overview', true);
   makeCardCollapsible('admin-users-card', 'admin-users-body', 'pk_fishing_collapse_admin_users');
   makeCardCollapsible('admin-competitions-card', 'admin-competitions-body', 'pk_fishing_collapse_admin_comps');
   makeCardCollapsible('admin-tackle-card', 'admin-tackle-card-body', 'pk_fishing_collapse_admin_tackle');
   makeCardCollapsible('admin-rigs-card', 'admin-rigs-card-body', 'pk_fishing_collapse_admin_rigs');
   makeCardCollapsible('admin-catches-card', 'admin-catches-body', 'pk_fishing_collapse_admin_catches');
+
+  renderAdminOverview();
 
   // Users
   const userSel = document.getElementById('admin-user-select');
@@ -9123,7 +9387,7 @@ document.getElementById('admin-catch-angler-select').addEventListener('change', 
   catchSel.disabled = false;
   catchSel.innerHTML = '<option value="">Choose...</option>' + adminCatchList.map(c=>{
     const time = new Date(c.time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-    const label = c.caught ? `${c.type||'Fish'} — ${c.weight}kg (${time})` : `No catch (${time})`;
+    const label = c.caught ? `${c.type||'Fish'} — ${formatWeight(c.weight)} (${time})` : `No catch (${time})`;
     return `<option value="${c.id}">${escapeHtml(label)}</option>`;
   }).join('');
 });
@@ -9329,8 +9593,14 @@ await loadTackleCategoryOptions();
   try{
     const themeSel = document.getElementById('theme-select');
     if(themeSel) themeSel.value = localStorage.getItem('pk_fishing_theme') || 'system';
+    const unitSel = document.getElementById('weight-unit-select');
+    if(unitSel) unitSel.value = getWeightUnit();
   }catch(e){}
   makeCardCollapsible('appearance-card', 'appearance-body', 'pk_fishing_collapse_appearance');
+  ['past-catch-weight','edit-catch-weight','admin-catch-weight'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) setupWeightUnitInput(el);
+  });
 
   // Return to whichever tab you were last on. Done last, so tabs hidden by
   // sign-in state (Timers, Insights) have already been resolved.
