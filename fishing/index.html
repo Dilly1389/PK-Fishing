@@ -168,6 +168,15 @@
     border-top:2px solid transparent;
   }
   nav.tabs button .tab-icon{font-size:19px;line-height:1;}
+  /* Timers sits center and is genuinely the tab you reach for most while
+     fishing — a filled, slightly raised icon marks it as the primary one,
+     the same convention many apps use for their most-repeated action */
+  nav.tabs button[data-tab="timers"] .tab-icon{
+    background:var(--rust);color:#fff;width:38px;height:38px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:20px;
+    margin-top:-14px;box-shadow:0 2px 6px rgba(0,0,0,0.3);
+  }
+  nav.tabs button[data-tab="timers"]{padding-top:2px;}
   nav.tabs button .tab-label{font-size:10px;font-weight:600;letter-spacing:0.02em;}
   nav.tabs button.active{color:#fff;border-top-color:var(--rust);}
 
@@ -186,6 +195,13 @@
     nav.tabs button.active{border-top-color:transparent;border-bottom-color:var(--rust);}
     nav.tabs button .tab-icon{font-size:16px;}
     nav.tabs button .tab-label{font-size:13px;}
+    /* The elevated circular treatment is a bottom-bar, thumb-reach
+       convention — doesn't apply to a desktop top bar, so plain here */
+    nav.tabs button[data-tab="timers"] .tab-icon{
+      background:none;color:inherit;width:auto;height:auto;border-radius:0;
+      margin-top:0;box-shadow:none;font-size:16px;
+    }
+    nav.tabs button[data-tab="timers"]{padding-top:14px;}
     main{max-width:900px;margin:0 auto;padding:20px 20px 40px;}
     .app-footer{padding-bottom:24px;}
     /* The More menu is a set of equal cards, so two columns suits it.
@@ -218,7 +234,7 @@
     display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 12px;
     background:var(--card-bg);border:1px solid var(--line);border-radius:var(--radius);
   }
-  .angler-bar label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;flex-shrink:0;}
+  .angler-bar label{font-size:13px;color:var(--muted);font-weight:600;flex-shrink:0;}
   .angler-bar select{
     flex:1;min-width:0;padding:9px 8px;border-radius:8px;border:1px solid var(--line);
     background:var(--card-bg);color:var(--ink);font-size:15px;font-family:inherit;
@@ -285,12 +301,14 @@
   .start-time-label{font-size:11.5px;color:var(--muted);}
   .btn-pause{background:var(--khaki);color:var(--ink);}
   .btn-reset{background:transparent;color:var(--muted);border:1px solid var(--line);}
-  .btn-recast{background:transparent;color:var(--dam);border:1px solid var(--dam);}
+  .btn-recast{
+    background:transparent;color:var(--dam);border:1px solid var(--dam);
+    flex:0 0 auto;min-width:0;padding:6px 10px;font-size:11.5px;
+  }
 
   .field{margin-bottom:12px;}
   .field label{
-    display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
-    font-weight:700;color:var(--muted);margin-bottom:5px;
+    display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:5px;
   }
   /* Checkbox rows — used both inside a .field and as standalone pickers
      like the whole-box share list, so this isn't scoped to .field */
@@ -319,7 +337,7 @@
   .row2 > div{flex:1;min-width:0;}
 
   .divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
-  .sub-heading{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 10px;}
+  .sub-heading{font-size:13px;font-weight:600;color:var(--muted);margin:0 0 10px;}
 
   .catch-toggle{display:flex;gap:8px;margin-bottom:12px;}
   .catch-photo-preview{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;}
@@ -524,6 +542,8 @@
   }
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
 </head>
 <body>
 <div class="app">
@@ -545,8 +565,8 @@
 
   <nav class="tabs" id="nav-tabs">
     <button data-tab="home" class="active"><span class="tab-icon">👌</span><span class="tab-label">Home</span></button>
-    <button data-tab="timers" id="timers-tab-btn" style="display:none;"><span class="tab-icon">⏱</span><span class="tab-label">Timers</span></button>
     <button data-tab="schedule"><span class="tab-icon">👤</span><span class="tab-label">Profile</span></button>
+    <button data-tab="timers" id="timers-tab-btn" style="display:none;"><span class="tab-icon">⏱</span><span class="tab-label">Timers</span></button>
     <button data-tab="insights" id="insights-tab-btn" style="display:none;"><span class="tab-icon">📊</span><span class="tab-label">Insights</span></button>
     <button data-tab="more"><span class="tab-icon">☰</span><span class="tab-label">More</span></button>
   </nav>
@@ -570,31 +590,31 @@
     <!-- MORE -->
     <div class="panel" id="panel-more">
       <button type="button" class="more-link" data-goto="feed">
-        <span class="more-icon">👥</span>
+        <span class="more-icon"><i class="ti ti-users" aria-hidden="true"></i></span>
         <span><b>Friends</b><br><span class="pc-line muted">Recent catches from anglers you follow</span></span>
       </button>
       <button type="button" class="more-link" data-goto="tackle">
-        <span class="more-icon">🎣</span>
+        <span class="more-icon"><i class="ti ti-fish" aria-hidden="true"></i></span>
         <span><b>Tackle Box</b><br><span class="pc-line muted">Your rods, reels, bait, dips and rigs</span></span>
       </button>
       <button type="button" class="more-link" data-goto="competitions">
-        <span class="more-icon">🏆</span>
+        <span class="more-icon"><i class="ti ti-trophy" aria-hidden="true"></i></span>
         <span><b>Competitions</b><br><span class="pc-line muted">Create, join and follow live standings</span></span>
       </button>
       <button type="button" class="more-link" data-goto="admin" id="more-admin-link" style="display:none;">
-        <span class="more-icon">⚙️</span>
+        <span class="more-icon"><i class="ti ti-settings" aria-hidden="true"></i></span>
         <span><b>Admin</b><br><span class="pc-line muted">Manage anglers, tackle, rigs and catches</span></span>
       </button>
       <button type="button" class="more-link" data-goto="whatsnew">
-        <span class="more-icon">✨</span>
+        <span class="more-icon"><i class="ti ti-sparkles" aria-hidden="true"></i></span>
         <span><b>What's New</b><br><span class="pc-line muted">Recent changes and additions to the app</span></span>
       </button>
       <button type="button" class="more-link" data-goto="terms">
-        <span class="more-icon">📄</span>
+        <span class="more-icon"><i class="ti ti-file-text" aria-hidden="true"></i></span>
         <span><b>Terms of Service</b><br><span class="pc-line muted">The rules for using PK Fishing</span></span>
       </button>
       <button type="button" class="more-link" data-goto="privacy">
-        <span class="more-icon">🔒</span>
+        <span class="more-icon"><i class="ti ti-lock" aria-hidden="true"></i></span>
         <span><b>Privacy Policy</b><br><span class="pc-line muted">What we store, why, and your rights</span></span>
       </button>
     </div>
@@ -628,7 +648,7 @@
         <p class="pc-line muted">Sign in from the Profile tab to use rod timers.</p>
       </section>
       <div id="timers-content" style="display:none;">
-        <button type="button" class="mini-btn" id="timers-help-btn" style="margin-bottom:14px;">❓ How Timers works</button>
+        <button type="button" class="mini-btn" id="timers-help-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How Timers works</button>
 
         <div class="angler-bar" style="display:none;">
           <label>Angler</label>
@@ -668,7 +688,7 @@
         <div id="session-weather-bar" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:14px;font-size:13px;color:var(--ink);"></div>
 
         <div id="session-log-card" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;">
-          <h2 style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;color:var(--muted);margin:0 0 5px;">Session Log</h2>
+          <h2 style="font-size:14px;font-weight:600;color:var(--muted);margin:0 0 5px;">Session log</h2>
           <div id="session-log-body">
             <textarea maxlength="2000" id="session-log-text" placeholder="How's it going? Water colour, wind, what's working, anything worth remembering..." autocomplete="pk-session-log" style="width:100%;min-height:60px;padding:8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;background:var(--paper);color:var(--ink);resize:vertical;" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
@@ -684,8 +704,8 @@
 
     <!-- PROFILE -->
     <div class="panel" id="panel-schedule">
-      <button type="button" class="mini-btn" id="show-onboarding-btn" style="margin-bottom:14px;">❓ How it works</button>
-      <button type="button" class="mini-btn" id="profile-help-btn" style="margin-bottom:14px;">❓ How the Profile works</button>
+      <button type="button" class="mini-btn" id="show-onboarding-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How it works</button>
+      <button type="button" class="mini-btn" id="profile-help-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How the Profile works</button>
 
       <section class="card" id="account-card">
         <div id="auth-forms">
@@ -696,7 +716,7 @@
               <p class="pc-line muted" style="margin:0;">Create your account</p>
             </div>
             <div class="field">
-              <label>Display Name / Nickname</label>
+              <label>Display name / nickname</label>
               <input type="text" maxlength="100" id="signup-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call" autocomplete="pk-field-2" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
             <div class="field">
@@ -737,7 +757,7 @@
             <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:14px;">
               <input type="checkbox" id="keep-signed-in" checked> Keep me signed in on this device
             </label>
-            <button class="primary-btn" id="signin-btn">Sign In</button>
+            <button class="primary-btn" id="signin-btn">Sign in</button>
             <div class="status" id="signin-status"></div>
 
             <div style="display:flex;align-items:center;gap:10px;margin:16px 0;">
@@ -757,7 +777,7 @@
             <div class="status" id="google-signin-status"></div>
 
             <p class="pc-line muted" style="margin-top:16px;text-align:center;">
-              Don't have an account? <button type="button" id="show-signup-link" style="background:none;border:none;color:var(--dam);font-weight:700;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;">Sign Up</button>
+              Don't have an account? <button type="button" id="show-signup-link" style="background:none;border:none;color:var(--dam);font-weight:700;cursor:pointer;font-family:inherit;font-size:inherit;padding:0;">Sign up</button>
             </p>
             <p class="pc-line muted" style="margin-top:6px;text-align:center;">
               <button type="button" id="forgot-password-link" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;font-family:inherit;padding:0;text-decoration:underline;">Forgot password?</button>
@@ -787,14 +807,14 @@
             <label>Profile picture</label>
             <img id="details-avatar-preview" src="" alt="Your profile picture" style="display:none;width:88px;height:88px;border-radius:50%;object-fit:cover;margin:4px auto 10px;border:2px solid var(--line);">
             <div style="display:flex;gap:8px;justify-content:center;margin-bottom:6px;">
-              <button type="button" class="mini-btn photo-camera-btn" data-target="details-avatar-input">📷 Take Photo</button>
-              <button type="button" class="mini-btn photo-gallery-btn" data-target="details-avatar-input">🖼️ Gallery</button>
+              <button type="button" class="mini-btn photo-camera-btn" data-target="details-avatar-input"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
+              <button type="button" class="mini-btn photo-gallery-btn" data-target="details-avatar-input"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
             </div>
             <div class="photo-filename" data-target="details-avatar-input" style="font-size:12px;color:var(--muted);"></div>
             <input type="file" accept="image/*" id="details-avatar-input" style="display:none;">
           </div>
           <div class="field">
-            <label>Display Name / Nickname</label>
+            <label>Display name / nickname</label>
             <input type="text" maxlength="100" id="details-name" placeholder="Sultan of Sluis, Bait Baron, Chief Groundbait Officer... your call" autocomplete="pk-field-3" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="row2">
@@ -860,9 +880,9 @@
           <input type="text" maxlength="100" id="past-catch-venue" placeholder="Where was it caught?" autocomplete="pk-venue-2" name="pk-venue-field-2" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           <div id="venue-suggestion-list-past" style="display:none;border:1px solid var(--line);border-radius:8px;margin-top:4px;overflow:hidden;"></div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
-            <button type="button" class="mini-btn" id="past-catch-venue-lookup">📍 Search for it</button>
-            <button type="button" class="mini-btn" id="past-catch-venue-pin">🗺️ Drop a pin</button>
-            <button type="button" class="mini-btn" id="past-catch-venue-coords">⌖ Enter coordinates</button>
+            <button type="button" class="mini-btn" id="past-catch-venue-lookup"><i class="ti ti-search" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Search for it</button>
+            <button type="button" class="mini-btn" id="past-catch-venue-pin"><i class="ti ti-map-pin" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Drop a pin</button>
+            <button type="button" class="mini-btn" id="past-catch-venue-coords"><i class="ti ti-crosshair" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Enter coordinates</button>
           </div>
           <div id="past-catch-venue-results" style="margin-top:6px;"></div>
           <div id="past-catch-coord-entry" style="display:none;margin-top:6px;">
@@ -876,8 +896,8 @@
         <div class="field">
           <label>Photo (optional)</label>
           <div style="display:flex;gap:8px;margin-bottom:6px;">
-            <button type="button" class="mini-btn photo-camera-btn" data-target="past-catch-photo">📷 Take Photo</button>
-            <button type="button" class="mini-btn photo-gallery-btn" data-target="past-catch-photo">🖼️ Gallery</button>
+            <button type="button" class="mini-btn photo-camera-btn" data-target="past-catch-photo"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
+            <button type="button" class="mini-btn photo-gallery-btn" data-target="past-catch-photo"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
           </div>
           <div class="photo-filename" data-target="past-catch-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div>
           <input type="file" accept="image/*" id="past-catch-photo" style="display:none;">
@@ -1061,7 +1081,7 @@
       </section>
 
       <section class="card" id="admin-users-card">
-        <h2>Admin: Users</h2>
+        <h2>Admin: users</h2>
         <div id="admin-users-body">
           <div class="field">
             <label>Select angler</label>
@@ -1132,14 +1152,14 @@
       </section>
 
       <section class="card" id="admin-rigs-card">
-        <h2>Admin: Rigs</h2>
+        <h2>Admin: rigs</h2>
         <div id="admin-rigs-card-body">
           <div id="admin-rigs-list"><div class="empty">Loading...</div></div>
         </div>
       </section>
 
       <section class="card" id="admin-catches-card">
-        <h2>Admin: Catches</h2>
+        <h2>Admin: catches</h2>
         <div id="admin-catches-body">
           <div class="field">
             <label>Angler</label>
@@ -1180,7 +1200,7 @@
       </section>
 
       <div id="tackle-content" style="display:none;">
-        <button type="button" class="mini-btn" id="tackle-help-btn" style="margin-bottom:14px;">❓ How the Tackle Box works</button>
+        <button type="button" class="mini-btn" id="tackle-help-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How the Tackle Box works</button>
 
         <section class="card" id="add-tackle-card">
           <h2>Add tackle item</h2>
@@ -1247,7 +1267,7 @@
           </div>
           <div class="field">
             <label>Photo (optional)</label>
-            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="tackle-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="tackle-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="tackle-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="tackle-photo" style="display:none;">
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="tackle-photo"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="tackle-photo"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button></div><div class="photo-filename" data-target="tackle-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="tackle-photo" style="display:none;">
           </div>
           <div class="field">
             <label>Share with friends (mutual follows only)</label>
@@ -1285,7 +1305,7 @@
           </div>
           <div class="field">
             <label>Photo (optional)</label>
-            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="rig-photo">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="rig-photo">🖼️ Gallery</button></div><div class="photo-filename" data-target="rig-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="rig-photo" style="display:none;">
+            <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="rig-photo"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="rig-photo"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button></div><div class="photo-filename" data-target="rig-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="rig-photo" style="display:none;">
           </div>
           <button class="primary-btn" id="rig-create-btn">Create rig</button>
           <div class="status" id="rig-create-status"></div>
@@ -1407,8 +1427,8 @@
     </div>
     <p class="pc-line muted" id="venue-edit-coords" style="margin-bottom:6px;"></p>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-      <button type="button" class="mini-btn" id="venue-edit-lookup">📍 Search for it</button>
-      <button type="button" class="mini-btn" id="venue-edit-pin">🗺️ Drop a pin</button>
+      <button type="button" class="mini-btn" id="venue-edit-lookup"><i class="ti ti-search" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Search for it</button>
+      <button type="button" class="mini-btn" id="venue-edit-pin"><i class="ti ti-map-pin" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Drop a pin</button>
     </div>
     <div id="venue-edit-results" style="margin-bottom:10px;"></div>
     <div class="field">
@@ -1430,8 +1450,8 @@
     </div>
     <p class="pc-line muted" id="session-edit-coords" style="margin-bottom:6px;"></p>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-      <button type="button" class="mini-btn" id="session-edit-lookup">📍 Search for it</button>
-      <button type="button" class="mini-btn" id="session-edit-pin">🗺️ Drop a pin</button>
+      <button type="button" class="mini-btn" id="session-edit-lookup"><i class="ti ti-search" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Search for it</button>
+      <button type="button" class="mini-btn" id="session-edit-pin"><i class="ti ti-map-pin" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Drop a pin</button>
     </div>
     <div id="session-edit-results" style="margin-bottom:10px;"></div>
     <div class="field">
@@ -1440,6 +1460,23 @@
     </div>
     <button class="primary-btn" id="session-edit-save">Save changes</button>
     <div class="status" id="session-edit-status"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="recast-confirm-modal">
+  <div class="modal-card">
+    <h3 style="margin-top:0;">↻ Recast this rod?</h3>
+    <p class="pc-line muted">Restarts the clock and keeps your rig, bait and hooks exactly as they are. Nothing gets logged — it's not a blank, just a fresh soak time.</p>
+    <div id="recast-blank-nudge" style="display:none;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px;">
+      <p class="pc-line" id="recast-blank-nudge-text" style="margin:0 0 8px;"></p>
+      <button type="button" class="mini-btn" id="recast-log-blank-instead">Log a blank instead</button>
+    </div>
+    <p class="pc-line muted" style="margin-top:10px;">What happened, if you don't mind saying:</p>
+    <div id="recast-reason-options" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:8px 0 4px;"></div>
+    <div class="row2" style="margin-top:14px;">
+      <button class="primary-btn" id="recast-confirm-cancel" style="background:var(--khaki);color:var(--ink);">Cancel</button>
+      <button class="primary-btn" id="recast-confirm-yes">Yes, recast</button>
+    </div>
   </div>
 </div>
 
@@ -1555,7 +1592,7 @@
 
 <div class="modal-overlay" id="timers-help-modal">
   <div class="modal-card">
-    <h3 style="margin-top:0;">⏱️ How Timers works</h3>
+    <h3 style="margin-top:0;"><i class="ti ti-clock" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How Timers works</h3>
     <div class="profile-catch">
       <div class="pc-head">Start a session</div>
       <div class="pc-line muted">Set your venue and how many rods you're on before your rods appear. If you're taking part in a competition that's running today, a banner shows above — tap it to fish that competition, which locks in the venue and tags every catch to it.</div>
@@ -1590,7 +1627,7 @@
 
 <div class="modal-overlay" id="profile-help-modal">
   <div class="modal-card">
-    <h3 style="margin-top:0;">👤 How the Profile works</h3>
+    <h3 style="margin-top:0;"><i class="ti ti-user" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How the Profile works</h3>
     <div class="profile-catch">
       <div class="pc-head">Followers, following, and badges</div>
       <div class="pc-line muted">Both counts are tappable — see who follows you or who you follow. Badges appear as a row below; tap any one for its full description and when you earned it. Some can be earned more than once, shown as a small number on the badge.</div>
@@ -1629,7 +1666,7 @@
 
 <div class="modal-overlay" id="tackle-help-modal">
   <div class="modal-card">
-    <h3 style="margin-top:0;">🎣 How the Tackle Box works</h3>
+    <h3 style="margin-top:0;"><i class="ti ti-fish" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How the Tackle Box works</h3>
     <div class="profile-catch">
       <div class="pc-head">Private by default</div>
       <div class="pc-line muted">Everything you add is only visible to you unless you choose to share it. Nobody sees your gear just by being in the app.</div>
@@ -1715,7 +1752,7 @@
       </div>
       <div class="field">
         <label>Photos</label>
-        <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="edit-catch-photo-input">📷 Take Photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="edit-catch-photo-input">🖼️ Gallery</button></div><div class="photo-filename" data-target="edit-catch-photo-input" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="edit-catch-photo-input" style="display:none;">
+        <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="edit-catch-photo-input"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="edit-catch-photo-input"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button></div><div class="photo-filename" data-target="edit-catch-photo-input" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="edit-catch-photo-input" style="display:none;">
         <div class="catch-photo-preview" id="edit-catch-photo-preview" style="display:none;"></div>
       </div>
     </div>
@@ -2038,16 +2075,38 @@ async function loadKnownRigs(){
 // only holds rigs you've ticked "in use", which isn't enough for Insights
 // looking back over old catches.
 let allRigHookLabels = {};
+// Rig name -> feed methods, alongside hook labels. A catch's feed method
+// isn't stored on the catch itself — it's a property of the rig it was
+// fished with, since a rig's delivery method is fixed by its own design.
+let allRigFeedMethods = {};
+// ID-keyed versions of both maps — unambiguous even when two rigs share a
+// name. Catches logged before rig_id existed fall back to the name-keyed
+// maps above; everything logged from here on resolves by ID.
+let allRigHookLabelsById = {};
+let allRigFeedMethodsById = {};
+
 async function loadAllRigHookLabels(){
   if(!isSignedIn() || !navigator.onLine) return;
   try{
-    const rows = await sbGet('rigs?select=name,hook_labels');
-    const map = {};
+    const rows = await sbGet('rigs?select=id,name,hook_labels,feed_methods,uses_bom');
+    const labelMap = {}, feedMap = {}, labelById = {}, feedById = {};
     rows.forEach(r=>{
-      if(!r.hook_labels) return;
-      try{ map[r.name] = JSON.parse(r.hook_labels); }catch(e){}
+      let labels = null;
+      if(r.hook_labels){ try{ labels = JSON.parse(r.hook_labels); }catch(e){} }
+      let feeds = null;
+      if(r.feed_methods){
+        try{ feeds = JSON.parse(r.feed_methods); }catch(e){}
+      }else if(r.uses_bom){
+        // Rigs from before feed methods existed just had a bom yes/no
+        feeds = ['Bom (method feeder)'];
+      }
+      if(labels){ labelMap[r.name] = labels; labelById[r.id] = labels; }
+      if(feeds){ feedMap[r.name] = feeds; feedById[r.id] = feeds; }
     });
-    allRigHookLabels = map;
+    allRigHookLabels = labelMap;
+    allRigFeedMethods = feedMap;
+    allRigHookLabelsById = labelById;
+    allRigFeedMethodsById = feedById;
   }catch(e){ console.error('loadAllRigHookLabels failed', e); }
 }
 
@@ -2066,7 +2125,7 @@ function buildRigOptionsHtml(){
     return '<option value="">No rigs yet — tick "Use" on the Tackle Box tab</option>';
   }
   let html = '<option value="">None</option>';
-  knownRigsFull.forEach(r=>{ html += `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`; });
+  knownRigsFull.forEach(r=>{ html += `<option value="${escapeHtml(r.name)}" data-rig-id="${escapeHtml(r.id)}">${escapeHtml(r.name)}</option>`; });
   return html;
 }
 
@@ -2195,12 +2254,17 @@ function renderRigFields(rod){
   const rigName = getRodFieldValue(rod, 'rig');
   const rigDef = rigName ? findRigDef(rigName) : null;
 
-  // The "which hook caught it" selector on the catch form should only ever
-  // offer hooks this specific rig actually has — not every hook slot the
-  // app supports in general.
+  // The "which hook caught it" selector only makes sense once a rig is
+  // picked — without one there's no real hook count or names to offer,
+  // so the field is hidden entirely rather than falling back to a
+  // generic, meaningless "Hook 1-4" list
+  const catchHookField = document.getElementById('catch-hook-field-'+rod);
   const catchHookSel = document.querySelector('.catch-hook[data-rod="'+rod+'"]');
-  if(catchHookSel){
-    const hookCount = rigDef ? rigDef.hookCount : MAX_HOOKS;
+  if(catchHookField){
+    catchHookField.style.display = rigDef ? 'block' : 'none';
+  }
+  if(catchHookSel && rigDef){
+    const hookCount = rigDef.hookCount;
     const prevValue = catchHookSel.value;
     catchHookSel.innerHTML = catchHookOptionsHtml(hookCount, rigDef);
     if([...catchHookSel.options].some(o=>o.value===prevValue)) catchHookSel.value = prevValue;
@@ -2746,6 +2810,7 @@ function buildCatchPayload(personId, entry){
     time: new Date(entry.time).toISOString(), timer_elapsed_ms: entry.timerElapsed,
     bom: entry.bom,
     rig: entry.rig || '',
+    rig_id: entry.rigId || null,
     rod_identifier: entry.rodIdentifier || '',
     cast_distance: entry.castDistance ?? null,
     rod_note: entry.rodNote || null,
@@ -3849,8 +3914,8 @@ async function renderTackleItemEditForm(itemId, containerEl){
     <div class="field">
       <label>Replace photo (optional)</label>
       <div style="display:flex;gap:8px;margin-bottom:6px;">
-        <button type="button" class="mini-btn photo-camera-btn" data-target="tackle-edit-photo-${itemId}">📷 Take Photo</button>
-        <button type="button" class="mini-btn photo-gallery-btn" data-target="tackle-edit-photo-${itemId}">🖼️ Gallery</button>
+        <button type="button" class="mini-btn photo-camera-btn" data-target="tackle-edit-photo-${itemId}"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
+        <button type="button" class="mini-btn photo-gallery-btn" data-target="tackle-edit-photo-${itemId}"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
       </div>
       <div class="photo-filename" data-target="tackle-edit-photo-${itemId}" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div>
       <input type="file" accept="image/*" id="tackle-edit-photo-${itemId}" style="display:none;">
@@ -4078,7 +4143,7 @@ async function renderRigsList(){
           <input type="checkbox" class="rig-use-toggle" data-rig="${r.id}" ${inUse.has(r.id) ? 'checked' : ''}> Use (show in my Timers rig list)
         </label>
         <div class="actions">
-          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}">📷</button>` : ''}
+          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}
           <button class="mini-btn" data-rig-edit="${r.id}">Edit</button>
           <button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>
         </div>
@@ -4102,7 +4167,7 @@ async function renderRigsList(){
           <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
         </div>
         <div class="actions">
-          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}">📷</button>` : ''}
+          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}
           ${isSignedIn()
             ? (already
                 ? `<span class="pc-line muted">Already in your rigs</span>`
@@ -4532,7 +4597,7 @@ async function renderTackleList(){
         ${useToggleHtml}
         <div class="actions">
           ${it.notes ? `<span style="font-size:12px;color:var(--muted);margin-right:6px;">${escapeHtml(it.notes)}</span>` : ''}
-          ${it.has_photo ? `<button class="mini-btn" data-tackle-photo="${it.id}">📷</button>` : ''}
+          ${it.has_photo ? `<button class="mini-btn" data-tackle-photo="${it.id}"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}
           ${canEdit ? `<button class="mini-btn" data-tackle-edit="${it.id}">Edit</button>` : ''}
           ${canManageShare ? `<button class="mini-btn" data-tackle-manage-share="${it.id}">Share</button>` : ''}
           ${canRemove ? `<button class="mini-btn danger" data-tackle-remove="${it.id}">Remove</button>` : ''}
@@ -4801,6 +4866,7 @@ async function loadPerson(id){
         identifier: row ? (row.identifier||'') : '',
         dotColor: row ? (row.dot_color||'#C1440E') : '#C1440E',
         rig: row ? (row.rig||'') : '',
+        rigId: row ? (row.rig_id||null) : null,
         hookCount: row ? (row.hook_count||2) : 2,
         rodItemId: row ? (row.rod_item_id||'') : '',
         reelItemId: row ? (row.reel_item_id||'') : '',
@@ -4818,6 +4884,7 @@ async function loadPerson(id){
         time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
         bom:c.bom||'',
         rig: c.rig || '',
+        rigId: c.rig_id || null,
         rodIdentifier: c.rod_identifier || '',
         castDistance: c.cast_distance ?? null,
         rodNote: c.rod_note || '',
@@ -4854,7 +4921,7 @@ async function saveRodState(personId, rod){
     fisherman_id: personId, rod,
     running: t.running, start_ts: t.startTs, accumulated_ms: t.accumulatedMs,
     bom: n.bom,
-    identifier: n.identifier, dot_color: n.dotColor, rig: n.rig, hook_count: n.hookCount,
+    identifier: n.identifier, dot_color: n.dotColor, rig: n.rig, rig_id: n.rigId || null, hook_count: n.hookCount,
     rod_item_id: n.rodItemId || null, reel_item_id: n.reelItemId || null,
     cast_distance: n.castDistance ? parseFloat(n.castDistance) : null,
     rod_note: n.rodNote || null
@@ -4977,14 +5044,15 @@ function rodCardHtml(r){
         <button class="sel-no active" data-rod="${r}" data-yn="no">No catch</button>
       </div>
       <div class="catch-fields" data-rod="${r}" style="display:none;">
-        <div class="field">
+        <div class="field" id="catch-hook-field-${r}" style="display:none;">
           <label>Hook</label>
           <select class="catch-hook" data-rod="${r}">${catchHookOptionsHtml(MAX_HOOKS)}</select>
         </div>
         <div class="row2">
           <div class="field">
             <label>Type of fish</label>
-            <select class="catch-type" data-rod="${r}">${speciesOptionsHtml(people.find(p=>p.id===currentPersonId), 'Select type', true)}</select>
+            <select class="catch-type" data-rod="${r}" style="display:none;">${speciesOptionsHtml(people.find(p=>p.id===currentPersonId), 'Select type', true)}</select>
+            <div class="catch-type-buttons" data-rod="${r}" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
             <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-27" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
           <div class="field">
@@ -4999,8 +5067,8 @@ function rodCardHtml(r){
         <div class="field">
           <label>Photos (optional — add as many as you like)</label>
           <div style="display:flex;gap:8px;margin-bottom:6px;">
-            <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}">📷 Take Photo</button>
-            <button type="button" class="mini-btn photo-gallery-btn" data-target-rod="${r}">🖼️ Gallery</button>
+            <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
+            <button type="button" class="mini-btn photo-gallery-btn" data-target-rod="${r}"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
           </div>
           <input type="file" accept="image/*" class="catch-photo" data-rod="${r}" style="display:none;">
           <div class="catch-photo-preview" data-rod="${r}" style="display:none;"></div>
@@ -5020,6 +5088,92 @@ function buildRodCards(){
   attachRodCardHandlers();
 }
 
+// ---------- Recast confirmation ----------
+// A few common reasons someone recasts, shown purely to make the confirm
+// step feel natural — tapping any of them confirms the recast the same way
+// "Yes, recast" does. Nothing about the reason is stored; this app decided
+// early on to keep recast itself unlogged, and that still holds here.
+// Every reason here is deliberately something that happened TO the line —
+// not a discretionary choice. "Fresh bait" and "Repositioning" were dropped
+// specifically because either could quietly excuse a long unproductive wait
+// that should honestly have been logged as a blank instead.
+const RECAST_REASONS = ['Tangled line', 'Snagged', 'Bait came off with cast', 'Line broke with cast'];
+let recastConfirmRod = null;
+
+// A rod out this long with nothing happening is worth a gentle nudge —
+// not blocking Recast, just making sure the honest option gets considered
+// before the convenient one
+const RECAST_BLANK_NUDGE_MS = 60 * 60000;
+
+function openRecastConfirm(rod){
+  recastConfirmRod = rod;
+  const nudgeWrap = document.getElementById('recast-blank-nudge');
+  const elapsed = currentPerson ? elapsedMs(currentPerson.timers[rod]) : 0;
+  if(elapsed >= RECAST_BLANK_NUDGE_MS){
+    document.getElementById('recast-blank-nudge-text').textContent =
+      `This rod's been out for ${fmt(elapsed)} — worth logging as a blank instead?`;
+    nudgeWrap.style.display = 'block';
+  }else{
+    nudgeWrap.style.display = 'none';
+  }
+  const optionsEl = document.getElementById('recast-reason-options');
+  optionsEl.innerHTML = RECAST_REASONS.map(r=>
+    `<button type="button" class="mini-btn recast-reason-btn" data-reason="${escapeHtml(r)}">${escapeHtml(r)}</button>`
+  ).join('');
+  optionsEl.querySelectorAll('.recast-reason-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> performRecast(recastConfirmRod, btn.dataset.reason));
+  });
+  document.getElementById('recast-confirm-modal').classList.add('open');
+}
+
+document.getElementById('recast-log-blank-instead').addEventListener('click', ()=>{
+  const rod = recastConfirmRod;
+  document.getElementById('recast-confirm-modal').classList.remove('open');
+  if(!rod) return;
+  // Exactly the same path as tapping "No catch" directly on the rod card
+  catchToggle[rod] = false;
+  document.querySelectorAll('.catch-toggle[data-rod="'+rod+'"] button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.yn === 'no');
+  });
+  showConfirmation(buildCatchEntry(rod));
+});
+
+async function performRecast(rod, reason){
+  document.getElementById('recast-confirm-modal').classList.remove('open');
+  if(!currentPerson || !rod) return;
+  currentPerson.timers[rod] = {running:true, startTs:Date.now(), accumulatedMs:0};
+  renderTimers();
+  await saveRodState(currentPersonId, rod);
+
+  // Recorded for later — not shown anywhere in Insights yet, but there's
+  // no point building the display before there's enough data to make it
+  // meaningful. Reuses the session's cached weather, same as catches do,
+  // so this doesn't cost a second API call.
+  try{
+    const myId = getMyFishermanId();
+    if(myId){
+      const w = (activeSession && weatherCache.sessionId === activeSession.id) ? weatherCache.weather : null;
+      const m = (activeSession && weatherCache.sessionId === activeSession.id) ? weatherCache.moon : moonPhase();
+      await sbPost('recasts', {
+        id: uid(), fisherman_id: myId, rod, reason: reason || null,
+        session_id: activeSession ? activeSession.id : null,
+        venue_id: activeSession ? activeSession.venue_id : null,
+        weather_temp: w ? w.temp : null,
+        weather_wind_speed: w ? w.windSpeed : null,
+        weather_wind_dir: w ? w.windDir : null,
+        weather_cloud_cover: w ? w.cloudCover : null,
+        weather_pressure: w ? w.pressure : null,
+        moon_phase: m ? m.label : null
+      });
+    }
+  }catch(e){ console.error('recast logging failed', e); }
+}
+
+document.getElementById('recast-confirm-yes').addEventListener('click', ()=> performRecast(recastConfirmRod));
+document.getElementById('recast-confirm-cancel').addEventListener('click', ()=>{
+  document.getElementById('recast-confirm-modal').classList.remove('open');
+});
+
 function attachRodCardHandlers(){
   document.querySelectorAll('.catch-weight').forEach(setupWeightUnitInput);
   document.querySelectorAll('[data-action]').forEach(btn=>{
@@ -5031,11 +5185,11 @@ function attachRodCardHandlers(){
       if(action==='start' && !t.running){ t.running=true; t.startTs=Date.now(); }
       if(action==='pause' && t.running){ t.accumulatedMs += Date.now()-t.startTs; t.running=false; t.startTs=null; }
       if(action==='reset'){ currentPerson.timers[rod] = {running:false,startTs:null,accumulatedMs:0}; }
-      // Recast — line got tangled or snagged, going back out with the same
-      // rig and bait. Just restart the clock; nothing is logged, since an
-      // interrupted cast isn't a real "fished this long with no bite".
+      // Recast now opens a confirmation step rather than firing instantly —
+      // see openRecastConfirm for the actual clock-restart logic
       if(action==='recast'){
-        currentPerson.timers[rod] = {running:true, startTs:Date.now(), accumulatedMs:0};
+        openRecastConfirm(rod);
+        return;
       }
       renderTimers();
       await saveRodState(currentPersonId, rod);
@@ -5060,6 +5214,13 @@ function attachRodCardHandlers(){
       if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
       if(!currentPerson) return;
       currentPerson.notes[rod][key] = sel.value;
+      if(key === 'rig'){
+        // Capture the rig's real ID too, not just its display name — this
+        // is what makes later lookups (hook labels, feed method) unambiguous
+        // even if two rigs happen to share a name
+        const opt = sel.options[sel.selectedIndex];
+        currentPerson.notes[rod].rigId = opt ? (opt.dataset.rigId || null) : null;
+      }
       await saveRodState(currentPersonId, rod);
       if(key === 'rig') renderRigFields(rod);
     });
@@ -5137,6 +5298,7 @@ function attachRodCardHandlers(){
       const dateEl = document.querySelector('.catch-date[data-rod="'+rod+'"]');
       if(typeEl) typeEl.value = '';
       if(typeOtherEl){ typeOtherEl.value = ''; typeOtherEl.style.display = 'none'; }
+      renderCatchTypeButtons(rod);
       if(weightEl) weightEl.value = '';
       if(photoEl) photoEl.value = '';
       if(dateEl) dateEl.value = '';
@@ -5144,11 +5306,32 @@ function attachRodCardHandlers(){
       renderPhotoPreview(rod);
     });
   });
+  // The species select stays as the real data source — buttons just drive
+  // it — so buildCatchEntry, the "Other" text input toggle, and the reset
+  // logic all keep working exactly as they did with a plain dropdown
+  function renderCatchTypeButtons(rod){
+    const sel = document.querySelector('.catch-type[data-rod="'+rod+'"]');
+    const wrap = document.querySelector('.catch-type-buttons[data-rod="'+rod+'"]');
+    if(!sel || !wrap) return;
+    wrap.innerHTML = [...sel.options].filter(o=>o.value).map(o=>
+      `<button type="button" class="mini-btn catch-type-btn" data-value="${escapeHtml(o.value)}"
+        style="${o.value===sel.value ? 'background:var(--dam);color:#fff;border-color:var(--dam);' : ''}">${escapeHtml(o.text)}</button>`
+    ).join('');
+    wrap.querySelectorAll('.catch-type-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        sel.value = btn.dataset.value;
+        sel.dispatchEvent(new Event('change'));
+        renderCatchTypeButtons(rod);
+      });
+    });
+  }
+
   document.querySelectorAll('.catch-type').forEach(sel=>{
     sel.addEventListener('change', ()=>{
       const otherEl = document.querySelector('.catch-type-other[data-rod="'+sel.dataset.rod+'"]');
       if(otherEl) otherEl.style.display = sel.value === 'Other' ? 'block' : 'none';
     });
+    renderCatchTypeButtons(sel.dataset.rod);
   });
   document.querySelectorAll('.log-catch-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -5344,7 +5527,7 @@ async function renderActiveCompetitionsBar(){
         : 'background:var(--dam);color:#fff;border:2px solid var(--dam);';
       return `<div class="${locked ? '' : 'comp-banner-pick'}" data-comp-id="${c.id}" data-comp-venue="${escapeHtml(c.dam||'')}"
         style="${styles}border-radius:10px;padding:10px 12px;margin-bottom:6px;${locked ? '' : 'cursor:pointer;'}">
-        🏆 <b>${escapeHtml(c.name)}</b> ${selected ? '— you\'re fishing this' : 'is running'} — ${metricLabel}${c.fish_type_filter ? ', '+escapeHtml(c.fish_type_filter)+' only' : ''}
+        <i class="ti ti-trophy" style="vertical-align:-2px;" aria-hidden="true"></i> <b>${escapeHtml(c.name)}</b> ${selected ? '— you\'re fishing this' : 'is running'} — ${metricLabel}${c.fish_type_filter ? ', '+escapeHtml(c.fish_type_filter)+' only' : ''}
         <span style="opacity:.8;">· ${endsLabel}</span>
         ${locked ? '' : `<div style="opacity:.8;margin-top:2px;">${selected ? '✓ Tap again to fish without it' : 'Tap to fish this competition'}</div>`}
       </div>`;
@@ -5867,13 +6050,14 @@ function buildCatchEntry(rod){
     id: uid(),
     caught,
     rod,
-    hook: (caught && hookEl) ? hookEl.value : '',
+    hook: (caught && hookEl && rigVal) ? hookEl.value : '',
     type: caught ? typeValue : '',
     weight: (caught && weightEl) ? (parseFloat(weightEl.value) || 0) : 0,
     time: (overrideTime && !isNaN(overrideTime)) ? overrideTime : Date.now(),
     timerElapsed: elapsedMs(currentPerson.timers[rod]),
     bom: bomVal,
     rig: rigVal,
+    rigId: notes.rigId || null,
     rodIdentifier: rodIdentifier,
     castDistance: notes.castDistance ? parseFloat(notes.castDistance) : null,
     rodNote: notes.rodNote || '',
@@ -5927,6 +6111,14 @@ function showConfirmation(entry){
 document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   if(!pendingEntry || !currentPerson) return;
   const entry = pendingEntry;
+
+  // Once a catch counts toward a competition standing, "just trust me" isn't
+  // enough — require a photo, same principle as dedicated tournament tools
+  if(entry.caught && entry.competitionId && (!entry.photos || !entry.photos.length)){
+    alert('Add a photo before saving — catches tagged to a competition need one, so the standings stay honest.');
+    return;
+  }
+
   const rod = entry.rod;
   currentPerson.catches.push(entry);
 
@@ -6211,12 +6403,19 @@ function buildInsightsHtml(catches, venues, sessions){
     const hookMatch = /Hook (\d+)/.exec(c.hook||'');
     if(!hookMatch) return [];
     const n = parseInt(hookMatch[1], 10);
-    const rigDef = c.rig ? findRigDef(c.rig) : null;
-    // Prefer the live rig if it's in use, otherwise fall back to the full
-    // map so catches on retired rigs still show their proper hook names
-    const fallback = c.rig && allRigHookLabels[c.rig]
-      ? {hookLabels: allRigHookLabels[c.rig]} : null;
-    const label = hookDisplayName(rigDef || fallback, n);
+    // Resolve by rig ID first — unambiguous even if two rigs share a name.
+    // Falls back to the live rig (for whatever's currently in use), then
+    // the name-keyed map, for catches logged before rig_id existed.
+    let rigDef = null;
+    if(c.rigId && allRigHookLabelsById[c.rigId]){
+      rigDef = {hookLabels: allRigHookLabelsById[c.rigId]};
+    }else{
+      rigDef = c.rig ? findRigDef(c.rig) : null;
+      if(!rigDef && c.rig && allRigHookLabels[c.rig]){
+        rigDef = {hookLabels: allRigHookLabels[c.rig]};
+      }
+    }
+    const label = hookDisplayName(rigDef, n);
     // Qualify with the rig, since "Top" on one rig isn't "Top" on another
     return [c.rig ? `${c.rig} — ${label}` : label];
   }), 'No hooks recorded on your catches yet.');
@@ -6235,6 +6434,15 @@ function buildInsightsHtml(catches, venues, sessions){
     if(!c.rig) return [];
     return catchingBaits(c).map(b=> c.rig + ' + ' + b);
   }), 'Need both a rig and a bait on the same catch to show combinations.');
+
+  // Feed method — Bom, PVA bag, mesh, stringer. Not stored on the catch
+  // itself; resolved from whichever rig was fished, since the delivery
+  // method is fixed by the rig's own design rather than chosen per cast.
+  html += statTable('By feed method', groupStats(c=>{
+    if(c.rigId && allRigFeedMethodsById[c.rigId]) return allRigFeedMethodsById[c.rigId];
+    if(!c.rig) return [];
+    return allRigFeedMethods[c.rig] || [];
+  }), 'No feed methods recorded yet — set one when building or editing a rig.');
 
   // Species breakdown
   html += statTable('By species', groupStats(c=>[c.type]), 'No species recorded yet.');
@@ -6889,7 +7097,7 @@ document.getElementById('past-catch-coord-apply').addEventListener('click', ()=>
     return;
   }
   pastCatchCoords = {lat, lng};
-  results.innerHTML = `<div class="pc-line muted">📍 Location set — ${lat.toFixed(4)}, ${lng.toFixed(4)}</div>`;
+  results.innerHTML = `<div class="pc-line muted"><i class="ti ti-map-pin" style="vertical-align:-2px;" aria-hidden="true"></i> Location set — ${lat.toFixed(4)}, ${lng.toFixed(4)}</div>`;
   document.getElementById('past-catch-coord-entry').style.display = 'none';
 });
 
@@ -6946,7 +7154,7 @@ document.getElementById('past-catch-venue-pin').addEventListener('click', ()=>{
   openPinDrop(pastCatchCoords, (coords)=>{
     pastCatchCoords = coords;
     document.getElementById('past-catch-venue-results').innerHTML =
-      `<div class="pc-line muted">📍 Location set — ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}</div>`;
+      `<div class="pc-line muted"><i class="ti ti-map-pin" style="vertical-align:-2px;" aria-hidden="true"></i> Location set — ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}</div>`;
   });
 });
 
@@ -6984,7 +7192,7 @@ async function openVenueEdit(venueId){
 function updateVenueEditCoordsLabel(){
   const el = document.getElementById('venue-edit-coords');
   el.textContent = editingVenueCoords
-    ? `📍 ${editingVenueCoords.lat.toFixed(4)}, ${editingVenueCoords.lng.toFixed(4)}`
+    ? `<i class="ti ti-map-pin" style="vertical-align:-2px;" aria-hidden="true"></i> ${editingVenueCoords.lat.toFixed(4)}, ${editingVenueCoords.lng.toFixed(4)}`
     : 'No map location set yet.';
 }
 
@@ -7079,7 +7287,7 @@ async function openSessionEdit(sessionId){
 function updateSessionEditCoordsLabel(){
   const el = document.getElementById('session-edit-coords');
   el.textContent = editingSessionCoords
-    ? `📍 ${editingSessionCoords.lat.toFixed(4)}, ${editingSessionCoords.lng.toFixed(4)}`
+    ? `<i class="ti ti-map-pin" style="vertical-align:-2px;" aria-hidden="true"></i> ${editingSessionCoords.lat.toFixed(4)}, ${editingSessionCoords.lng.toFixed(4)}`
     : 'No map location set for this venue yet.';
 }
 
@@ -7194,7 +7402,7 @@ document.getElementById('past-catch-venue-lookup').addEventListener('click', asy
       const p = places[parseInt(btn.dataset.idx,10)];
       document.getElementById('past-catch-venue').value = p.name;
       pastCatchCoords = {lat: p.lat, lng: p.lng};
-      results.innerHTML = `<div class="pc-line muted">📍 Location set — ${escapeHtml(p.name)} will appear on your map.</div>`;
+      results.innerHTML = `<div class="pc-line muted"><i class="ti ti-map-pin" style="vertical-align:-2px;" aria-hidden="true"></i> Location set — ${escapeHtml(p.name)} will appear on your map.</div>`;
     });
   });
 });
@@ -7410,7 +7618,7 @@ async function openProfile(personId){
     html += `<div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:16px;background:var(--paper);">
       <p class="sub-heading">Admin: edit this angler</p>
       <div class="field">
-        <label>Display Name</label>
+        <label>Display name</label>
         <input type="text" maxlength="100" id="admin-edit-name" value="${escapeHtml(p.name)}" autocomplete="pk-field-28" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <div class="field">
@@ -8615,7 +8823,7 @@ async function renderHome(){
     const elapsed = Date.now() - started;
     activeWrap.innerHTML = `
       <div style="background:var(--dam);color:#fff;border-radius:12px;padding:14px;margin-bottom:14px;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;opacity:.85;">Session running</div>
+        <div style="font-size:13px;font-weight:500;opacity:.85;">Session running</div>
         <div style="font-size:18px;font-weight:700;margin:4px 0;">${escapeHtml(activeSession.venue_name || 'Session')}</div>
         <div style="font-size:13px;opacity:.9;">${fmtDuration(elapsed)} · ${normalizeRodsCount(activeSession.rods)} rod${normalizeRodsCount(activeSession.rods)===1?'':'s'}</div>
         <button type="button" class="mini-btn" id="home-goto-timers" style="margin-top:10px;background:#fff;">Go to Timers</button>
@@ -8646,7 +8854,7 @@ async function renderHome(){
         : (c.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
       return `<button type="button" class="home-comp-link" data-comp="${c.id}"
         style="display:block;width:100%;text-align:left;background:var(--dam-deep);color:#fff;border:none;border-radius:10px;padding:10px 12px;margin-bottom:8px;font-family:inherit;font-size:13px;cursor:pointer;">
-        🏆 <b>${escapeHtml(c.name)}</b> is running — ${metricLabel}
+        <i class="ti ti-trophy" style="vertical-align:-2px;" aria-hidden="true"></i> <b>${escapeHtml(c.name)}</b> is running — ${metricLabel}
       </button>`;
     }).join('');
     compWrap.querySelectorAll('.home-comp-link').forEach(b=>{
@@ -8692,7 +8900,7 @@ async function renderHomeWeather(){
     el.style.cursor = 'pointer';
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);">Right now, where you are</div>
+        <div style="font-size:13px;font-weight:500;color:var(--muted);">Right now, where you are</div>
         <div style="font-size:12px;color:var(--muted);">Forecast ›</div>
       </div>
       <div style="font-size:14px;color:var(--ink);margin-top:6px;">
