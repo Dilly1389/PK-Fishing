@@ -6310,7 +6310,7 @@ function buildInsightsHtml(catches, venues, sessions){
   html += `<div class="profile-summary">
       <div><b>${caught.length}</b>catches</div>
       <div><b>${formatWeight(totalWeight)}</b>total</div>
-      <div><b>${biggest ? biggest.weight+'kg' : '—'}</b>biggest</div>
+      <div><b>${biggest ? formatWeight(biggest.weight) : '—'}</b>biggest</div>
       <div><b>${fmtDuration(avgSoak)}</b>avg soak</div>
     </div>`;
 
@@ -6369,7 +6369,11 @@ function buildInsightsHtml(catches, venues, sessions){
   }
 
   function statTable(title, rows, emptyMsg){
-    if(rows.length === 0) return `<p class="sub-heading">${escapeHtml(title)}</p><div class="empty">${escapeHtml(emptyMsg)}</div>`;
+    // Hide the whole section when there's nothing to show — a page full of
+    // "no X recorded yet" messages for someone still building up their
+    // history reads as broken, not just early. The section reappears on
+    // its own the moment there's real data behind it.
+    if(rows.length === 0) return '';
     let t = `<p class="sub-heading">${escapeHtml(title)}</p><ul class="people-list">`;
     rows.forEach(r=>{
       t += `<li>
