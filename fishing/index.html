@@ -543,7 +543,6 @@
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
 </head>
 <body>
 <div class="app">
@@ -1368,6 +1367,12 @@
               </select>
             </div>
           </div>
+          <div class="field" id="tackle-filter-brand-wrap" style="display:none;">
+            <label>Brand</label>
+            <select id="tackle-filter-brand">
+              <option value="">All brands</option>
+            </select>
+          </div>
           <div class="field">
             <label>Show</label>
             <select id="tackle-filter-visibility">
@@ -1833,7 +1838,7 @@ const ALL_BAIT_TYPES = [
 // Bump this whenever a badge image file is replaced with the same filename —
 // otherwise browsers (and CDN caches) can keep serving the old cached version
 // indefinitely, since nothing about the URL itself changes.
-const BADGE_ASSET_VERSION = 2;
+const BADGE_ASSET_VERSION = 3;
 
 const BADGE_DEFS = [
   // One-off badges: `test` returns true once the condition is met.
@@ -4449,6 +4454,7 @@ document.getElementById('tackle-filter-category').addEventListener('change', (e)
 document.getElementById('tackle-filter-baittype').addEventListener('change', renderTackleList);
 document.getElementById('tackle-filter-visibility').addEventListener('change', renderTackleList);
 document.getElementById('tackle-filter-sharedby').addEventListener('change', renderTackleList);
+document.getElementById('tackle-filter-brand').addEventListener('change', renderTackleList);
 
 let tackleItemsCache = [];
 
@@ -4484,7 +4490,6 @@ async function renderTackleList(){
 
   const catFilter = document.getElementById('tackle-filter-category').value;
   const baitTypeFilter = document.getElementById('tackle-filter-baittype').value;
-  const visFilter = document.getElementById('tackle-filter-visibility').value;
   const sharedByWrap = document.getElementById('tackle-filter-sharedby-wrap');
   const sharedBySel = document.getElementById('tackle-filter-sharedby');
 
@@ -4492,6 +4497,24 @@ async function renderTackleList(){
   if(catFilter) items = items.filter(it=> (it.category||'Other') === catFilter);
   if(catFilter === 'Bait' && baitTypeFilter) items = items.filter(it=> it.bait_type === baitTypeFilter);
 
+  // Brand — only worth showing once there's actually more than one brand
+  // to choose between within whatever's already been filtered above
+  const brandWrap = document.getElementById('tackle-filter-brand-wrap');
+  const brandSel = document.getElementById('tackle-filter-brand');
+  const brandsPresent = [...new Set(items.map(it=>it.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  if(brandsPresent.length > 1){
+    brandWrap.style.display = 'block';
+    const currentBrand = brandSel.value;
+    brandSel.innerHTML = '<option value="">All brands</option>' +
+      brandsPresent.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+    if(brandsPresent.includes(currentBrand)) brandSel.value = currentBrand;
+    if(brandSel.value) items = items.filter(it=> it.brand === brandSel.value);
+  }else{
+    brandWrap.style.display = 'none';
+    brandSel.value = '';
+  }
+
+  const visFilter = document.getElementById('tackle-filter-visibility').value;
   if(visFilter === 'shared-with-me'){
     sharedByWrap.style.display = 'block';
     // Shared with me covers both per-item shares AND whole-box shares —
@@ -7591,6 +7614,22 @@ async function openProfile(personId){
     </div>
   </div>`;
 
+  // Some badges have species-specific artwork — right now just Double
+  // Digits (carp vs barbel), since both are genuinely common at 10kg+ and
+  // showing the actual species caught is more meaningful than one fixed
+  // image regardless of what was really landed. Falls back to the plain
+  // badge for any other species, or if nothing 10kg+ is found.
+  function badgeImageSrc(key){
+    if(key === 'ten_kg'){
+      const bigOnes = catches.filter(c=> c.caught && (c.weight||0) >= 10).sort((a,b)=> b.time - a.time);
+      const species = bigOnes.length ? (bigOnes[0].type || '').toLowerCase() : '';
+      if(species === 'barbel') return 'badge-ten_kg-barbel.png';
+      if(species === 'carp' || species === 'mirror carp' || species === 'grass carp') return 'badge-ten_kg-carp.png';
+      if(species.includes('yellowfish')) return 'badge-ten_kg-yellowfish.png';
+    }
+    return 'badge-'+key+'.png';
+  }
+
   // Badge strip — horizontal scroll, earned badges only
   const earnedBadges = await loadBadgesFor(p.id);
   if(earnedBadges.length){
@@ -7607,7 +7646,7 @@ async function openProfile(personId){
           : '';
         return `<button type="button" class="badge-strip-item" data-badge-key="${b.key}" data-badge-when="${escapeHtml(when)}" data-badge-count="${count}" style="flex-shrink:0;width:82px;text-align:center;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;position:relative;">
           ${countBubble}
-          <img src="badge-${b.key}.png?v=${BADGE_ASSET_VERSION}" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
+          <img src="${badgeImageSrc(b.key)}?v=${BADGE_ASSET_VERSION}" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
           <div style="font-size:11px;font-weight:700;color:var(--ink);line-height:1.2;">${escapeHtml(b.name)}</div>
           <div style="font-size:10px;color:var(--muted);">${escapeHtml(when)}</div>
         </button>`;
@@ -7700,33 +7739,79 @@ async function openProfile(personId){
   // not distorting what happened, it's correcting whether it happened at
   // all, so that's allowed on any catch you own.
   const canEditCatches = (myFishermanId && myFishermanId === p.id) || isSuperUser();
-  html += catches.length
-    ? catches.map(c=>catchDetailHtml(c, canEditCatches && !c.sessionId, canEditCatches)).join('')
-    : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>';
+
+  // Only worth showing a search once there's actually enough to search
+  // through — a handful of entries doesn't need a filter bar cluttering
+  // the page above them
+  const speciesPresent = [...new Set(catches.filter(c=>c.caught).map(c=>c.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  if(catches.length > 5){
+    html += `<div class="row2" style="margin-bottom:10px;">
+      <div class="field" style="margin-bottom:0;">
+        <input type="text" maxlength="100" id="profile-catch-search" placeholder="Search species or venue..." autocomplete="pk-profile-search" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      ${speciesPresent.length > 1 ? `<div class="field" style="margin-bottom:0;flex:0 0 auto;min-width:130px;">
+        <select id="profile-catch-species-filter">
+          <option value="">All species</option>
+          ${speciesPresent.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+        </select>
+      </div>` : ''}
+    </div>`;
+  }
+  html += `<div id="profile-catch-list-container"></div>`;
   document.getElementById('profile-body').innerHTML = html;
   document.getElementById('profile-modal').classList.add('open');
 
-  document.querySelectorAll('.profile-edit-catch').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const c = catches.find(x=>x.id === btn.dataset.catchId);
-      openEditCatch(btn.dataset.catchId, c);
-    });
-  });
+  // Re-runs on every search keystroke / filter change — re-renders just
+  // the catch list itself and re-attaches its own edit/remove handlers,
+  // rather than rebuilding the whole profile (follow counts, badges, the
+  // photo gallery) on every letter typed
+  function renderProfileCatchList(){
+    const container = document.getElementById('profile-catch-list-container');
+    if(!container) return;
+    const searchEl = document.getElementById('profile-catch-search');
+    const speciesEl = document.getElementById('profile-catch-species-filter');
+    const query = searchEl ? searchEl.value.trim().toLowerCase() : '';
+    const speciesFilter = speciesEl ? speciesEl.value : '';
 
-  document.querySelectorAll('.profile-remove-catch').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const c = catches.find(x=>x.id === btn.dataset.catchId);
-      const desc = c && c.caught ? `this ${c.type||'catch'}` : 'this entry';
-      if(!confirmDelete(desc)) return;
-      try{
-        await sbDelete('catches', 'id=eq.'+btn.dataset.catchId);
-        openProfile(personId);
-      }catch(e){
-        console.error(e);
-        alert('Could not remove: ' + (e.message || 'unknown error'));
-      }
+    let filtered = catches;
+    if(speciesFilter) filtered = filtered.filter(c=> c.type === speciesFilter);
+    if(query){
+      filtered = filtered.filter(c=>{
+        const haystack = [c.type, c.rig, c.hook, c.rodNote].filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(query);
+      });
+    }
+
+    container.innerHTML = filtered.length
+      ? filtered.map(c=>catchDetailHtml(c, canEditCatches && !c.sessionId, canEditCatches)).join('')
+      : (catches.length ? '<div class="empty">Nothing matches that search.</div>' : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>');
+
+    container.querySelectorAll('.profile-edit-catch').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const c = catches.find(x=>x.id === btn.dataset.catchId);
+        openEditCatch(btn.dataset.catchId, c);
+      });
     });
-  });
+    container.querySelectorAll('.profile-remove-catch').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const c = catches.find(x=>x.id === btn.dataset.catchId);
+        const desc = c && c.caught ? `this ${c.type||'catch'}` : 'this entry';
+        if(!confirmDelete(desc)) return;
+        try{
+          await sbDelete('catches', 'id=eq.'+btn.dataset.catchId);
+          openProfile(personId);
+        }catch(e){
+          console.error(e);
+          alert('Could not remove: ' + (e.message || 'unknown error'));
+        }
+      });
+    });
+  }
+  renderProfileCatchList();
+  const searchInput = document.getElementById('profile-catch-search');
+  if(searchInput) searchInput.addEventListener('input', renderProfileCatchList);
+  const speciesFilterSel = document.getElementById('profile-catch-species-filter');
+  if(speciesFilterSel) speciesFilterSel.addEventListener('change', renderProfileCatchList);
 
   document.querySelectorAll('.follow-count-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -7742,7 +7827,7 @@ async function openProfile(personId){
       if(!def) return;
       const count = parseInt(btn.dataset.badgeCount || '1', 10);
       document.getElementById('badge-detail-title').textContent = def.name + (count > 1 ? ' ×' + count : '');
-      document.getElementById('badge-detail-img').src = 'badge-'+def.key+'.png?v='+BADGE_ASSET_VERSION;
+      document.getElementById('badge-detail-img').src = badgeImageSrc(def.key)+'?v='+BADGE_ASSET_VERSION;
       document.getElementById('badge-detail-desc').textContent = def.desc;
       const whenText = btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '';
       document.getElementById('badge-detail-when').textContent =
@@ -8607,9 +8692,10 @@ const CHANGELOG = [
     'Offline support — log catches with no signal, syncs when you reconnect'
   ]},
   {version:'1.0', date:'August 2026', changes:[
-    'The original launch, as "Dam Log" — per-rod timers, catch and blank logging',
-    'A basic leaderboard',
-    'Sign-in, sign-up and notifications'
+    'The original launch, as "Dam Log" — three rods, timers, catch and blank logging',
+    'Bom and two hook notes per rod',
+    'A simple list of fishermen — no accounts yet, just picking a name from a dropdown',
+    'A basic leaderboard ranked by total weight'
   ]}
 ];
 
