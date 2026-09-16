@@ -7570,6 +7570,22 @@ document.getElementById('follow-list-close').addEventListener('click', ()=>{
 document.getElementById('forecast-modal-x').addEventListener('click', ()=>{
   document.getElementById('forecast-modal').classList.remove('open');
 });
+// Some badges have species-specific artwork — right now just Double Digits
+// (carp vs barbel vs yellowfish), since showing the species actually landed
+// is more meaningful than one fixed image. Reads from whichever profile is
+// currently open, so the bookcase and the profile strip agree.
+let badgeArtCatches = [];
+function badgeImageSrc(key){
+  if(key === 'ten_kg' && badgeArtCatches.length){
+    const bigOnes = badgeArtCatches.filter(c=> c.caught && (c.weight||0) >= 10).sort((a,b)=> b.time - a.time);
+    const species = bigOnes.length ? (bigOnes[0].type || '').toLowerCase() : '';
+    if(species === 'barbel') return 'badge-ten_kg-barbel.png';
+    if(species === 'carp' || species === 'mirror carp' || species === 'grass carp') return 'badge-ten_kg-carp.png';
+    if(species.includes('yellowfish')) return 'badge-ten_kg-yellowfish.png';
+  }
+  return 'badge-'+key+'.png';
+}
+
 // ---------- Badge bookcase ----------
 // A wooden display cabinet rather than a plain grid. Every badge has a fixed
 // slot in BADGE_DEFS order, so the cabinet is the same shape for everyone and
@@ -7744,21 +7760,7 @@ async function openProfile(personId){
     </div>
   </div>`;
 
-  // Some badges have species-specific artwork — right now just Double
-  // Digits (carp vs barbel), since both are genuinely common at 10kg+ and
-  // showing the actual species caught is more meaningful than one fixed
-  // image regardless of what was really landed. Falls back to the plain
-  // badge for any other species, or if nothing 10kg+ is found.
-  function badgeImageSrc(key){
-    if(key === 'ten_kg'){
-      const bigOnes = catches.filter(c=> c.caught && (c.weight||0) >= 10).sort((a,b)=> b.time - a.time);
-      const species = bigOnes.length ? (bigOnes[0].type || '').toLowerCase() : '';
-      if(species === 'barbel') return 'badge-ten_kg-barbel.png';
-      if(species === 'carp' || species === 'mirror carp' || species === 'grass carp') return 'badge-ten_kg-carp.png';
-      if(species.includes('yellowfish')) return 'badge-ten_kg-yellowfish.png';
-    }
-    return 'badge-'+key+'.png';
-  }
+  badgeArtCatches = catches;
 
   // Badge strip — heading, then only the 3 most recently earned, with a
   // link through to the full collection. Sorted by whichever is more
@@ -10129,3 +10131,4 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
+            
