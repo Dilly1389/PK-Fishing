@@ -1504,6 +1504,14 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="badge-bookcase-modal">
+  <div class="modal-card wide" style="padding:16px 14px;">
+    <div id="badge-bookcase-cabinet"></div>
+    <p class="pc-line muted" style="margin-top:12px;text-align:center;">The empty slots are still a mystery — no hints here, you'll only find out what they are by earning them.</p>
+    <button class="primary-btn" id="badge-bookcase-close" style="margin-top:12px;">Close</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="badge-detail-modal">
   <div class="modal-card" style="text-align:center;">
     <img id="badge-detail-img" src="" alt="" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
@@ -1838,7 +1846,7 @@ const ALL_BAIT_TYPES = [
 // Bump this whenever a badge image file is replaced with the same filename —
 // otherwise browsers (and CDN caches) can keep serving the old cached version
 // indefinitely, since nothing about the URL itself changes.
-const BADGE_ASSET_VERSION = 3;
+const BADGE_ASSET_VERSION = 10;
 
 const BADGE_DEFS = [
   // One-off badges: `test` returns true once the condition is met.
@@ -7560,6 +7568,126 @@ document.getElementById('follow-list-close').addEventListener('click', ()=>{
 document.getElementById('forecast-modal-x').addEventListener('click', ()=>{
   document.getElementById('forecast-modal').classList.remove('open');
 });
+// ---------- Badge bookcase ----------
+// A wooden display cabinet rather than a plain grid. Every badge has a fixed
+// slot in BADGE_DEFS order, so the cabinet is the same shape for everyone and
+// only what's filled changes. Unearned slots are unlabelled dark recesses —
+// deliberately no hint about what belongs there.
+const CABINET_WOOD = "repeating-linear-gradient(91deg, rgba(255,255,255,.035) 0px, rgba(0,0,0,.05) 2px, rgba(255,255,255,.02) 5px, rgba(0,0,0,.06) 9px), linear-gradient(180deg,#6b4526,#4a2e18)";
+const CABINET_HEX = "polygon(25% 2%,75% 2%,100% 50%,75% 98%,25% 98%,0% 50%)";
+
+function openBadgeDetailFor(def, count, whenText){
+  document.getElementById('badge-detail-title').textContent = def.name + (count > 1 ? ' \u00d7' + count : '');
+  document.getElementById('badge-detail-img').src = badgeImageSrc(def.key)+'?v='+BADGE_ASSET_VERSION;
+  document.getElementById('badge-detail-desc').textContent = def.desc;
+  document.getElementById('badge-detail-when').textContent =
+    count > 1 ? whenText + ' \u00b7 earned ' + count + ' times'
+              : whenText.replace('First earned', 'Earned');
+  document.getElementById('badge-detail-modal').classList.add('open');
+}
+
+async function openBadgeBookcase(personId){
+  const el = document.getElementById('badge-bookcase-cabinet');
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById('badge-bookcase-modal').classList.add('open');
+
+  const earned = await loadBadgesFor(personId);
+  const byKey = {};
+  earned.forEach(e=>{ byKey[e.badge_key] = e; });
+
+  const shellOpen = '<div style="position:relative;padding:12px 4px 8px;'
+    + 'background:linear-gradient(180deg,#2a1a0d 0%,#3a2513 70%,#2a1a0d 100%);'
+    + 'box-shadow:inset 0 5px 10px rgba(0,0,0,.82), inset 0 -4px 8px rgba(0,0,0,.5),'
+    + 'inset 4px 0 8px rgba(0,0,0,.45), inset -4px 0 8px rgba(0,0,0,.45);">'
+    + '<div style="position:absolute;top:0;left:10%;right:10%;height:34%;'
+    + 'background:radial-gradient(ellipse at 50% 0%, rgba(255,205,135,.30), rgba(255,205,135,0) 72%);'
+    + 'pointer-events:none;"></div>';
+
+  let cells = '';
+  BADGE_DEFS.forEach((b, i)=>{
+    const e = byKey[b.key];
+    const borderR = (i % 3 === 2) ? '' : 'border-right:1px solid rgba(0,0,0,.62);';
+    let inner;
+    if(e){
+      const count = e.earn_count || 1;
+      const when = new Date(e.earned_at).toLocaleDateString([], {month:'short', year:'numeric'});
+      const bubble = count > 1
+        ? '<span style="position:absolute;top:8px;right:10px;background:var(--dam);color:#fff;'
+          + 'border:2px solid #2a1a0d;border-radius:999px;min-width:20px;height:20px;display:inline-flex;'
+          + 'align-items:center;justify-content:center;font-size:10px;font-weight:700;padding:0 3px;z-index:2;">'
+          + count + '</span>'
+        : '';
+      inner = bubble
+        + '<img src="' + badgeImageSrc(b.key) + '?v=' + BADGE_ASSET_VERSION + '" alt="' + escapeHtml(b.name) + '" '
+        + 'style="width:64px;height:auto;display:block;margin:0 auto;filter:drop-shadow(0 5px 6px rgba(0,0,0,.75));" '
+        + 'onerror="this.outerHTML=\'<div style=&quot;width:58px;height:58px;margin:0 auto;border-radius:14px;'
+        + 'background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>'
+        + b.emoji + '</div>\';">'
+        + '<div style="margin-top:6px;font-size:9.5px;line-height:1.2;text-align:center;color:#e8cda4;'
+        + 'text-shadow:0 1px 2px rgba(0,0,0,.85);min-height:22px;">' + escapeHtml(b.name) + '</div>';
+      cells += '<div style="' + borderR + '"><button type="button" class="bookcase-badge" '
+        + 'data-badge-key="' + b.key + '" data-badge-count="' + count + '" data-badge-when="' + escapeHtml(when) + '" '
+        + 'style="display:block;width:100%;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">'
+        + shellOpen + inner + '</div></button></div>';
+    }else{
+      // No label, no tooltip, nothing tappable — an empty slot gives nothing away
+      inner = '<div style="width:58px;height:67px;margin:0 auto;clip-path:' + CABINET_HEX + ';'
+        + 'background:linear-gradient(180deg,#150c05,#241509);'
+        + 'box-shadow:inset 0 3px 9px rgba(0,0,0,.95);"></div>'
+        + '<div style="margin-top:6px;min-height:22px;"></div>';
+      cells += '<div style="' + borderR + '">' + shellOpen + inner + '</div></div>';
+    }
+  });
+
+  const perRow = 3;
+
+  el.innerHTML =
+    '<div style="border-radius:8px;overflow:hidden;border:1px solid #1d1009;'
+    + 'box-shadow:0 18px 34px rgba(0,0,0,.5);background:' + CABINET_WOOD + ';">'
+    + '<div style="padding:14px 12px 12px;background:' + CABINET_WOOD + ';text-align:center;'
+    + 'box-shadow:inset 0 2px 0 rgba(255,215,170,.2), 0 5px 11px rgba(0,0,0,.5);">'
+    + '<div style="display:inline-block;padding:7px 22px;border-radius:3px;'
+    + 'background:linear-gradient(180deg,#fbeec2 0%,#d4b06a 38%,#8e6a2c 64%,#e3c68c 100%);'
+    + 'border:1px solid #6b4d1e;box-shadow:0 2px 5px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.7);">'
+    + '<span style="font-family:Georgia,serif;font-weight:700;font-size:13px;letter-spacing:.13em;'
+    + 'color:#3b2a0b;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,255,255,.5);">Fins of Fame</span></div>'
+    + '<div style="font-size:10.5px;color:#cda67c;margin-top:6px;">' + earned.length + ' of ' + BADGE_DEFS.length + ' earned</div></div>'
+    + '<div style="padding:0 8px;background:' + CABINET_WOOD + ';" id="badge-bookcase-shelves"></div>'
+    + '<div style="height:15px;background:linear-gradient(180deg,#8a5930 0%,#5c3a1e 40%,#2b1a0c 100%);'
+    + 'box-shadow:0 -2px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,220,180,.35);"></div></div>';
+
+  // Build shelves by slicing the rendered cells into rows of three
+  const holder = document.createElement('div');
+  holder.innerHTML = cells;
+  const nodes = Array.from(holder.children);
+  const shelves = document.getElementById('badge-bookcase-shelves');
+  let shelfHtml = '';
+  for(let i = 0; i < nodes.length; i += perRow){
+    const row = document.createElement('div');
+    row.style.display = 'grid';
+    row.style.gridTemplateColumns = 'repeat(3,1fr)';
+    nodes.slice(i, i + perRow).forEach(n=> row.appendChild(n));
+    shelves.appendChild(row);
+    const b = document.createElement('div');
+    b.style.cssText = 'height:10px;background:linear-gradient(180deg,#9c6737 0%,#7a4f28 30%,#4f321a 75%,#33200f 100%);'
+      + 'box-shadow:0 5px 11px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,225,185,.45);';
+    shelves.appendChild(b);
+  }
+
+  shelves.querySelectorAll('.bookcase-badge').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const def = BADGE_DEFS.find(x=>x.key === btn.dataset.badgeKey);
+      if(!def) return;
+      const count = parseInt(btn.dataset.badgeCount || '1', 10);
+      openBadgeDetailFor(def, count, btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '');
+    });
+  });
+}
+
+document.getElementById('badge-bookcase-close').addEventListener('click', ()=>{
+  document.getElementById('badge-bookcase-modal').classList.remove('open');
+});
+
 document.getElementById('badge-detail-close').addEventListener('click', ()=>{
   document.getElementById('badge-detail-modal').classList.remove('open');
 });
@@ -7630,13 +7758,23 @@ async function openProfile(personId){
     return 'badge-'+key+'.png';
   }
 
-  // Badge strip — horizontal scroll, earned badges only
+  // Badge strip — heading, then only the 3 most recently earned, with a
+  // link through to the full collection. Sorted by whichever is more
+  // recent between first-earned and last-re-earned, so a badge someone
+  // just earned again bubbles back up even if they got it ages ago too.
   const earnedBadges = await loadBadgesFor(p.id);
   if(earnedBadges.length){
     const earnedKeys = new Set(earnedBadges.map(b=>b.badge_key));
-    const earnedDefs = BADGE_DEFS.filter(b=> earnedKeys.has(b.key));
+    const recentBadges = earnedBadges.slice().sort((a,b)=>
+      new Date(b.last_earned_at || b.earned_at) - new Date(a.last_earned_at || a.earned_at)
+    ).slice(0, 3);
+    const recentDefs = recentBadges.map(eb=> BADGE_DEFS.find(d=>d.key===eb.badge_key)).filter(Boolean);
+    html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin:4px 0 8px;">
+      <p class="sub-heading" style="margin:0;">Fins of Fame</p>
+      <button type="button" class="badge-bookcase-open" data-person-id="${p.id}" style="background:none;border:none;color:var(--dam);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;padding:0;">View all ›</button>
+    </div>`;
     html += `<div style="display:flex;gap:10px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch;">` +
-      earnedDefs.map(b=>{
+      recentDefs.map(b=>{
         const earned = earnedBadges.find(e=>e.badge_key===b.key);
         const when = earned ? new Date(earned.earned_at).toLocaleDateString([], {month:'short', year:'numeric'}) : '';
         const count = earned ? (earned.earn_count || 1) : 1;
@@ -7819,6 +7957,10 @@ async function openProfile(personId){
       if(type === 'followers' && followerCount) openFollowList('Followers', followerUserIds, 'user');
       if(type === 'following' && followingCount) openFollowList('Following', followingFishermanIds, 'fisherman');
     });
+  });
+
+  document.querySelectorAll('.badge-bookcase-open').forEach(btn=>{
+    btn.addEventListener('click', ()=> openBadgeBookcase(btn.dataset.personId));
   });
 
   document.querySelectorAll('.badge-strip-item').forEach(btn=>{
@@ -8077,7 +8219,7 @@ function showNewPBFlash(typeLabel, weight){
   el.className = 'pb-flash';
   el.innerHTML = `<div class="pb-flash-inner">
       <div class="pb-flash-trophy">🏆</div>
-      <div class="pb-flash-title">NEW PERSONAL BEST!</div>
+      <div class="pb-flash-title">PB LEKKER!</div>
       <div class="pb-flash-detail">${escapeHtml(typeLabel)} — ${formatWeight(weight)}</div>
     </div>`;
   document.body.appendChild(el);
