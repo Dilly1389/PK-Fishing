@@ -586,6 +586,13 @@
 
       <p class="sub-heading">Latest from your mates</p>
       <div id="home-feed"><div class="empty">Loading...</div></div>
+
+      <!-- Sits at the bottom deliberately: Home is about what's happening
+           right now, so this shouldn't push that down. On a new account
+           where the rest is still empty, it ends up prominent anyway. -->
+      <div style="text-align:center;margin-top:18px;">
+        <button type="button" class="mini-btn" id="show-onboarding-btn"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How it works</button>
+      </div>
     </div>
 
     <!-- MORE -->
@@ -705,7 +712,6 @@
 
     <!-- PROFILE -->
     <div class="panel" id="panel-schedule">
-      <button type="button" class="mini-btn" id="show-onboarding-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How it works</button>
       <button type="button" class="mini-btn" id="profile-help-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How the Profile works</button>
 
       <section class="card" id="account-card">
@@ -1507,7 +1513,8 @@
 </div>
 
 <div class="modal-overlay" id="badge-bookcase-modal">
-  <div class="modal-card wide" style="padding:16px 14px;">
+  <div class="modal-card wide" style="padding:16px 14px;position:relative;">
+    <button type="button" id="badge-bookcase-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <div id="badge-bookcase-cabinet"></div>
     <p class="pc-line muted" style="margin-top:12px;text-align:center;">The empty slots are still a mystery — no hints here, you'll only find out what they are by earning them.</p>
     <button class="primary-btn" id="badge-bookcase-close" style="margin-top:12px;">Close</button>
@@ -7592,7 +7599,7 @@ function badgeImageSrc(key){
 // only what's filled changes. Unearned slots are unlabelled dark recesses —
 // deliberately no hint about what belongs there.
 const CABINET_WOOD = "repeating-linear-gradient(91deg, rgba(255,255,255,.035) 0px, rgba(0,0,0,.05) 2px, rgba(255,255,255,.02) 5px, rgba(0,0,0,.06) 9px), linear-gradient(180deg,#6b4526,#4a2e18)";
-const CABINET_HEX = "polygon(25% 2%,75% 2%,100% 50%,75% 98%,25% 98%,0% 50%)";
+const CABINET_HEX = "polygon(50% 0%, 100% 30%, 100% 70%, 50% 100%, 0% 70%, 0% 30%)";
 
 function openBadgeDetailFor(def, count, whenText){
   document.getElementById('badge-detail-title').textContent = def.name + (count > 1 ? ' \u00d7' + count : '');
@@ -7613,7 +7620,7 @@ async function openBadgeBookcase(personId){
   const byKey = {};
   earned.forEach(e=>{ byKey[e.badge_key] = e; });
 
-  const shellOpen = '<div style="position:relative;padding:12px 4px 8px;'
+  const shellOpen = '<div style="position:relative;height:100%;box-sizing:border-box;padding:12px 4px 8px;'
     + 'background:linear-gradient(180deg,#2a1a0d 0%,#3a2513 70%,#2a1a0d 100%);'
     + 'box-shadow:inset 0 5px 10px rgba(0,0,0,.82), inset 0 -4px 8px rgba(0,0,0,.5),'
     + 'inset 4px 0 8px rgba(0,0,0,.45), inset -4px 0 8px rgba(0,0,0,.45);">'
@@ -7643,17 +7650,17 @@ async function openBadgeBookcase(personId){
         + b.emoji + '</div>\';">'
         + '<div style="margin-top:6px;font-size:9.5px;line-height:1.2;text-align:center;color:#e8cda4;'
         + 'text-shadow:0 1px 2px rgba(0,0,0,.85);min-height:22px;">' + escapeHtml(b.name) + '</div>';
-      cells += '<div style="' + borderR + '"><button type="button" class="bookcase-badge" '
+      cells += '<div style="height:100%;' + borderR + '"><button type="button" class="bookcase-badge" '
         + 'data-badge-key="' + b.key + '" data-badge-count="' + count + '" data-badge-when="' + escapeHtml(when) + '" '
-        + 'style="display:block;width:100%;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">'
+        + 'style="display:block;width:100%;height:100%;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">'
         + shellOpen + inner + '</div></button></div>';
     }else{
       // No label, no tooltip, nothing tappable — an empty slot gives nothing away
-      inner = '<div style="width:58px;height:67px;margin:0 auto;clip-path:' + CABINET_HEX + ';'
-        + 'background:linear-gradient(180deg,#150c05,#241509);'
-        + 'box-shadow:inset 0 3px 9px rgba(0,0,0,.95);"></div>'
+      inner = '<div style="width:64px;height:74px;margin:0 auto;clip-path:' + CABINET_HEX + ';'
+        + 'background:linear-gradient(160deg,#120a04,#2a1a0b);'
+        + 'box-shadow:inset 0 4px 10px rgba(0,0,0,.95), inset 0 -2px 4px rgba(255,190,130,.06);"></div>'
         + '<div style="margin-top:6px;min-height:22px;"></div>';
-      cells += '<div style="' + borderR + '">' + shellOpen + inner + '</div></div>';
+      cells += '<div style="height:100%;' + borderR + '">' + shellOpen + inner + '</div></div>';
     }
   });
 
@@ -7703,6 +7710,9 @@ async function openBadgeBookcase(personId){
 }
 
 document.getElementById('badge-bookcase-close').addEventListener('click', ()=>{
+  document.getElementById('badge-bookcase-modal').classList.remove('open');
+});
+document.getElementById('badge-bookcase-x').addEventListener('click', ()=>{
   document.getElementById('badge-bookcase-modal').classList.remove('open');
 });
 
@@ -10131,4 +10141,3 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
-            
