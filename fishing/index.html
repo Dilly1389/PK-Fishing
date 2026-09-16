@@ -503,7 +503,9 @@
   .modal-overlay.open{display:flex;}
   /* These open on top of an already-open modal, so they need to win the
      stacking order regardless of where they sit in the DOM */
-  #badge-detail-modal, #follow-list-modal, #session-edit-modal, #venue-edit-modal, #venue-catches-modal, #forecast-modal, #edit-catch-modal{z-index:2100;}
+  #badge-detail-modal, #badge-bookcase-modal, #follow-list-modal, #session-edit-modal, #venue-edit-modal, #venue-catches-modal, #forecast-modal, #edit-catch-modal{z-index:2100;}
+  /* The detail popup opens from inside the bookcase, so it has to win over it */
+  #badge-detail-modal{z-index:2150;}
   /* Pin drop opens on top of the venue/session edit modals */
   #pin-drop-modal{z-index:2200;}
   .modal-card{
