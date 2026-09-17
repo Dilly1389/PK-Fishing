@@ -1084,6 +1084,11 @@
           <div id="admin-overview-signups"><div class="empty">Loading...</div></div>
           <p class="sub-heading" style="margin-top:14px;">Recent catches</p>
           <div id="admin-overview-catches"><div class="empty">Loading...</div></div>
+          <hr class="divider">
+          <p class="sub-heading">Badge event history</p>
+          <p class="pc-line muted" style="margin-bottom:10px;">Rebuilds detailed badge history (which catch, which session) from everyone's existing data. Safe to run more than once — already-recorded events are skipped, nothing is duplicated.</p>
+          <button type="button" class="mini-btn" id="admin-backfill-badge-events">Backfill everyone's badge history</button>
+          <div class="status" id="admin-backfill-status"></div>
         </div>
       </section>
 
@@ -1522,11 +1527,12 @@
 </div>
 
 <div class="modal-overlay" id="badge-detail-modal">
-  <div class="modal-card" style="text-align:center;">
+  <div class="modal-card" style="text-align:center;max-height:82vh;overflow-y:auto;">
     <img id="badge-detail-img" src="" alt="" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
     <h3 id="badge-detail-title" style="margin:0 0 6px;"></h3>
     <p class="pc-line muted" id="badge-detail-desc" style="margin-bottom:4px;"></p>
     <p class="pc-line muted" id="badge-detail-when"></p>
+    <div id="badge-detail-history" style="text-align:left;margin-top:10px;"></div>
     <button class="mini-btn" id="badge-detail-close" style="margin-top:12px;">Close</button>
   </div>
 </div>
@@ -6583,7 +6589,7 @@ function buildInsightsHtml(catches, venues, sessions){
       return {
         id: s.id,
         name: s.venue_name || 'Session',
-        when: started.toLocaleDateString([], {month:'short', day:'numeric', year:'numeric'}),
+        when: started.toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}),
         count: sc.length,
         weight,
         duration: durationMs,
@@ -6698,6 +6704,141 @@ async function computeBadgeStats(fishermanId){
   return stats;
 }
 
+// ---------- Badge event history (per-occurrence, not just a count) ----------
+// Replays a person's full catch/session history in chronological order and
+// reconstructs every individual moment a badge condition was met — the
+// specific catch that was the 10th, the specific fish that beat a PB, and
+// so on. This mirrors computeBadgeStats' logic exactly, just at the
+// resolution of "which one" rather than "how many" — the two are checked
+// against each other in devtools during testing, not assumed to agree.
+async function computeBadgeEvents(fishermanId){
+  const rec = await loadPerson(fishermanId);
+  const allCatches = (rec && rec.catches) ? rec.catches.slice().sort((a,b)=> a.time - b.time) : [];
+  const caught = allCatches.filter(c=>c.caught);
+  const events = [];
+  const add = (key, time, extra)=> events.push(Object.assign({badge_key:key, event_time:new Date(time).toISOString()}, extra||{}));
+
+  // Catches only carry venueId, not a name — resolve once here rather
+  // than leaving venue_name silently blank on every event
+  let venueNameById = {};
+  try{
+    const person = people.find(x=>x.id===fishermanId);
+    if(person && person.user_id){
+      const venueRows = await sbGet('venues?select=id,name&owner_user_id=eq.'+person.user_id);
+      venueRows.forEach(v=>{ venueNameById[v.id] = v.name; });
+    }
+  }catch(e){ console.error('venue lookup for badge events failed', e); }
+  const venueOf = c => c.venueId ? (venueNameById[c.venueId] || null) : null;
+
+  // First catch, and the 10th/50th/100th — milestone badges tied to a
+  // specific catch rather than a repeatable count
+  const milestones = {1:'first_catch', 10:'catch_10', 50:'catch_50', 100:'catch_100'};
+  caught.forEach((c, i)=>{
+    const n = i+1;
+    if(milestones[n]) add(milestones[n], c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
+  });
+
+  // Repeatable, one event per qualifying catch
+  caught.forEach(c=>{
+    if((c.weight||0) >= 10) add('ten_kg', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
+    if(c.hasKnownTime !== false && new Date(c.time).getHours() < 6) add('night_owl', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
+    if(c.moonPhase === 'Full Moon') add('full_moon', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
+    if(RARE_SPECIES.includes(c.type)) add('rare_catch', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
+  });
+
+  // Mixed Bag — the catch that brought distinct species to 5
+  const seenSpecies = new Set();
+  for(const c of caught){
+    if(!c.type) continue;
+    seenSpecies.add(c.type);
+    if(seenSpecies.size === 5){ add('five_species', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)}); break; }
+  }
+
+  // Explorer — the catch that introduced the 3rd distinct venue
+  const seenVenues = new Set();
+  for(const c of caught){
+    if(!c.venueId) continue;
+    seenVenues.add(c.venueId);
+    if(seenVenues.size === 3){ add('three_venues', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)}); break; }
+  }
+
+  // Grand Slam — the catch that completed the current Reel Records list.
+  // Uses today's list against all of history, same approximation
+  // computeBadgeStats already makes if Reel Records changed over time.
+  const person = people.find(x=>x.id===fishermanId);
+  const recordSpecies = getTrophySpeciesFor(person);
+  if(recordSpecies.length){
+    const seenRecord = new Set();
+    for(const c of caught){
+      if(!recordSpecies.includes(c.type)) continue;
+      seenRecord.add(c.type);
+      if(seenRecord.size === recordSpecies.length){ add('grand_slam', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)}); break; }
+    }
+  }
+
+  // Personal Best — every catch that beat the running max for its species
+  const bestBySpecies = {};
+  caught.forEach(c=>{
+    if(!c.type || !(c.weight > 0)) return;
+    if(bestBySpecies[c.type] === undefined){ bestBySpecies[c.type] = c.weight; }
+    else if(c.weight > bestBySpecies[c.type]){
+      add('beat_your_best', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
+      bestBySpecies[c.type] = c.weight;
+    }
+  });
+
+  // Session and competition based — need the sessions/competitions list,
+  // not just catches
+  try{
+    const sessions = await sbGet('sessions?select=id,started_at,ended_at,venue_name&fisherman_id=eq.'+fishermanId+'&order=started_at.asc');
+    const caughtSessionIds = new Set(caught.map(c=>c.sessionId).filter(Boolean));
+    let sessionN = 0;
+    sessions.forEach(s=>{
+      sessionN++;
+      if(sessionN === 10) add('ten_sessions', s.started_at, {venue_name:s.venue_name, session_id:s.id});
+      if(s.ended_at && !caughtSessionIds.has(s.id)) add('first_blank', s.ended_at, {venue_name:s.venue_name, session_id:s.id});
+    });
+  }catch(e){ console.error('session-based badge replay failed', e); }
+
+  // Competitor — first catch tagged to each distinct competition (matches
+  // the existing rule: taking part only counts once you've actually
+  // landed something in it, same as computeBadgeStats)
+  const seenComps = new Set();
+  caught.forEach(c=>{
+    if(!c.competitionId || seenComps.has(c.competitionId)) return;
+    seenComps.add(c.competitionId);
+    add('competitor', c.time, {species:c.type, weight:c.weight, catch_id:c.id, competition_id:c.competitionId, venue_name:venueOf(c)});
+  });
+
+  return events.sort((a,b)=> new Date(a.event_time) - new Date(b.event_time));
+}
+
+// Reconciles the full replay against what's already stored, inserting only
+// events that are genuinely missing — safe to call repeatedly, and this is
+// how both the one-time historical backfill and ongoing capture both work,
+// rather than two separate code paths that could drift out of sync
+async function syncBadgeEvents(fishermanId){
+  if(!isSignedIn() || !navigator.onLine) return;
+  try{
+    const [computed, stored] = await Promise.all([
+      computeBadgeEvents(fishermanId),
+      sbGet('badge_events?fisherman_id=eq.'+fishermanId+'&select=badge_key,catch_id,session_id,competition_id,event_time')
+    ]);
+    // A natural key per event — catch/session/competition id where there
+    // is one, otherwise badge+timestamp (covers the few badges with no
+    // single linking id)
+    const keyOf = e => e.badge_key + '|' + (e.catch_id || e.session_id || e.competition_id || e.event_time);
+    const have = new Set(stored.map(keyOf));
+    const missing = computed.filter(e => !have.has(keyOf(e)));
+    if(!missing.length) return;
+    for(const e of missing){
+      try{
+        await sbPost('badge_events', Object.assign({id: uid(), fisherman_id: fishermanId}, e));
+      }catch(err){ console.error('badge event insert failed', e.badge_key, err); }
+    }
+  }catch(e){ console.error('syncBadgeEvents failed', e); }
+}
+
 // Check for newly-earned badges and award them. Safe to call repeatedly —
 // the unique constraint means a badge can only ever be awarded once.
 async function checkAndAwardBadges(){
@@ -6738,6 +6879,9 @@ async function checkAndAwardBadges(){
       }catch(e){ console.error('award failed', badge.key, e); }
     }
     if(changed) refreshNotifBadge();
+    // Additive — keeps the detailed event history current alongside the
+    // existing count/summary logic above, without changing it
+    await syncBadgeEvents(myId);
   }catch(e){ console.error('checkAndAwardBadges failed', e); }
 }
 
@@ -7601,7 +7745,7 @@ function badgeImageSrc(key){
 const CABINET_WOOD = "repeating-linear-gradient(91deg, rgba(255,255,255,.035) 0px, rgba(0,0,0,.05) 2px, rgba(255,255,255,.02) 5px, rgba(0,0,0,.06) 9px), linear-gradient(180deg,#6b4526,#4a2e18)";
 const CABINET_HEX = "polygon(50% 0%, 100% 30%, 100% 70%, 50% 100%, 0% 70%, 0% 30%)";
 
-function openBadgeDetailFor(def, count, whenText){
+function openBadgeDetailFor(def, count, whenText, personId){
   document.getElementById('badge-detail-title').textContent = def.name + (count > 1 ? ' \u00d7' + count : '');
   document.getElementById('badge-detail-img').src = badgeImageSrc(def.key)+'?v='+BADGE_ASSET_VERSION;
   document.getElementById('badge-detail-desc').textContent = def.desc;
@@ -7609,6 +7753,25 @@ function openBadgeDetailFor(def, count, whenText){
     count > 1 ? whenText + ' \u00b7 earned ' + count + ' times'
               : whenText.replace('First earned', 'Earned');
   document.getElementById('badge-detail-modal').classList.add('open');
+
+  const histEl = document.getElementById('badge-detail-history');
+  histEl.innerHTML = '';
+  if(!personId) return;
+  sbGet('badge_events?fisherman_id=eq.'+personId+'&badge_key=eq.'+def.key+'&select=event_time,species,weight,venue_name&order=event_time.desc')
+    .then(rows=>{
+      if(!rows.length) return; // Nothing recorded yet — badges earned before this history existed
+      histEl.innerHTML = '<p class="sub-heading" style="margin-bottom:8px;">Every time</p>' +
+        rows.map(r=>{
+          const when = new Date(r.event_time).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'});
+          const bits = [];
+          if(r.species) bits.push(escapeHtml(r.species));
+          if(r.weight) bits.push(formatWeight(r.weight));
+          if(r.venue_name) bits.push(escapeHtml(r.venue_name));
+          return '<div class="pc-line" style="padding:5px 0;border-bottom:1px solid var(--line);">' +
+            '<span class="muted">' + when + '</span>' + (bits.length ? ' \u00b7 ' + bits.join(' \u00b7 ') : '') + '</div>';
+        }).join('');
+    })
+    .catch(e=> console.error('badge history load failed', e));
 }
 
 async function openBadgeBookcase(personId){
@@ -7704,7 +7867,7 @@ async function openBadgeBookcase(personId){
       const def = BADGE_DEFS.find(x=>x.key === btn.dataset.badgeKey);
       if(!def) return;
       const count = parseInt(btn.dataset.badgeCount || '1', 10);
-      openBadgeDetailFor(def, count, btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '');
+      openBadgeDetailFor(def, count, btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '', personId);
     });
   });
 }
@@ -7982,13 +8145,8 @@ async function openProfile(personId){
       const def = BADGE_DEFS.find(x=>x.key === btn.dataset.badgeKey);
       if(!def) return;
       const count = parseInt(btn.dataset.badgeCount || '1', 10);
-      document.getElementById('badge-detail-title').textContent = def.name + (count > 1 ? ' ×' + count : '');
-      document.getElementById('badge-detail-img').src = badgeImageSrc(def.key)+'?v='+BADGE_ASSET_VERSION;
-      document.getElementById('badge-detail-desc').textContent = def.desc;
       const whenText = btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '';
-      document.getElementById('badge-detail-when').textContent =
-        count > 1 ? whenText + ' · earned ' + count + ' times' : whenText.replace('First earned', 'Earned');
-      document.getElementById('badge-detail-modal').classList.add('open');
+      openBadgeDetailFor(def, count, whenText, personId);
     });
   });
 
@@ -8749,7 +8907,7 @@ function formatTimeAgo(ts){
   if(hrs < 24) return hrs+'h ago';
   const days = Math.floor(hrs/24);
   if(days < 7) return days+'d ago';
-  return new Date(ts).toLocaleDateString([], {month:'short', day:'numeric'});
+  return new Date(ts).toLocaleDateString([], {day:'numeric', month:'short'});
 }
 
 async function loadFeedItems(fishermanIds){
@@ -9578,6 +9736,25 @@ async function renderCompetitions(){
 }
 
 // ---------- Admin tab ----------
+document.getElementById('admin-backfill-badge-events').addEventListener('click', async ()=>{
+  const btn = document.getElementById('admin-backfill-badge-events');
+  const st = document.getElementById('admin-backfill-status');
+  btn.disabled = true;
+  try{
+    const all = await sbGet('fishermen?select=id,name');
+    for(let i=0; i<all.length; i++){
+      st.textContent = 'Working on ' + all[i].name + '... (' + (i+1) + ' of ' + all.length + ')';
+      try{ await syncBadgeEvents(all[i].id); }
+      catch(e){ console.error('backfill failed for', all[i].id, e); }
+    }
+    st.textContent = 'Done — checked ' + all.length + ' anglers.';
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not complete: ' + (e.message || 'unknown error');
+  }
+  btn.disabled = false;
+});
+
 async function renderAdminOverview(){
   const statsEl = document.getElementById('admin-overview-stats');
   const signupsEl = document.getElementById('admin-overview-signups');
