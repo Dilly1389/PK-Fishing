@@ -6716,7 +6716,11 @@ async function computeBadgeEvents(fishermanId){
   const allCatches = (rec && rec.catches) ? rec.catches.slice().sort((a,b)=> a.time - b.time) : [];
   const caught = allCatches.filter(c=>c.caught);
   const events = [];
-  const add = (key, time, extra)=> events.push(Object.assign({badge_key:key, event_time:new Date(time).toISOString()}, extra||{}));
+  const add = (key, time, extra)=>{
+    const iso = new Date(time).toISOString();
+    const dedupe = (extra && (extra.catch_id || extra.session_id || extra.competition_id)) || iso;
+    events.push(Object.assign({badge_key:key, event_time:iso, dedupe_key:dedupe}, extra||{}));
+  };
 
   // Catches only carry venueId, not a name — resolve once here rather
   // than leaving venue_name silently blank on every event
@@ -6822,12 +6826,12 @@ async function syncBadgeEvents(fishermanId){
   try{
     const [computed, stored] = await Promise.all([
       computeBadgeEvents(fishermanId),
-      sbGet('badge_events?fisherman_id=eq.'+fishermanId+'&select=badge_key,catch_id,session_id,competition_id,event_time')
+      sbGet('badge_events?fisherman_id=eq.'+fishermanId+'&select=badge_key,dedupe_key')
     ]);
-    // A natural key per event — catch/session/competition id where there
-    // is one, otherwise badge+timestamp (covers the few badges with no
-    // single linking id)
-    const keyOf = e => e.badge_key + '|' + (e.catch_id || e.session_id || e.competition_id || e.event_time);
+    // Same dedupe_key both sides — computed here, and already stored on
+    // each row in the database, rather than two separately-maintained
+    // versions of the same logic that could quietly drift apart
+    const keyOf = e => e.badge_key + '|' + e.dedupe_key;
     const have = new Set(stored.map(keyOf));
     const missing = computed.filter(e => !have.has(keyOf(e)));
     if(!missing.length) return;
