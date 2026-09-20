@@ -5652,7 +5652,7 @@ async function renderSessionUi(){
     document.getElementById('session-active-venue').textContent = activeSession.venue_name || 'Session in progress';
     const started = new Date(activeSession.started_at);
     document.getElementById('session-active-meta').textContent =
-      `started ${started.toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}`;
+      `started ${started.toLocaleString('en-ZA', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}`;
     const activeRodsSel = document.getElementById('session-active-rods');
     if(activeRodsSel){
       const rods = normalizeRodsCount(activeSession.rods);
@@ -5760,7 +5760,7 @@ async function openForecast(){
   let html = `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
   hours.forEach(h=>{
     html += `<li>
-      <div class="who"><b>${h.time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</b></div>
+      <div class="who"><b>${h.time.toLocaleTimeString('en-ZA', {hour:'2-digit', minute:'2-digit'})}</b></div>
       <div class="actions">
         <span class="pill">${h.temp != null ? Math.round(h.temp)+'°C' : '—'}</span>
         <span class="pill">💨 ${h.wind != null ? Math.round(h.wind)+'km/h '+windDirLabel(h.windDir) : '—'}</span>
@@ -5782,7 +5782,7 @@ async function openForecast(){
   if(data.daily && data.daily.time){
     html += `<p class="sub-heading">Next few days</p><ul class="people-list">`;
     data.daily.time.forEach((d, i)=>{
-      const day = new Date(d).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
+      const day = new Date(d).toLocaleDateString('en-ZA', {weekday:'short', day:'numeric', month:'short'});
       html += `<li>
         <div class="who"><b>${escapeHtml(day)}</b></div>
         <div class="actions">
@@ -6152,7 +6152,7 @@ let pendingEntry = null;
 
 function showConfirmation(entry){
   pendingEntry = entry;
-  const timeStr = new Date(entry.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const timeStr = new Date(entry.time).toLocaleTimeString('en-ZA', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(entry.timerElapsed||0);
   let html = `<h3>${entry.caught ? 'Caught a fish?' : 'No catch?'}</h3>`;
   html += `<p><b>${RID_LABEL[entry.rod]}</b>${entry.caught ? ' · '+escapeHtml(entry.hook) : ''}${entry.rodIdentifier ? ' · '+escapeHtml(entry.rodIdentifier) : ''}</p>`;
@@ -6165,7 +6165,7 @@ function showConfirmation(entry){
   if(isToday){
     html += `<p>Time of day: <b>${timeStr}</b></p>`;
   }else{
-    html += `<p>Caught: <b>${entryDate.toLocaleString([], {weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}</b></p>`;
+    html += `<p>Caught: <b>${entryDate.toLocaleString('en-ZA', {weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}</b></p>`;
   }
   html += `<p>Rod timer: <b>${timerStr}</b></p>`;
   if(entry.rig){
@@ -6317,10 +6317,10 @@ function renderProfilePhotoGrid(entries, filterType){
 function catchDetailHtml(c, editable, removable){
   const timeStr = c.hasKnownTime === false
     ? 'not recorded'
-    : new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    : new Date(c.time).toLocaleTimeString('en-ZA', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(c.timerElapsed||0);
   const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
-  const dateStr = new Date(c.time).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'});
+  const dateStr = new Date(c.time).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'});
   let html = `<div class="profile-catch">
     <div class="pc-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <span>${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</span>
@@ -6622,7 +6622,7 @@ function buildInsightsHtml(catches, venues, sessions){
       return {
         id: s.id,
         name: s.venue_name || 'Session',
-        when: started.toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}),
+        when: started.toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'}),
         count: sc.length,
         weight,
         duration: durationMs,
@@ -6874,12 +6874,25 @@ async function syncBadgeEvents(fishermanId){
     // versions of the same logic that could quietly drift apart
     const keyOf = e => e.badge_key + '|' + e.dedupe_key;
     const have = new Set(stored.map(keyOf));
+    const wanted = new Set(computed.map(keyOf));
+
     const missing = computed.filter(e => !have.has(keyOf(e)));
-    if(!missing.length) return;
     for(const e of missing){
       try{
         await sbPost('badge_events', Object.assign({id: uid(), fisherman_id: fishermanId}, e));
       }catch(err){ console.error('badge event insert failed', e.badge_key, err); }
+    }
+
+    // The replay works from whatever catches and sessions exist right now,
+    // so anything stored that it no longer produces has had its source
+    // deleted — clear it out rather than leaving orphaned history
+    const orphaned = stored.filter(e => !wanted.has(keyOf(e)));
+    for(const e of orphaned){
+      try{
+        await sbDelete('badge_events', 'fisherman_id=eq.'+fishermanId
+          + '&badge_key=eq.'+encodeURIComponent(e.badge_key)
+          + '&dedupe_key=eq.'+encodeURIComponent(e.dedupe_key));
+      }catch(err){ console.error('badge event cleanup failed', e.badge_key, err); }
     }
   }catch(e){ console.error('syncBadgeEvents failed', e); }
 }
@@ -6903,9 +6916,17 @@ async function checkAndAwardBadges(){
       // Repeatable badges track how many times they've been earned;
       // one-off badges are simply earned or not
       const target = badge.count ? (badge.count(stats) || 0) : (badge.test(stats) ? 1 : 0);
-      if(target <= 0) continue;
 
       try{
+        if(target <= 0){
+          // The catches behind this badge are gone — drop it rather than
+          // leaving a badge with nothing supporting it
+          if(current){
+            await sbDelete('badges_earned', 'fisherman_id=eq.'+myId+'&badge_key=eq.'+badge.key);
+            changed++;
+          }
+          continue;
+        }
         if(!current){
           await sbPost('badges_earned', {
             id: uid(), fisherman_id: myId, badge_key: badge.key,
@@ -6919,6 +6940,13 @@ async function checkAndAwardBadges(){
             earn_count: target, last_earned_at: new Date().toISOString()
           });
           await sbRpc('notify_badge_earned', {p_badge_key: badge.key, p_badge_name: badge.name + ' ×' + target});
+          changed++;
+        }else if(target < (current.earn_count || 1)){
+          // Count dropped because something was deleted — correct it
+          // quietly, no notification for losing ground
+          await sbPatch('badges_earned', 'fisherman_id=eq.'+myId+'&badge_key=eq.'+badge.key, {
+            earn_count: target
+          });
           changed++;
         }
       }catch(e){ console.error('award failed', badge.key, e); }
@@ -7788,7 +7816,6 @@ function badgeImageSrc(key){
 // only what's filled changes. Unearned slots are unlabelled dark recesses —
 // deliberately no hint about what belongs there.
 const CABINET_WOOD = "repeating-linear-gradient(91deg, rgba(255,255,255,.035) 0px, rgba(0,0,0,.05) 2px, rgba(255,255,255,.02) 5px, rgba(0,0,0,.06) 9px), linear-gradient(180deg,#6b4526,#4a2e18)";
-const CABINET_HEX = "polygon(50% 0%, 100% 30%, 100% 70%, 50% 100%, 0% 70%, 0% 30%)";
 
 function openBadgeDetailFor(def, count, whenText, personId, isComp){
   document.getElementById('badge-detail-title').textContent = def.name + (count > 1 ? ' \u00d7' + count : '');
@@ -7811,7 +7838,7 @@ function openBadgeDetailFor(def, count, whenText, personId, isComp){
         if(!rows.length) return;
         histEl.innerHTML = '<p class="sub-heading" style="margin-bottom:8px;">Every time</p>' +
           rows.map(r=>{
-            const when = new Date(r.awarded_at).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'});
+            const when = new Date(r.awarded_at).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'});
             return '<div class="pc-line" style="padding:5px 0;border-bottom:1px solid var(--line);">' +
               '<span class="muted">' + when + '</span>' +
               (r.competition_name ? ' \u00b7 ' + escapeHtml(r.competition_name) : '') + '</div>';
@@ -7826,7 +7853,7 @@ function openBadgeDetailFor(def, count, whenText, personId, isComp){
       if(!rows.length) return; // Nothing recorded yet — badges earned before this history existed
       histEl.innerHTML = '<p class="sub-heading" style="margin-bottom:8px;">Every time</p>' +
         rows.map(r=>{
-          const when = new Date(r.event_time).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'});
+          const when = new Date(r.event_time).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'});
           const bits = [];
           if(r.species) bits.push(escapeHtml(r.species));
           if(r.weight) bits.push(formatWeight(r.weight));
@@ -7872,13 +7899,15 @@ async function openBadgeBookcase(personId){
 // Shared by both cabinets. `isComp` switches where a tapped badge reads its
 // history from, since competition wins live in their own table.
 function renderCabinet(el, defs, byKey, title, personId, isComp){
-  const shellOpen = '<div style="position:relative;height:100%;box-sizing:border-box;padding:12px 4px 8px;'
+  // The little spotlight only shines on a slot that actually holds a badge —
+  // an unlit slot reads as empty shelf rather than something being hidden
+  const shellOpen = (lit)=> '<div style="position:relative;height:100%;box-sizing:border-box;padding:12px 4px 8px;'
     + 'background:linear-gradient(180deg,#2a1a0d 0%,#3a2513 70%,#2a1a0d 100%);'
     + 'box-shadow:inset 0 5px 10px rgba(0,0,0,.82), inset 0 -4px 8px rgba(0,0,0,.5),'
     + 'inset 4px 0 8px rgba(0,0,0,.45), inset -4px 0 8px rgba(0,0,0,.45);">'
-    + '<div style="position:absolute;top:0;left:10%;right:10%;height:34%;'
-    + 'background:radial-gradient(ellipse at 50% 0%, rgba(255,205,135,.30), rgba(255,205,135,0) 72%);'
-    + 'pointer-events:none;"></div>';
+    + (lit ? '<div style="position:absolute;top:0;left:10%;right:10%;height:34%;'
+      + 'background:radial-gradient(ellipse at 50% 0%, rgba(255,205,135,.30), rgba(255,205,135,0) 72%);'
+      + 'pointer-events:none;"></div>' : '');
 
   let cells = '';
   let earnedCount = 0;
@@ -7890,7 +7919,7 @@ function renderCabinet(el, defs, byKey, title, personId, isComp){
       earnedCount++;
       const count = isComp ? e.count : (e.earn_count || 1);
       const whenSrc = isComp ? e.latest : e.earned_at;
-      const when = new Date(whenSrc).toLocaleDateString([], {month:'short', year:'numeric'});
+      const when = new Date(whenSrc).toLocaleDateString('en-ZA', {month:'short', year:'numeric'});
       const bubble = count > 1
         ? '<span style="position:absolute;top:8px;right:10px;background:var(--dam);color:#fff;'
           + 'border:2px solid #2a1a0d;border-radius:999px;min-width:20px;height:20px;display:inline-flex;'
@@ -7909,13 +7938,11 @@ function renderCabinet(el, defs, byKey, title, personId, isComp){
         + 'data-badge-key="' + b.key + '" data-badge-count="' + count + '" data-badge-when="' + escapeHtml(when) + '" '
         + 'data-badge-comp="' + (isComp ? '1' : '') + '" '
         + 'style="display:block;width:100%;height:100%;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">'
-        + shellOpen + inner + '</div></button></div>';
+        + shellOpen(true) + inner + '</div></button></div>';
     }else{
-      inner = '<div style="width:64px;height:74px;margin:0 auto;clip-path:' + CABINET_HEX + ';'
-        + 'background:linear-gradient(160deg,#120a04,#2a1a0b);'
-        + 'box-shadow:inset 0 4px 10px rgba(0,0,0,.95), inset 0 -2px 4px rgba(255,190,130,.06);"></div>'
+      inner = '<div style="width:64px;height:74px;margin:0 auto;"></div>'
         + '<div style="margin-top:6px;min-height:22px;"></div>';
-      cells += '<div style="height:100%;' + borderR + '">' + shellOpen + inner + '</div></div>';
+      cells += '<div style="height:100%;' + borderR + '">' + shellOpen(false) + inner + '</div></div>';
     }
   });
 
@@ -8089,7 +8116,7 @@ async function openProfile(personId){
     html += `<div style="display:flex;gap:10px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch;">` +
       recentDefs.map(b=>{
         const earned = earnedBadges.find(e=>e.badge_key===b.key);
-        const when = earned ? new Date(earned.earned_at).toLocaleDateString([], {month:'short', year:'numeric'}) : '';
+        const when = earned ? new Date(earned.earned_at).toLocaleDateString('en-ZA', {month:'short', year:'numeric'}) : '';
         const count = earned ? (earned.earn_count || 1) : 1;
         // Only worth showing a number once it's been earned more than once
         const countBubble = count > 1
@@ -8155,7 +8182,7 @@ async function openProfile(personId){
   }else{
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">` +
       speciesStats.map(s=>{
-        const pbDate = s.pb ? new Date(s.pb.time).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}) : '';
+        const pbDate = s.pb ? new Date(s.pb.time).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'}) : '';
         const pbPhoto = (s.pb && s.pb.photos && s.pb.photos.length) ? s.pb.photos[0] : null;
         return `
         <div class="profile-catch" style="flex:1;min-width:130px;text-align:center;">
@@ -8611,7 +8638,7 @@ async function renderPhotoComments(){
   if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet — be the first to say something.</div>'; return; }
   const myUserId = isSignedIn() ? session.user.id : null;
   el.innerHTML = rows.map(c=>{
-    const time = new Date(c.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const time = new Date(c.created_at).toLocaleString('en-ZA', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     const isMine = myUserId && c.author_user_id === myUserId;
     const canManage = isMine || isSuperUser();
     return `<div class="comment-item" data-comment-id="${c.id}">
@@ -8728,7 +8755,7 @@ function renderTimers(){
     const label = document.getElementById('start-time-'+r);
     if(label){
       label.textContent = (t && t.running && t.startTs)
-        ? 'Started ' + new Date(t.startTs).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+        ? 'Started ' + new Date(t.startTs).toLocaleTimeString('en-ZA', {hour:'2-digit',minute:'2-digit'})
         : '';
     }
   });
@@ -8769,7 +8796,7 @@ function renderCatchList(rod){
   if(entries.length===0){ el.innerHTML = '<div class="empty">No entries yet this session.</div>'; return; }
   el.innerHTML = entries.slice().reverse().map(c=>{
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)} (${escapeHtml(c.hook||'')})` : `No catch`;
-    const time = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const time = new Date(c.time).toLocaleTimeString('en-ZA', {hour:'2-digit',minute:'2-digit'});
     const photoCount = (c.photos && c.photos.length) || 0;
     if(photoCount) photoGalleryCache[c.id] = c.photos;
     const thumb = photoCount
@@ -9043,7 +9070,7 @@ function formatTimeAgo(ts){
   if(hrs < 24) return hrs+'h ago';
   const days = Math.floor(hrs/24);
   if(days < 7) return days+'d ago';
-  return new Date(ts).toLocaleDateString([], {day:'numeric', month:'short'});
+  return new Date(ts).toLocaleDateString('en-ZA', {day:'numeric', month:'short'});
 }
 
 async function loadFeedItems(fishermanIds){
@@ -10204,7 +10231,7 @@ async function renderAdminOverview(){
     // so genuinely recent joins always show first regardless of table size
     const rows = await sbGet('fishermen?select=id,name,created_at&order=created_at.desc.nullslast&limit=5');
     signupsEl.innerHTML = rows.length ? rows.map(r=>{
-      const when = r.created_at ? new Date(r.created_at).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}) : 'Before join dates were tracked';
+      const when = r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'}) : 'Before join dates were tracked';
       return `<div class="profile-catch"><div class="pc-head">${escapeHtml(r.name)}</div><div class="pc-line muted">${escapeHtml(when)}</div></div>`;
     }).join('') : '<div class="empty">No anglers yet.</div>';
   }catch(e){
@@ -10218,7 +10245,7 @@ async function renderAdminOverview(){
     // round of queries needed just to label who caught what
     catchesEl.innerHTML = rows.length ? rows.map(c=>{
       const angler = people.find(p=>p.id===c.fisherman_id);
-      const when = new Date(c.time).toLocaleDateString([], {day:'numeric', month:'short'});
+      const when = new Date(c.time).toLocaleDateString('en-ZA', {day:'numeric', month:'short'});
       return `<div class="profile-catch">
         <div class="pc-head">${escapeHtml(angler ? angler.name : 'Unknown')} — ${escapeHtml(c.fish_type||'Fish')}</div>
         <div class="pc-line muted">${formatWeight(c.weight)} · ${escapeHtml(when)}</div>
@@ -10437,7 +10464,7 @@ document.getElementById('admin-catch-angler-select').addEventListener('change', 
   }
   catchSel.disabled = false;
   catchSel.innerHTML = '<option value="">Choose...</option>' + adminCatchList.map(c=>{
-    const time = new Date(c.time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const time = new Date(c.time).toLocaleString('en-ZA', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     const label = c.caught ? `${c.type||'Fish'} — ${formatWeight(c.weight)} (${time})` : `No catch (${time})`;
     return `<option value="${c.id}">${escapeHtml(label)}</option>`;
   }).join('');
