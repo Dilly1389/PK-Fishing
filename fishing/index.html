@@ -1520,8 +1520,14 @@
 <div class="modal-overlay" id="badge-bookcase-modal">
   <div class="modal-card wide" style="padding:16px 14px;position:relative;">
     <button type="button" id="badge-bookcase-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
-    <div id="badge-bookcase-cabinet"></div>
-    <p class="pc-line muted" style="margin-top:12px;text-align:center;">The empty slots are still a mystery — no hints here, you'll only find out what they are by earning them.</p>
+    <!-- Two cabinets side by side, swiped horizontally. Scroll snapping
+         does the work — no JS gesture handling needed. -->
+    <div id="badge-bookcase-pages" style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px;scrollbar-width:none;-ms-overflow-style:none;">
+      <div style="flex:0 0 100%;scroll-snap-align:center;"><div id="badge-bookcase-cabinet"></div></div>
+      <div style="flex:0 0 100%;scroll-snap-align:center;"><div id="badge-bookcase-cabinet-comp"></div></div>
+    </div>
+    <div id="badge-bookcase-dots" style="display:flex;gap:7px;justify-content:center;padding:12px 0 2px;"></div>
+    <p class="pc-line muted" style="text-align:center;">The empty slots are still a mystery — no hints here, you'll only find out what they are by earning them.</p>
     <button class="primary-btn" id="badge-bookcase-close" style="margin-top:12px;">Close</button>
   </div>
 </div>
@@ -1861,7 +1867,7 @@ const ALL_BAIT_TYPES = [
 // Bump this whenever a badge image file is replaced with the same filename —
 // otherwise browsers (and CDN caches) can keep serving the old cached version
 // indefinitely, since nothing about the URL itself changes.
-const BADGE_ASSET_VERSION = 10;
+const BADGE_ASSET_VERSION = 11;
 
 const BADGE_DEFS = [
   // One-off badges: `test` returns true once the condition is met.
@@ -1897,6 +1903,24 @@ const BADGE_DEFS = [
    count: s=> s.rareCatchCount},
   {key:'beat_your_best', emoji:'📈', name:'Personal Best',     desc:'Beat your own record for a species',
    count: s=> s.beatenOwnPbCount}
+];
+
+// Competition badges are a different shape to the ones above: awarded by
+// where you finished against other people when a competition ends, not by
+// your own running totals. They live in their own table (competition_badges)
+// because each award is tied to a specific competition and date.
+// metric matches competitions.metric; place is 1/2/3.
+const COMPETITION_BADGE_DEFS = [
+  {key:'comp_weight_1st',  emoji:'🥇', name:'Biggest Bag',        desc:'Heaviest total weight in a competition',        metric:'total_weight', place:1},
+  {key:'comp_weight_2nd',  emoji:'🥈', name:'Bag Runner-up',      desc:'Second heaviest total weight in a competition',  metric:'total_weight', place:2},
+  {key:'comp_weight_3rd',  emoji:'🥉', name:'Bag Third',          desc:'Third heaviest total weight in a competition',   metric:'total_weight', place:3},
+  {key:'comp_catches_1st', emoji:'🥇', name:'Most Catches',       desc:'Most fish landed in a competition',              metric:'catch_count',  place:1},
+  {key:'comp_catches_2nd', emoji:'🥈', name:'Catches Runner-up',  desc:'Second most fish landed in a competition',        metric:'catch_count',  place:2},
+  {key:'comp_catches_3rd', emoji:'🥉', name:'Catches Third',      desc:'Third most fish landed in a competition',         metric:'catch_count',  place:3},
+  {key:'comp_biggest_1st', emoji:'🥇', name:'Biggest Fish',       desc:'Biggest single fish in a competition',            metric:'biggest_fish', place:1},
+  {key:'comp_biggest_2nd', emoji:'🥈', name:'Biggest Runner-up',  desc:'Second biggest single fish in a competition',     metric:'biggest_fish', place:2},
+  {key:'comp_biggest_3rd', emoji:'🥉', name:'Biggest Third',      desc:'Third biggest single fish in a competition',      metric:'biggest_fish', place:3},
+  {key:'here_for_beer',    emoji:'🍺', name:'Here for the Beer',  desc:"Fewest fish in a competition — you're here for the vibes, not the trophy"}
 ];
 
 // The uncommon species — catching one of these is a genuine achievement,
@@ -3561,6 +3585,9 @@ await loadTackleCategoryOptions();
       await setActivePerson(myFishermanId);
     }
     updateTimersVisibility();
+    // Someone who arrived via an invite link while signed out — finish the
+    // join now that we know who they are
+    checkPendingCompetitionJoin();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not sign in.';
@@ -3647,6 +3674,12 @@ async function notifyCatchLike(catchId){
 async function notifyCompetitionAdd(competitionId, fishermanId){
   try{ await sbRpc('notify_competition_add', {p_competition_id: competitionId, p_fisherman_id: fishermanId}); }
   catch(e){ console.error('notify_competition_add failed', e); }
+}
+async function notifyCompetitionJoinRequest(competitionId, fishermanId, competitionName){
+  try{ await sbRpc('notify_competition_join_request', {
+    p_competition_id: competitionId, p_fisherman_id: fishermanId, p_competition_name: competitionName || null
+  }); }
+  catch(e){ console.error('notify_competition_join_request failed', e); }
 }
 async function loadMyNotifications(){
   if(!isSignedIn()) return [];
@@ -5536,7 +5569,7 @@ async function renderActiveCompetitionsBar(){
     // the app even at a handful of users
     const compIds = comps.map(c=>c.id);
     const participantRows = compIds.length
-      ? await sbGet('competition_participants?select=competition_id,fisherman_id&competition_id=in.('+compIds.join(',')+')')
+      ? await sbGet('competition_participants?select=competition_id,fisherman_id&status=eq.approved&competition_id=in.('+compIds.join(',')+')')
       : [];
     const participantsByComp = {};
     participantRows.forEach(r=>{
@@ -6650,6 +6683,14 @@ async function loadBadgesFor(fishermanId){
   }catch(e){ console.error('loadBadgesFor failed', e); return []; }
 }
 
+// Competition badge awards — one row per win, so the same badge can appear
+// several times with different competitions and dates
+async function loadCompetitionBadgesFor(fishermanId){
+  try{
+    return await sbGet('competition_badges?select=badge_key,competition_name,awarded_at&fisherman_id=eq.'+fishermanId+'&order=awarded_at.desc');
+  }catch(e){ console.error('loadCompetitionBadgesFor failed', e); return []; }
+}
+
 // Build the stats each badge test runs against
 async function computeBadgeStats(fishermanId){
   const rec = await loadPerson(fishermanId);
@@ -7749,7 +7790,7 @@ function badgeImageSrc(key){
 const CABINET_WOOD = "repeating-linear-gradient(91deg, rgba(255,255,255,.035) 0px, rgba(0,0,0,.05) 2px, rgba(255,255,255,.02) 5px, rgba(0,0,0,.06) 9px), linear-gradient(180deg,#6b4526,#4a2e18)";
 const CABINET_HEX = "polygon(50% 0%, 100% 30%, 100% 70%, 50% 100%, 0% 70%, 0% 30%)";
 
-function openBadgeDetailFor(def, count, whenText, personId){
+function openBadgeDetailFor(def, count, whenText, personId, isComp){
   document.getElementById('badge-detail-title').textContent = def.name + (count > 1 ? ' \u00d7' + count : '');
   document.getElementById('badge-detail-img').src = badgeImageSrc(def.key)+'?v='+BADGE_ASSET_VERSION;
   document.getElementById('badge-detail-desc').textContent = def.desc;
@@ -7761,6 +7802,25 @@ function openBadgeDetailFor(def, count, whenText, personId){
   const histEl = document.getElementById('badge-detail-history');
   histEl.innerHTML = '';
   if(!personId) return;
+
+  // Competition wins live in their own table and show which competition
+  // each one was won at, not species/weight
+  if(isComp){
+    sbGet('competition_badges?fisherman_id=eq.'+personId+'&badge_key=eq.'+def.key+'&select=awarded_at,competition_name&order=awarded_at.desc')
+      .then(rows=>{
+        if(!rows.length) return;
+        histEl.innerHTML = '<p class="sub-heading" style="margin-bottom:8px;">Every time</p>' +
+          rows.map(r=>{
+            const when = new Date(r.awarded_at).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'});
+            return '<div class="pc-line" style="padding:5px 0;border-bottom:1px solid var(--line);">' +
+              '<span class="muted">' + when + '</span>' +
+              (r.competition_name ? ' \u00b7 ' + escapeHtml(r.competition_name) : '') + '</div>';
+          }).join('');
+      })
+      .catch(e=> console.error('competition badge history load failed', e));
+    return;
+  }
+
   sbGet('badge_events?fisherman_id=eq.'+personId+'&badge_key=eq.'+def.key+'&select=event_time,species,weight,venue_name&order=event_time.desc')
     .then(rows=>{
       if(!rows.length) return; // Nothing recorded yet — badges earned before this history existed
@@ -7780,13 +7840,38 @@ function openBadgeDetailFor(def, count, whenText, personId){
 
 async function openBadgeBookcase(personId){
   const el = document.getElementById('badge-bookcase-cabinet');
+  const elComp = document.getElementById('badge-bookcase-cabinet-comp');
   el.innerHTML = '<div class="empty">Loading...</div>';
+  elComp.innerHTML = '';
   document.getElementById('badge-bookcase-modal').classList.add('open');
 
-  const earned = await loadBadgesFor(personId);
+  const [earned, compAwards] = await Promise.all([
+    loadBadgesFor(personId),
+    loadCompetitionBadgesFor(personId)
+  ]);
+
   const byKey = {};
   earned.forEach(e=>{ byKey[e.badge_key] = e; });
 
+  // Competition badges arrive one row per win — fold them into the same
+  // {count, when} shape the cabinet builder already understands, keeping
+  // the most recent win as the one shown on the shelf
+  const compByKey = {};
+  compAwards.forEach(a=>{
+    if(!compByKey[a.badge_key]){
+      compByKey[a.badge_key] = {count:0, latest:a.awarded_at, latestComp:a.competition_name};
+    }
+    compByKey[a.badge_key].count++;
+  });
+
+  renderCabinet(el, BADGE_DEFS, byKey, 'Fins of Fame', personId, false);
+  renderCabinet(elComp, COMPETITION_BADGE_DEFS, compByKey, 'Trophy Case', personId, true);
+  renderBookcaseDots();
+}
+
+// Shared by both cabinets. `isComp` switches where a tapped badge reads its
+// history from, since competition wins live in their own table.
+function renderCabinet(el, defs, byKey, title, personId, isComp){
   const shellOpen = '<div style="position:relative;height:100%;box-sizing:border-box;padding:12px 4px 8px;'
     + 'background:linear-gradient(180deg,#2a1a0d 0%,#3a2513 70%,#2a1a0d 100%);'
     + 'box-shadow:inset 0 5px 10px rgba(0,0,0,.82), inset 0 -4px 8px rgba(0,0,0,.5),'
@@ -7796,13 +7881,16 @@ async function openBadgeBookcase(personId){
     + 'pointer-events:none;"></div>';
 
   let cells = '';
-  BADGE_DEFS.forEach((b, i)=>{
+  let earnedCount = 0;
+  defs.forEach((b, i)=>{
     const e = byKey[b.key];
     const borderR = (i % 3 === 2) ? '' : 'border-right:1px solid rgba(0,0,0,.62);';
     let inner;
     if(e){
-      const count = e.earn_count || 1;
-      const when = new Date(e.earned_at).toLocaleDateString([], {month:'short', year:'numeric'});
+      earnedCount++;
+      const count = isComp ? e.count : (e.earn_count || 1);
+      const whenSrc = isComp ? e.latest : e.earned_at;
+      const when = new Date(whenSrc).toLocaleDateString([], {month:'short', year:'numeric'});
       const bubble = count > 1
         ? '<span style="position:absolute;top:8px;right:10px;background:var(--dam);color:#fff;'
           + 'border:2px solid #2a1a0d;border-radius:999px;min-width:20px;height:20px;display:inline-flex;'
@@ -7819,10 +7907,10 @@ async function openBadgeBookcase(personId){
         + 'text-shadow:0 1px 2px rgba(0,0,0,.85);min-height:22px;">' + escapeHtml(b.name) + '</div>';
       cells += '<div style="height:100%;' + borderR + '"><button type="button" class="bookcase-badge" '
         + 'data-badge-key="' + b.key + '" data-badge-count="' + count + '" data-badge-when="' + escapeHtml(when) + '" '
+        + 'data-badge-comp="' + (isComp ? '1' : '') + '" '
         + 'style="display:block;width:100%;height:100%;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">'
         + shellOpen + inner + '</div></button></div>';
     }else{
-      // No label, no tooltip, nothing tappable — an empty slot gives nothing away
       inner = '<div style="width:64px;height:74px;margin:0 auto;clip-path:' + CABINET_HEX + ';'
         + 'background:linear-gradient(160deg,#120a04,#2a1a0b);'
         + 'box-shadow:inset 0 4px 10px rgba(0,0,0,.95), inset 0 -2px 4px rgba(255,190,130,.06);"></div>'
@@ -7830,8 +7918,6 @@ async function openBadgeBookcase(personId){
       cells += '<div style="height:100%;' + borderR + '">' + shellOpen + inner + '</div></div>';
     }
   });
-
-  const perRow = 3;
 
   el.innerHTML =
     '<div style="border-radius:8px;overflow:hidden;border:1px solid #1d1009;'
@@ -7842,18 +7928,42 @@ async function openBadgeBookcase(personId){
     + 'background:linear-gradient(180deg,#fbeec2 0%,#d4b06a 38%,#8e6a2c 64%,#e3c68c 100%);'
     + 'border:1px solid #6b4d1e;box-shadow:0 2px 5px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.7);">'
     + '<span style="font-family:Georgia,serif;font-weight:700;font-size:13px;letter-spacing:.13em;'
-    + 'color:#3b2a0b;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,255,255,.5);">Fins of Fame</span></div>'
-    + '<div style="font-size:10.5px;color:#cda67c;margin-top:6px;">' + earned.length + ' of ' + BADGE_DEFS.length + ' earned</div></div>'
-    + '<div style="padding:0 8px;background:' + CABINET_WOOD + ';" id="badge-bookcase-shelves"></div>'
+    + 'color:#3b2a0b;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,255,255,.5);">' + escapeHtml(title) + '</span></div>'
+    + '<div style="font-size:10.5px;color:#cda67c;margin-top:6px;">' + earnedCount + ' of ' + defs.length + ' earned</div></div>'
+    + '<div style="padding:0 8px;background:' + CABINET_WOOD + ';" class="bookcase-shelves"></div>'
     + '<div style="height:15px;background:linear-gradient(180deg,#8a5930 0%,#5c3a1e 40%,#2b1a0c 100%);'
     + 'box-shadow:0 -2px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,220,180,.35);"></div></div>';
 
-  // Build shelves by slicing the rendered cells into rows of three
   const holder = document.createElement('div');
   holder.innerHTML = cells;
   const nodes = Array.from(holder.children);
-  const shelves = document.getElementById('badge-bookcase-shelves');
-  let shelfHtml = '';
+  const shelves = el.querySelector('.bookcase-shelves');
+  const perRow = 3;
+  // Pad the last shelf when the badge count doesn't divide evenly, so it
+  // reads as an empty part of the cabinet rather than a hole in it
+  const remainder = nodes.length % perRow;
+  if(remainder){
+    const makeFiller = ()=>{
+      const filler = document.createElement('div');
+      filler.style.cssText = 'height:100%;border-right:1px solid rgba(0,0,0,.62);';
+      filler.innerHTML = shellOpen + '<div style="width:64px;height:74px;margin:0 auto;"></div>'
+        + '<div style="margin-top:6px;min-height:22px;"></div></div>';
+      return filler;
+    };
+    if(remainder === 1){
+      // A single badge on the last shelf sits centred, with a blank panel
+      // either side — a lone badge stranded on the left looks like the row
+      // is missing two rather than deliberately holding one
+      const only = nodes.pop();
+      only.style.borderRight = '1px solid rgba(0,0,0,.62)';
+      nodes.push(makeFiller(), only, makeFiller());
+    }else{
+      for(let k = 0; k < perRow - remainder; k++) nodes.push(makeFiller());
+    }
+    // The cell that ends up last in the row shouldn't carry a divider
+    const tail = nodes[nodes.length - 1];
+    if(tail) tail.style.borderRight = 'none';
+  }
   for(let i = 0; i < nodes.length; i += perRow){
     const row = document.createElement('div');
     row.style.display = 'grid';
@@ -7868,12 +7978,28 @@ async function openBadgeBookcase(personId){
 
   shelves.querySelectorAll('.bookcase-badge').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      const def = BADGE_DEFS.find(x=>x.key === btn.dataset.badgeKey);
+      const pool = btn.dataset.badgeComp ? COMPETITION_BADGE_DEFS : BADGE_DEFS;
+      const def = pool.find(x=>x.key === btn.dataset.badgeKey);
       if(!def) return;
       const count = parseInt(btn.dataset.badgeCount || '1', 10);
-      openBadgeDetailFor(def, count, btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '', personId);
+      openBadgeDetailFor(def, count, btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '', personId, !!btn.dataset.badgeComp);
     });
   });
+}
+
+function renderBookcaseDots(){
+  const pages = document.getElementById('badge-bookcase-pages');
+  const dots = document.getElementById('badge-bookcase-dots');
+  if(!pages || !dots) return;
+  const draw = ()=>{
+    const idx = Math.round(pages.scrollLeft / Math.max(pages.clientWidth, 1));
+    dots.innerHTML = [0,1].map(i=>
+      '<span style="width:7px;height:7px;border-radius:50%;background:'
+      + (i === idx ? 'var(--dam)' : 'var(--line)') + ';"></span>').join('');
+  };
+  draw();
+  pages.onscroll = draw;
+  pages.scrollLeft = 0;
 }
 
 document.getElementById('badge-bookcase-close').addEventListener('click', ()=>{
@@ -8822,7 +8948,7 @@ async function renderLeaderboard(){
   const damLabel = document.getElementById('lb-competition-dam');
   if(competitionId){
     try{
-      const rows = await sbGet('competition_participants?select=fisherman_id&competition_id=eq.'+competitionId);
+      const rows = await sbGet('competition_participants?select=fisherman_id&status=eq.approved&competition_id=eq.'+competitionId);
       participantIds = rows.map(r=>r.fisherman_id);
       const compRows = await sbGet('competitions?select=dam&id=eq.'+competitionId);
       if(compRows[0] && compRows[0].dam){
@@ -9408,10 +9534,211 @@ document.getElementById('feed-search-input').addEventListener('input', ()=> rend
 
 // ---------- Competitions ----------
 async function insertCompetition(item){ await sbPost('competitions', item); }
+// The organiser adding someone directly is already an approval — only
+// invite-link requests go through the pending queue
 async function addCompetitionParticipant(competitionId, fishermanId){
-  await sbPost('competition_participants', {id: uid(), competition_id: competitionId, fisherman_id: fishermanId});
+  await sbPost('competition_participants', {id: uid(), competition_id: competitionId, fisherman_id: fishermanId, status: 'approved'});
   notifyCompetitionAdd(competitionId, fishermanId);
 }
+// ---------- Competition invite links ----------
+// A shared ?join=<competitionId> link. Handled after sign-in, since we need
+// to know who is joining — if they arrive signed out, the id is held and
+// picked up once they've signed in rather than lost.
+let pendingCompetitionJoin = null;
+
+async function handleCompetitionInvite(){
+  const compId = pendingCompetitionJoin
+    || new URLSearchParams(window.location.search).get('join');
+  if(!compId) return;
+
+  if(!isSignedIn()){
+    // Hold it — checkPendingCompetitionJoin() retries after sign-in
+    pendingCompetitionJoin = compId;
+    return;
+  }
+  pendingCompetitionJoin = null;
+
+  const myId = getMyFishermanId();
+  if(!myId) return;
+
+  try{
+    const rows = await sbGet('competitions?select=id,name,end_date,end_time&id=eq.'+compId);
+    const comp = rows[0];
+    if(!comp){ alert('That competition link is no longer valid.'); clearJoinParam(); return; }
+
+    // Joining is allowed right up until it ends — someone turning up late
+    // to a weekend comp is normal; joining after the result is not
+    if(competitionHasEnded(comp)){
+      alert('"' + (comp.name || 'That competition') + '" has already finished, so you can\'t join it now.');
+      clearJoinParam();
+      return;
+    }
+
+    // Check both states — approved means they're in, pending means they've
+    // already asked and are waiting. Neither should create a second row.
+    const [existing, pending] = await Promise.all([
+      loadCompetitionParticipants(compId),
+      loadCompetitionPendingRequests(compId)
+    ]);
+    if(existing.includes(myId)){
+      alert('You\'re already in "' + (comp.name || 'this competition') + '".');
+      clearJoinParam();
+      return;
+    }
+    if(pending.some(r=> r.fisherman_id === myId)){
+      alert('You\'ve already asked to join "' + (comp.name || 'this competition') + '" — waiting on the organiser.');
+      clearJoinParam();
+      return;
+    }
+
+    if(!confirm('Ask to join "' + (comp.name || 'this competition') + '"?')){ clearJoinParam(); return; }
+
+    // Invite-link joins are requests — the organiser approves them, so a
+    // link shared in a group chat can't quietly add strangers
+    await sbPost('competition_participants', {
+      id: uid(), competition_id: compId, fisherman_id: myId,
+      status: 'pending', requested_at: new Date().toISOString()
+    });
+    notifyCompetitionJoinRequest(compId, myId, comp.name);
+    alert('Request sent — the organiser needs to approve you before you\'re in.');
+    clearJoinParam();
+    renderHome();
+  }catch(e){
+    console.error('competition invite failed', e);
+    alert('Could not join that competition right now — try again shortly.');
+  }
+}
+
+// Drop the parameter so a refresh doesn't re-trigger the prompt
+function clearJoinParam(){
+  try{
+    const url = new URL(window.location.href);
+    url.searchParams.delete('join');
+    window.history.replaceState({}, '', url.toString());
+  }catch(e){}
+}
+
+function checkPendingCompetitionJoin(){
+  if(pendingCompetitionJoin && isSignedIn()) handleCompetitionInvite();
+}
+
+function competitionInviteLink(compId){
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('join', compId);
+  return url.toString();
+}
+
+// ---------- Competition badge awards ----------
+// Runs when a competition has ended. Reuses computeCompetitionLeaderboard
+// for the top-3 placements so ranking never drifts from what the standings
+// screen shows, then handles Here for the Beer separately because it needs
+// the full participant roster, not just people who caught something.
+async function awardCompetitionBadges(comp){
+  try{
+    const participantIds = await loadCompetitionParticipants(comp.id);
+    if(!participantIds.length) return;
+
+    const standings = await computeCompetitionLeaderboard(comp, participantIds);
+    const awards = []; // {fisherman_id, badge_key}
+
+    // Top 3 on this competition's own metric. Ties share a place: two
+    // people level on first both get gold, and the next person down gets
+    // bronze — same as how a real podium handles a dead heat.
+    const metricKey = comp.metric==='catch_count' ? 'count' : (comp.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
+    const scored = standings.filter(s=> (s[metricKey]||0) > 0);
+    let place = 0, lastVal = null, seen = 0;
+    for(const s of scored){
+      const val = s[metricKey]||0;
+      seen++;
+      if(val !== lastVal){ place = seen; lastVal = val; }
+      if(place > 3) break;
+      const def = COMPETITION_BADGE_DEFS.find(d=> d.metric === comp.metric && d.place === place);
+      if(def) awards.push({fisherman_id: s.id, badge_key: def.key});
+    }
+
+    // Here for the Beer — fewest fish. Everyone who JOINED counts, including
+    // anyone who never landed a thing (they're absent from standings entirely).
+    const beer = await pickHereForTheBeer(comp, participantIds, standings);
+    beer.forEach(fid=> awards.push({fisherman_id: fid, badge_key: 'here_for_beer'}));
+
+    for(const a of awards){
+      try{
+        await sbPost('competition_badges', {
+          id: uid(),
+          fisherman_id: a.fisherman_id,
+          badge_key: a.badge_key,
+          competition_id: comp.id,
+          competition_name: comp.name || null,
+          awarded_at: new Date().toISOString()
+        });
+      }catch(e){
+        // A duplicate is expected if this reruns — the unique index rejects
+        // it and we simply move on
+        console.error('competition badge insert skipped', a.badge_key, e);
+      }
+    }
+  }catch(e){ console.error('awardCompetitionBadges failed', comp.id, e); }
+}
+
+// Fewest fish, with the agreed tiebreaker chain. Each step only runs while
+// more than one person is still tied.
+async function pickHereForTheBeer(comp, participantIds, standings){
+  const statById = {};
+  standings.forEach(s=>{ statById[s.id] = s; });
+
+  // Everyone who joined, including those with no catches at all
+  let field = participantIds.map(fid=> ({
+    id: fid,
+    count: statById[fid] ? statById[fid].count : 0,
+    weight: statById[fid] ? statById[fid].totalWeight : 0
+  }));
+  if(field.length < 2) return [];
+
+  const narrow = (arr, valueOf, prefer) => {
+    const vals = arr.map(valueOf);
+    const target = prefer === 'min' ? Math.min(...vals) : Math.max(...vals);
+    return arr.filter((x,i)=> vals[i] === target);
+  };
+
+  // 1. Fewest catches
+  field = narrow(field, x=> x.count, 'min');
+  if(field.length === 1) return field.map(x=>x.id);
+
+  // 2. Lowest total weight
+  field = narrow(field, x=> x.weight, 'min');
+  if(field.length === 1) return field.map(x=>x.id);
+
+  // 3. Fewest blanks logged — a blank takes a deliberate "No catch" tap,
+  //    so fewer of them means less active engagement
+  try{
+    const blanks = await sbGet('catches?select=fisherman_id&caught=eq.false&competition_id=eq.'+comp.id);
+    const blankCount = {};
+    blanks.forEach(b=>{ blankCount[b.fisherman_id] = (blankCount[b.fisherman_id]||0) + 1; });
+    field = narrow(field, x=> blankCount[x.id] || 0, 'min');
+    if(field.length === 1) return field.map(x=>x.id);
+  }catch(e){ console.error('blank tiebreak failed', e); }
+
+  // 4. Most total soak time — deliberately the opposite direction to the
+  //    others: recasting resets the clock, so a high soak with nothing to
+  //    show for it usually means the rod just sat there unattended
+  try{
+    const sessions = await sbGet('sessions?select=id,fisherman_id&competition_id=eq.'+comp.id);
+    const sessionOwner = {};
+    sessions.forEach(s=>{ sessionOwner[s.id] = s.fisherman_id; });
+    const soak = {};
+    const catchRows = await sbGet('catches?select=fisherman_id,timer_elapsed_ms&competition_id=eq.'+comp.id);
+    catchRows.forEach(r=>{
+      soak[r.fisherman_id] = (soak[r.fisherman_id]||0) + (r.timer_elapsed_ms||0);
+    });
+    field = narrow(field, x=> soak[x.id] || 0, 'max');
+  }catch(e){ console.error('soak tiebreak failed', e); }
+
+  // Anyone still tied shares it
+  return field.map(x=>x.id);
+}
+
 // Any competition that's finished but hasn't announced its winner yet.
 // Safe to call repeatedly — the results_sent flag stops duplicates.
 async function announceFinishedCompetitions(){
@@ -9420,9 +9747,12 @@ async function announceFinishedCompetitions(){
     const today = new Date().toISOString().slice(0,10);
     // Include today's competitions too — one ending at 16:00 has genuinely
     // finished by 17:00, even though the date hasn't rolled over yet
-    let candidates = await sbGet('competitions?select=id,end_date,end_time&end_date=lte.'+today+'&results_sent=is.false');
+    let candidates = await sbGet('competitions?select=id,name,metric,fish_type_filter,end_date,end_time&end_date=lte.'+today+'&results_sent=is.false');
     const done = candidates.filter(c=> competitionHasEnded(c));
     for(const c of done){
+      // Badges first — if the notify RPC flips results_sent, this branch
+      // won't run again, so awarding before that keeps them from being missed
+      await awardCompetitionBadges(c);
       try{ await sbRpc('notify_competition_results', {p_competition_id: c.id}); }
       catch(e){ console.error('results notify failed', c.id, e); }
     }
@@ -9461,11 +9791,28 @@ async function computeCompetitionLeaderboard(comp, participantIds){
   return stats;
 }
 
+// Approved participants only — pending requests don't compete, don't
+// appear in standings, and can't win badges
 async function loadCompetitionParticipants(competitionId){
   try{
-    const rows = await sbGet('competition_participants?select=fisherman_id&competition_id=eq.'+competitionId);
+    const rows = await sbGet('competition_participants?select=fisherman_id&status=eq.approved&competition_id=eq.'+competitionId);
     return rows.map(r=>r.fisherman_id);
   }catch(e){ console.error(e); return []; }
+}
+
+async function loadCompetitionPendingRequests(competitionId){
+  try{
+    return await sbGet('competition_participants?select=id,fisherman_id,requested_at&status=eq.pending&competition_id=eq.'+competitionId);
+  }catch(e){ console.error(e); return []; }
+}
+
+async function approveCompetitionRequest(rowId, competitionId, fishermanId){
+  await sbPatch('competition_participants', 'id=eq.'+rowId, {status: 'approved'});
+  notifyCompetitionAdd(competitionId, fishermanId);
+}
+
+async function declineCompetitionRequest(rowId){
+  await sbDelete('competition_participants', 'id=eq.'+rowId);
 }
 async function deleteCompetition(id){ await sbDelete('competitions', 'id=eq.'+id); }
 
@@ -9663,8 +10010,10 @@ async function renderCompetitions(){
             <input type="text" maxlength="100" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email..." autocomplete="pk-field-32" name="comp-add-${c.id}" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             <div class="competition-add-results" data-competition="${c.id}" style="margin-top:6px;"></div>
           </div>` : ''}
+        ${canDelete ? `<div class="competition-requests" data-competition="${c.id}" style="margin-top:10px;"></div>` : ''}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
           <button class="mini-btn" data-competition-share="${c.id}">Share live standings</button>
+          <button class="mini-btn" data-competition-invite="${c.id}">Invite to join</button>
           ${canDelete ? `<button class="mini-btn" data-competition-edit="${c.id}">Edit</button>` : ''}
           ${canDelete ? `<button class="mini-btn danger" data-competition-remove="${c.id}">Delete competition</button>` : ''}
         </div>
@@ -9700,6 +10049,58 @@ async function renderCompetitions(){
       }catch(e){
         // Sharing cancelled, or clipboard blocked — show the link to copy manually
         if(e && e.name !== 'AbortError') window.prompt('Copy this link:', url);
+      }
+    });
+  });
+  // Pending join requests, organiser only
+  el.querySelectorAll('.competition-requests').forEach(async wrap=>{
+    const compId = wrap.dataset.competition;
+    const pending = await loadCompetitionPendingRequests(compId);
+    if(!pending.length){ wrap.innerHTML = ''; return; }
+    wrap.innerHTML = '<p class="sub-heading" style="margin-bottom:6px;">Wants to join</p>' +
+      pending.map(r=>{
+        const p = people.find(x=>x.id===r.fisherman_id);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);">'
+          + '<span style="font-size:14px;">' + escapeHtml(p ? p.name : 'Unknown') + '</span>'
+          + '<span style="display:flex;gap:6px;">'
+          + '<button type="button" class="mini-btn" data-approve-req="' + r.id + '" data-comp="' + compId + '" data-fid="' + r.fisherman_id + '">Approve</button>'
+          + '<button type="button" class="mini-btn danger" data-decline-req="' + r.id + '">Decline</button>'
+          + '</span></div>';
+      }).join('');
+    wrap.querySelectorAll('[data-approve-req]').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        b.disabled = true;
+        try{
+          await approveCompetitionRequest(b.dataset.approveReq, b.dataset.comp, b.dataset.fid);
+          renderCompetitions();
+        }catch(e){ console.error(e); alert('Could not approve — try again.'); b.disabled = false; }
+      });
+    });
+    wrap.querySelectorAll('[data-decline-req]').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        if(!confirm('Decline this request?')) return;
+        b.disabled = true;
+        try{
+          await declineCompetitionRequest(b.dataset.declineReq);
+          renderCompetitions();
+        }catch(e){ console.error(e); alert('Could not decline — try again.'); b.disabled = false; }
+      });
+    });
+  });
+
+  el.querySelectorAll('[data-competition-invite]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const url = competitionInviteLink(btn.dataset.competitionInvite);
+      try{
+        if(navigator.share){
+          await navigator.share({title: 'Join this competition', url});
+        }else{
+          await navigator.clipboard.writeText(url);
+          btn.textContent = 'Link copied!';
+          setTimeout(()=>{ btn.textContent = 'Invite to join'; }, 1600);
+        }
+      }catch(e){
+        if(e && e.name !== 'AbortError') window.prompt('Copy this invite link:', url);
       }
     });
   });
@@ -10223,6 +10624,7 @@ await loadTackleCategoryOptions();
   syncPendingCatches();
   announceFinishedCompetitions();
   checkAndAwardBadges();
+  handleCompetitionInvite();
   if(isSignedIn()){ await loadActiveSession(); await renderSessionUi(); }
   maybeShowInstallBanner();
   try{
