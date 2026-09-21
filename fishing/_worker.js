@@ -2,11 +2,10 @@
 // "under construction" page on pksport.co.za until the real PK Sport site exists.
 //
 // - pk-fishing.pages.dev (and any other address) -> the fishing app, unchanged
-// - pksport.co.za/fishing                        -> redirects to the fishing app
+// - pksport.co.za/fishing/                       -> the fishing app, served in place (address stays put)
 // - pksport.co.za (anything else)                -> the under construction page
 
 const SPORT_HOSTS = new Set(['pksport.co.za', 'www.pksport.co.za']);
-const FISHING_APP = 'https://pk-fishing.pages.dev/';
 
 const UNDER_CONSTRUCTION = `<!DOCTYPE html>
 <html lang="en">
@@ -35,7 +34,7 @@ const UNDER_CONSTRUCTION = `<!DOCTYPE html>
   <span class="badge">Under construction</span>
   <h1>PK Sport</h1>
   <p>We're building something new. Check back soon.</p>
-  <p>Looking for fishing? <a href="${FISHING_APP}">Open PK Fishing</a></p>
+  <p>Looking for fishing? <a href="/fishing/">Open PK Fishing</a></p>
 </main>
 </body>
 </html>`;
@@ -45,8 +44,24 @@ export default {
     const url = new URL(request.url);
 
     if (SPORT_HOSTS.has(url.hostname)) {
-      if (url.pathname === '/fishing' || url.pathname.startsWith('/fishing/')) {
-        return Response.redirect(FISHING_APP, 302);
+      // /fishing -> /fishing/ so the app's relative file paths resolve inside the folder
+      if (url.pathname === '/fishing') {
+        url.pathname = '/fishing/';
+        return Response.redirect(url.toString(), 301);
+      }
+      // Serve the app in place: strip the /fishing prefix and fetch the file from the app's assets
+      if (url.pathname.startsWith('/fishing/')) {
+        const assetUrl = new URL(url);
+        assetUrl.pathname = url.pathname.slice('/fishing'.length);
+        const res = await env.ASSETS.fetch(new Request(assetUrl, request));
+        // Keep any redirect the assets layer issues (e.g. /index.html -> /) inside /fishing
+        const loc = res.headers.get('Location');
+        if (res.status >= 300 && res.status < 400 && loc && loc.startsWith('/')) {
+          const headers = new Headers(res.headers);
+          headers.set('Location', '/fishing' + loc);
+          return new Response(null, { status: res.status, headers });
+        }
+        return res;
       }
       return new Response(UNDER_CONSTRUCTION, {
         status: 200,
