@@ -1,7 +1,8 @@
 // Cloudflare Pages worker: keeps the fishing app on its own address and shows an
 // "under construction" page on pksport.co.za until the real PK Sport site exists.
 //
-// - pk-fishing.pages.dev (and any other address) -> the fishing app, unchanged
+// - pk-fishing.pages.dev                         -> redirects to pksport.co.za/fishing
+// - other addresses (per-deployment previews)    -> the fishing app, unchanged
 // - pksport.co.za/fishing                        -> the fishing app, served in place (address stays put)
 // - pksport.co.za (anything else)                -> the under construction page
 
@@ -43,7 +44,19 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // The app now lives at pksport.co.za/fishing. Only the main pages.dev address is redirected
+    // (temporary, so it is easy to undo); per-deployment addresses like abc123.pk-fishing.pages.dev
+    // keep serving the app for testing.
+    if (url.hostname === 'pk-fishing.pages.dev') {
+      return Response.redirect('https://pksport.co.za/fishing' + url.search, 302);
+    }
+
     if (SPORT_HOSTS.has(url.hostname)) {
+      // Old links and home-screen shortcuts from when the app lived at the site root
+      // (/index.html, or the root with a query such as ?view=spectator) go to the app.
+      if (url.pathname === '/index.html' || (url.pathname === '/' && url.search)) {
+        return Response.redirect('https://' + url.hostname + '/fishing' + url.search, 302);
+      }
       // The app lives at exactly /fishing (no trailing slash), so sign-in return addresses match
       // what Supabase already allows. /fishing/ is sent to /fishing.
       if (url.pathname === '/fishing/') {
