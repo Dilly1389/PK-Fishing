@@ -1742,7 +1742,10 @@
 <div class="modal-overlay" id="photo-modal">
   <div class="modal-card" style="max-width:92vw;max-height:88vh;overflow-y:auto;padding:12px;text-align:center;position:relative;">
     <button type="button" id="photo-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
-    <img id="photo-modal-img" src="" alt="Catch photo" style="max-width:100%;max-height:60vh;border-radius:10px;display:block;margin:0 auto;touch-action:pan-y;">
+    <div id="photo-zoom-stage" style="display:block;width:fit-content;max-width:100%;margin:0 auto;overflow:hidden;border-radius:10px;touch-action:none;">
+      <img id="photo-modal-img" src="" alt="Catch photo" draggable="false" style="max-width:100%;max-height:60vh;display:block;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;">
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Pinch or double-tap to zoom</div>
     <div id="photo-modal-nav" style="display:none;justify-content:space-between;align-items:center;margin-top:8px;">
       <button type="button" id="photo-prev-btn" class="mini-btn">‹ Prev</button>
       <span id="photo-modal-counter" style="font-size:12px;color:var(--muted);"></span>
@@ -8481,6 +8484,7 @@ let currentPhotoIndex = 0;
 function renderPhotoModalImage(){
   const img = document.getElementById('photo-modal-img');
   img.src = currentPhotoList[currentPhotoIndex] || '';
+  if(typeof resetPhotoZoom === 'function') resetPhotoZoom();
   const nav = document.getElementById('photo-modal-nav');
   if(nav){
     nav.style.display = currentPhotoList.length > 1 ? 'flex' : 'none';
@@ -8500,16 +8504,120 @@ function showPrevPhoto(){
 }
 document.getElementById('photo-next-btn').addEventListener('click', showNextPhoto);
 document.getElementById('photo-prev-btn').addEventListener('click', showPrevPhoto);
+// Zoom and pan for the photo viewer: pinch, double-tap, mouse wheel, drag to move when zoomed.
+// When not zoomed, a horizontal swipe still moves to the previous/next photo.
+var resetPhotoZoom = function(){};
 (function(){
-  let touchStartX = null;
-  const imgEl = document.getElementById('photo-modal-img');
-  imgEl.addEventListener('touchstart', (e)=>{ touchStartX = e.touches[0].clientX; }, {passive:true});
-  imgEl.addEventListener('touchend', (e)=>{
-    if(touchStartX === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    if(Math.abs(dx) > 40){ dx < 0 ? showNextPhoto() : showPrevPhoto(); }
-    touchStartX = null;
-  }, {passive:true});
+  const stage = document.getElementById('photo-zoom-stage');
+  const img = document.getElementById('photo-modal-img');
+  const MAX_SCALE = 5, DOUBLE_TAP_SCALE = 2.5;
+  let scale = 1, tx = 0, ty = 0;
+  const pointers = new Map();
+  let pinch = null, drag = null, swipe = null;
+  let moved = false, lastTap = {t: 0, x: 0, y: 0};
+
+  function apply(){
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+  }
+  // Keep the photo covering the frame so it can't be dragged out of view
+  function clampPan(){
+    const maxX = Math.max(0, (scale - 1) * img.offsetWidth / 2);
+    const maxY = Math.max(0, (scale - 1) * img.offsetHeight / 2);
+    tx = Math.min(maxX, Math.max(-maxX, tx));
+    ty = Math.min(maxY, Math.max(-maxY, ty));
+  }
+  // Zoom to newScale while keeping the point under the fingers (fx, fy, from the frame centre) still
+  function zoomTo(newScale, fx, fy){
+    newScale = Math.min(MAX_SCALE, Math.max(1, newScale));
+    tx = fx - (newScale / scale) * (fx - tx);
+    ty = fy - (newScale / scale) * (fy - ty);
+    scale = newScale;
+    if(scale < 1.001){ scale = 1; tx = 0; ty = 0; }
+    clampPan();
+    apply();
+  }
+  function fromCentre(clientX, clientY){
+    const r = stage.getBoundingClientRect();
+    return { x: clientX - (r.left + r.width / 2), y: clientY - (r.top + r.height / 2) };
+  }
+  function distance(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+  function midpoint(a, b){ return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+  resetPhotoZoom = function(){ scale = 1; tx = 0; ty = 0; pointers.clear(); pinch = drag = swipe = null; apply(); };
+
+  stage.addEventListener('pointerdown', (e)=>{
+    try{ stage.setPointerCapture(e.pointerId); }catch(err){}
+    pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    moved = false;
+    if(pointers.size === 2){
+      const [a, b] = [...pointers.values()];
+      pinch = { dist: distance(a, b), mid: midpoint(a, b) };
+      drag = swipe = null;
+    }else if(pointers.size === 1){
+      if(scale > 1) drag = { x: e.clientX, y: e.clientY, tx, ty };
+      else swipe = { x: e.clientX, y: e.clientY };
+    }
+  });
+  stage.addEventListener('pointermove', (e)=>{
+    if(!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if(pinch && pointers.size >= 2){
+      const [a, b] = [...pointers.values()];
+      const mid = midpoint(a, b), dist = distance(a, b);
+      if(pinch.dist > 0){
+        const f = fromCentre(mid.x, mid.y);
+        tx += mid.x - pinch.mid.x;   // moving both fingers together pans too
+        ty += mid.y - pinch.mid.y;
+        zoomTo(scale * (dist / pinch.dist), f.x, f.y);
+      }
+      pinch.dist = dist; pinch.mid = mid; moved = true;
+    }else if(drag && scale > 1){
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if(Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+      tx = drag.tx + dx; ty = drag.ty + dy;
+      clampPan(); apply();
+    }else if(swipe){
+      if(Math.abs(e.clientX - swipe.x) > 8 || Math.abs(e.clientY - swipe.y) > 8) moved = true;
+    }
+  });
+  function endPointer(e){
+    if(!pointers.has(e.pointerId)) return;
+    const wasSwipe = swipe, wasPinch = pinch;
+    pointers.delete(e.pointerId);
+    if(wasPinch){
+      if(pointers.size < 2) pinch = null;
+      // One finger left after a pinch: carry on as a pan if zoomed in
+      if(pointers.size === 1 && scale > 1){
+        const p = [...pointers.values()][0];
+        drag = { x: p.x, y: p.y, tx, ty };
+      }
+      return;
+    }
+    drag = null; swipe = null;
+    if(e.type === 'pointercancel') return;
+    if(wasSwipe && scale === 1){
+      const dx = e.clientX - wasSwipe.x, dy = e.clientY - wasSwipe.y;
+      if(Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)){ dx < 0 ? showNextPhoto() : showPrevPhoto(); return; }
+    }
+    if(!moved){
+      const now = Date.now();
+      if(now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40){
+        if(scale > 1){ zoomTo(1, 0, 0); }
+        else{ const f = fromCentre(e.clientX, e.clientY); zoomTo(DOUBLE_TAP_SCALE, f.x, f.y); }
+        lastTap.t = 0;
+      }else{
+        lastTap = { t: now, x: e.clientX, y: e.clientY };
+      }
+    }
+  }
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
+  // Desktop: scroll wheel zooms
+  stage.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const f = fromCentre(e.clientX, e.clientY);
+    const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;   // some browsers report lines, not pixels
+    zoomTo(scale * Math.exp(-dy * 0.0015), f.x, f.y);
+  }, {passive: false});
 })();
 
 function openPhotoModal(src, catchId, index){
