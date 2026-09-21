@@ -60,6 +60,22 @@ export default {
           .on('head', { element(el) { el.prepend('<base href="/fishing/">', { html: true }); } })
           .transform(res);
       }
+      // Home-screen shortcuts: give the phone the exact address to open (no redirects), and keep
+      // the app scoped to /fishing. Only done here, so pk-fishing.pages.dev keeps its own manifest.
+      if (url.pathname === '/fishing/manifest.json' || url.pathname === '/fishing/manifest-spectator.json') {
+        const manifestUrl = new URL(url);
+        manifestUrl.pathname = url.pathname.slice('/fishing'.length);
+        const res = await env.ASSETS.fetch(new Request(manifestUrl, request));
+        if (!res.ok) return res;
+        const manifest = await res.json();
+        const query = String(manifest.start_url || '').split('?')[1];
+        manifest.start_url = '/fishing' + (query ? '?' + query : '');
+        manifest.scope = '/fishing';
+        manifest.id = manifest.start_url;
+        return new Response(JSON.stringify(manifest, null, 2), {
+          headers: { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache' },
+        });
+      }
       // Serve the app in place: strip the /fishing prefix and fetch the file from the app's assets
       if (url.pathname.startsWith('/fishing/')) {
         const assetUrl = new URL(url);
