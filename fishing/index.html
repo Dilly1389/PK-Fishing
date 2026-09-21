@@ -4040,7 +4040,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
       };
       const photoInput = document.getElementById('tackle-edit-photo-'+itemId);
       if(photoInput && photoInput.files[0]){
-        patch.photo = await uploadPhoto(photoInput.files[0], {maxDim: 600, quality: 0.8});
+        patch.photo = await uploadPhoto(photoInput.files[0], {maxDim: 1000, quality: 0.85});
         patch.has_photo = true;
       }
       await sbPatch('tackle_items', 'id=eq.'+itemId, patch);
@@ -4722,7 +4722,7 @@ async function renderTackleList(){
         </div>`) : '';
       return `<li>
         <div class="who">
-          ${it.has_photo ? `<img class="tackle-thumb" data-thumb="${it.id}" alt="">` : ''}
+          ${it.has_photo ? `<img class="tackle-thumb" data-thumb="${it.id}" alt="" loading="lazy" decoding="async">` : ''}
           <b>${escapeHtml(it.name)}</b>
           ${it.brand ? `<span class="pill">${escapeHtml(it.brand)}</span>` : ''}
           ${baitTag}
@@ -4915,8 +4915,8 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   try{
     let photo = null;
     if(photoEl.files[0]){
-      // Small thumbnail only — this is reference data, not a showcase photo
-      photo = await uploadPhoto(photoEl.files[0], {maxDim: 600, quality: 0.8});
+      // 1000px is sharp enough to see the detail on a phone without making the list slow to load
+      photo = await uploadPhoto(photoEl.files[0], {maxDim: 1000, quality: 0.85});
     }
     const newItemId = uid();
     const categoryValue = catEl.value;
