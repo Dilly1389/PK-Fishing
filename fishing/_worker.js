@@ -2,7 +2,7 @@
 // "under construction" page on pksport.co.za until the real PK Sport site exists.
 //
 // - pk-fishing.pages.dev (and any other address) -> the fishing app, unchanged
-// - pksport.co.za/fishing/                       -> the fishing app, served in place (address stays put)
+// - pksport.co.za/fishing                        -> the fishing app, served in place (address stays put)
 // - pksport.co.za (anything else)                -> the under construction page
 
 const SPORT_HOSTS = new Set(['pksport.co.za', 'www.pksport.co.za']);
@@ -34,7 +34,7 @@ const UNDER_CONSTRUCTION = `<!DOCTYPE html>
   <span class="badge">Under construction</span>
   <h1>PK Sport</h1>
   <p>We're building something new. Check back soon.</p>
-  <p>Looking for fishing? <a href="/fishing/">Open PK Fishing</a></p>
+  <p>Looking for fishing? <a href="/fishing">Open PK Fishing</a></p>
 </main>
 </body>
 </html>`;
@@ -44,10 +44,21 @@ export default {
     const url = new URL(request.url);
 
     if (SPORT_HOSTS.has(url.hostname)) {
-      // /fishing -> /fishing/ so the app's relative file paths resolve inside the folder
-      if (url.pathname === '/fishing') {
-        url.pathname = '/fishing/';
+      // The app lives at exactly /fishing (no trailing slash), so sign-in return addresses match
+      // what Supabase already allows. /fishing/ is sent to /fishing.
+      if (url.pathname === '/fishing/') {
+        url.pathname = '/fishing';
         return Response.redirect(url.toString(), 301);
+      }
+      // A <base> tag makes the app's relative file paths (icons, manifest, badges) resolve
+      // inside /fishing/ even though the page address has no trailing slash.
+      if (url.pathname === '/fishing') {
+        const assetUrl = new URL(url);
+        assetUrl.pathname = '/';
+        const res = await env.ASSETS.fetch(new Request(assetUrl, request));
+        return new HTMLRewriter()
+          .on('head', { element(el) { el.prepend('<base href="/fishing/">', { html: true }); } })
+          .transform(res);
       }
       // Serve the app in place: strip the /fishing prefix and fetch the file from the app's assets
       if (url.pathname.startsWith('/fishing/')) {
