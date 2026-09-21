@@ -381,7 +381,7 @@
     vertical-align:middle;
   }
   .people-list .actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-  .tackle-thumb{display:none;width:40px;height:40px;border-radius:6px;object-fit:cover;margin-right:8px;vertical-align:middle;border:1px solid var(--line);cursor:pointer;}
+  .tackle-thumb{display:none;width:44px;height:44px;border-radius:6px;object-fit:cover;margin-right:8px;vertical-align:middle;border:1px solid var(--line);cursor:pointer;}
   /* Vertical "how full is the tub" slider for baits and dips */
   .fill-level-wrap{
     display:flex;align-items:center;gap:8px;margin-top:6px;
@@ -4173,30 +4173,26 @@ function renderTackleSharePicker(){
 async function deleteTackleItem(id){
   await sbDelete('tackle_items', 'id=eq.'+id);
 }
-// Thumbnails next to each tackle item. The list itself loads without photos (fast), then this
-// fetches them in one request and fills them in. Reset to null whenever the items are reloaded.
-let tackleThumbs = null;
-async function fillTackleThumbs(root){
-  if(!root.querySelector('img[data-thumb]')) return;
+// Photos shown next to tackle items and rigs. The lists load without photos (fast), then this
+// fetches them in one request per table and fills them in. Tapping one opens the full viewer.
+// The cache is cleared whenever the list is reloaded so edited photos show up.
+let thumbCache = {};
+async function fillThumbs(root, table){
+  const sel = 'img[data-thumb-table="'+table+'"]';
+  if(!root.querySelector(sel)) return;
   try{
-    if(!tackleThumbs){
-      const rows = await sbGet('tackle_items?has_photo=eq.true&select=id,photo');
-      tackleThumbs = new Map(rows.filter(r=>r.photo).map(r=>[r.id, r.photo]));
+    if(!thumbCache[table]){
+      const rows = await sbGet(table+'?has_photo=eq.true&select=id,photo');
+      thumbCache[table] = new Map(rows.filter(r=>r.photo).map(r=>[r.id, r.photo]));
     }
-    root.querySelectorAll('img[data-thumb]').forEach(img=>{
-      const src = tackleThumbs.get(img.dataset.thumb);
+    root.querySelectorAll(sel).forEach(img=>{
+      const src = thumbCache[table].get(img.dataset.thumb);
       if(!src) return;
       img.src = src;
       img.style.display = 'inline-block';
       img.onclick = ()=> openPhotoModal(src, null);
     });
-  }catch(e){ console.error('Could not load tackle thumbnails', e); }
-}
-async function viewTacklePhoto(id){
-  try{
-    const rows = await sbGet('tackle_items?id=eq.'+id+'&select=photo');
-    if(rows[0] && rows[0].photo){ openPhotoModal(rows[0].photo, null); }
-  }catch(e){ console.error(e); showDbError('Could not load photo.'); }
+  }catch(e){ console.error('Could not load photos for ' + table, e); }
 }
 
 // ---------- Rigs (built by users, feeds the Rig dropdown on Timers) ----------
@@ -4210,12 +4206,6 @@ async function loadRigsFull(){
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
 }
-async function viewRigPhoto(id){
-  try{
-    const rows = await sbGet('rigs?id=eq.'+id+'&select=photo');
-    if(rows[0] && rows[0].photo){ openPhotoModal(rows[0].photo, null); }
-  }catch(e){ console.error(e); showDbError('Could not load photo.'); }
-}
 // Shows the actual feed methods rather than a bare Bom yes/no
 function feedMethodPills(r){
   let methods = [];
@@ -4228,6 +4218,7 @@ function feedMethodPills(r){
 async function renderRigsList(){
   const el = document.getElementById('rigs-list');
   if(!el) return;
+  delete thumbCache['rigs'];   // re-fetch photos so an edited one shows up
   el.innerHTML = '<div class="empty">Loading...</div>';
   const rigs = await loadRigsFull();
   const myId = isSignedIn() ? session.user.id : null;
@@ -4251,6 +4242,7 @@ async function renderRigsList(){
     html += '<ul class="people-list">' + mine.map(r=>`
       <li>
         <div class="who">
+          ${r.has_photo ? `<img class="tackle-thumb" data-thumb="${r.id}" data-thumb-table="rigs" alt="" loading="lazy" decoding="async">` : ''}
           <b>${escapeHtml(r.name)}</b>
           ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
           ${feedMethodPills(r)}
@@ -4260,7 +4252,6 @@ async function renderRigsList(){
           <input type="checkbox" class="rig-use-toggle" data-rig="${r.id}" ${inUse.has(r.id) ? 'checked' : ''}> Use (show in my Timers rig list)
         </label>
         <div class="actions">
-          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}
           <button class="mini-btn" data-rig-edit="${r.id}">Edit</button>
           <button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>
         </div>
@@ -4278,13 +4269,13 @@ async function renderRigsList(){
       const already = myCopiedFrom.has(r.id);
       return `<li>
         <div class="who">
+          ${r.has_photo ? `<img class="tackle-thumb" data-thumb="${r.id}" data-thumb-table="rigs" alt="" loading="lazy" decoding="async">` : ''}
           <b>${escapeHtml(r.name)}</b>
           ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
           ${feedMethodPills(r)}
           <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
         </div>
         <div class="actions">
-          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}
           ${isSignedIn()
             ? (already
                 ? `<span class="pc-line muted">Already in your rigs</span>`
@@ -4373,9 +4364,7 @@ async function renderRigsList(){
       if(currentPerson) renderAll();
     });
   });
-  el.querySelectorAll('[data-rig-photo]').forEach(btn=>{
-    btn.addEventListener('click', ()=> viewRigPhoto(btn.dataset.rigPhoto));
-  });
+  fillThumbs(el, 'rigs');
   el.querySelectorAll('[data-rig-edit]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const rigId = btn.dataset.rigEdit;
@@ -4588,7 +4577,7 @@ async function renderTackleList(){
   const el = document.getElementById('tackle-list');
   if(!el) return;
   el.innerHTML = '<div class="empty">Loading...</div>';
-  tackleThumbs = null;
+  thumbCache = {};
   tackleItemsCache = await loadTackleItems();
   renderTackleNameSuggestions();
   const sharedWithMeIds = await loadSharedWithMeTackleItemIds();
@@ -4725,7 +4714,7 @@ async function renderTackleList(){
         </div>`) : '';
       return `<li>
         <div class="who">
-          ${it.has_photo ? `<img class="tackle-thumb" data-thumb="${it.id}" alt="" loading="lazy" decoding="async">` : ''}
+          ${it.has_photo ? `<img class="tackle-thumb" data-thumb="${it.id}" data-thumb-table="tackle_items" alt="" loading="lazy" decoding="async">` : ''}
           <b>${escapeHtml(it.name)}</b>
           ${it.brand ? `<span class="pill">${escapeHtml(it.brand)}</span>` : ''}
           ${baitTag}
@@ -4734,7 +4723,6 @@ async function renderTackleList(){
         ${useToggleHtml}
         <div class="actions">
           ${it.notes ? `<span style="font-size:12px;color:var(--muted);margin-right:6px;">${escapeHtml(it.notes)}</span>` : ''}
-          ${it.has_photo ? `<button class="mini-btn" data-tackle-photo="${it.id}"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}
           ${canEdit ? `<button class="mini-btn" data-tackle-edit="${it.id}">Edit</button>` : ''}
           ${canManageShare ? `<button class="mini-btn" data-tackle-manage-share="${it.id}">Share</button>` : ''}
           ${canRemove ? `<button class="mini-btn danger" data-tackle-remove="${it.id}">Remove</button>` : ''}
@@ -4844,10 +4832,7 @@ await loadTackleCategoryOptions();
       if(currentPerson) renderAll();
     });
   });
-  el.querySelectorAll('[data-tackle-photo]').forEach(btn=>{
-    btn.addEventListener('click', ()=> viewTacklePhoto(btn.dataset.tacklePhoto));
-  });
-  fillTackleThumbs(el);
+  fillThumbs(el, 'tackle_items');
   el.querySelectorAll('[data-fill-slider]').forEach(slider=>{
     const id = slider.dataset.fillSlider;
     const bar = el.querySelector('[data-fill-bar="'+id+'"]');
