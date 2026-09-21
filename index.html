@@ -316,6 +316,7 @@
     vertical-align:middle;
   }
   .people-list .actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .tackle-thumb{display:none;width:40px;height:40px;border-radius:6px;object-fit:cover;margin-right:8px;vertical-align:middle;border:1px solid var(--line);cursor:pointer;}
   /* Vertical "how full is the tub" slider for baits and dips */
   .fill-level-wrap{
     display:flex;align-items:center;gap:8px;margin-top:6px;
@@ -3499,6 +3500,25 @@ function renderTackleSharePicker(){
 async function deleteTackleItem(id){
   await sbDelete('tackle_items', 'id=eq.'+id);
 }
+// Thumbnails next to each tackle item. The list itself loads without photos (fast), then this
+// fetches them in one request and fills them in. Reset to null whenever the items are reloaded.
+let tackleThumbs = null;
+async function fillTackleThumbs(root){
+  if(!root.querySelector('img[data-thumb]')) return;
+  try{
+    if(!tackleThumbs){
+      const rows = await sbGet('tackle_items?has_photo=eq.true&select=id,photo');
+      tackleThumbs = new Map(rows.filter(r=>r.photo).map(r=>[r.id, r.photo]));
+    }
+    root.querySelectorAll('img[data-thumb]').forEach(img=>{
+      const src = tackleThumbs.get(img.dataset.thumb);
+      if(!src) return;
+      img.src = src;
+      img.style.display = 'inline-block';
+      img.onclick = ()=> openPhotoModal(src, null);
+    });
+  }catch(e){ console.error('Could not load tackle thumbnails', e); }
+}
 async function viewTacklePhoto(id){
   try{
     const rows = await sbGet('tackle_items?id=eq.'+id+'&select=photo');
@@ -3726,6 +3746,7 @@ async function renderTackleList(){
   const el = document.getElementById('tackle-list');
   if(!el) return;
   el.innerHTML = '<div class="empty">Loading...</div>';
+  tackleThumbs = null;
   tackleItemsCache = await loadTackleItems();
   renderTackleNameSuggestions();
   const sharedWithMeIds = await loadSharedWithMeTackleItemIds();
@@ -3817,6 +3838,7 @@ async function renderTackleList(){
         </div>` : '';
       return `<li>
         <div class="who">
+          ${it.has_photo ? `<img class="tackle-thumb" data-thumb="${it.id}" alt="">` : ''}
           <b>${escapeHtml(it.name)}</b>
           ${it.brand ? `<span class="pill">${escapeHtml(it.brand)}</span>` : ''}
           ${baitTag}
@@ -3881,6 +3903,7 @@ await loadTackleCategoryOptions();
   el.querySelectorAll('[data-tackle-photo]').forEach(btn=>{
     btn.addEventListener('click', ()=> viewTacklePhoto(btn.dataset.tacklePhoto));
   });
+  fillTackleThumbs(el);
   el.querySelectorAll('[data-fill-slider]').forEach(slider=>{
     const id = slider.dataset.fillSlider;
     const bar = el.querySelector('[data-fill-bar="'+id+'"]');
