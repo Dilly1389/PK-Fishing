@@ -3298,6 +3298,13 @@ function renderAccountArea(){
   document.body.classList.toggle('signed-out-view', isSignedOutNormalView);
   if(appearanceCard) appearanceCard.style.display = isSignedOutNormalView ? 'none' : 'block';
   if(profileHelpBtn) profileHelpBtn.style.display = isSignedOutNormalView ? 'none' : 'inline-block';
+  // With the nav hidden, a signed-out visitor can't leave whatever panel is open, and the
+  // sign-in card only lives on the Profile panel — so always show that one when signed out.
+  const schedulePanel = document.getElementById('panel-schedule');
+  if(isSignedOutNormalView && schedulePanel && !schedulePanel.classList.contains('active')){
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    schedulePanel.classList.add('active');
+  }
 }
 
 function updateTimersVisibility(){
