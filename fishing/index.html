@@ -10724,6 +10724,8 @@ await loadTackleCategoryOptions();
 
   // Return to whichever tab you were last on. Done last, so tabs hidden by
   // sign-in state (Timers, Insights) have already been resolved.
+  // Signed out, the nav is hidden and only the sign-in card should show — don't jump away from it.
+  if(document.body.classList.contains('signed-out-view')) return;
   try{
     const lastTab = localStorage.getItem('pk_fishing_active_tab');
     if(lastTab && document.getElementById('panel-'+lastTab)){
