@@ -544,7 +544,7 @@
   }
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 </head>
 <body>
 <div class="app">
@@ -577,6 +577,10 @@
     <!-- TIMERS -->
     <!-- HOME -->
     <div class="panel active" id="panel-home">
+      <div style="text-align:center;margin-bottom:14px;">
+        <button type="button" class="mini-btn" id="show-onboarding-btn"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How it works</button>
+      </div>
+
       <div id="home-weather" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;"></div>
 
       <button class="primary-btn" id="home-start-session" style="margin-bottom:14px;">+ Start a session</button>
@@ -586,13 +590,6 @@
 
       <p class="sub-heading">Latest from your mates</p>
       <div id="home-feed"><div class="empty">Loading...</div></div>
-
-      <!-- Sits at the bottom deliberately: Home is about what's happening
-           right now, so this shouldn't push that down. On a new account
-           where the rest is still empty, it ends up prominent anyway. -->
-      <div style="text-align:center;margin-top:18px;">
-        <button type="button" class="mini-btn" id="show-onboarding-btn"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How it works</button>
-      </div>
     </div>
 
     <!-- MORE -->
@@ -921,7 +918,7 @@
       </section>
 
       <section class="card" id="appearance-card">
-        <h2>Appearance</h2>
+        <h2>Personal preferences</h2>
         <div id="appearance-body">
           <div class="field">
             <label>Theme</label>
@@ -935,7 +932,15 @@
             <label>Weight unit</label>
             <select id="weight-unit-select">
               <option value="kg">Kilograms (kg)</option>
-              <option value="lb">Pounds & ounces (lb/oz)</option>
+              <option value="lb">Pounds &amp; ounces (lb/oz)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Date format</label>
+            <select id="date-format-select">
+              <option value="dmy">Day first (17 Sept 2026)</option>
+              <option value="mdy">Month first (Sept 17, 2026)</option>
+              <option value="device">Match my device</option>
             </select>
           </div>
         </div>
@@ -1645,7 +1650,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Recast</div>
-      <div class="pc-line muted">Tangled line, snag, or just going back out with the same bait? Tap Recast to restart the clock without touching your rig or hooks. Nothing gets logged — it's not a blank, just a fresh soak time.</div>
+      <div class="pc-line muted">Tangled line, snag, or just going back out with the same bait? Tap Recast, pick what happened, and it restarts the clock without touching your rig or hooks — it's not a blank, just a fresh soak time. If a rod's been out over an hour, you'll get a gentle nudge asking whether it's honestly worth logging as a blank instead, with a one-tap way to do that if so.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Logging a catch</div>
@@ -1664,7 +1669,7 @@
     <h3 style="margin-top:0;"><i class="ti ti-user" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How the Profile works</h3>
     <div class="profile-catch">
       <div class="pc-head">Followers, following, and badges</div>
-      <div class="pc-line muted">Both counts are tappable — see who follows you or who you follow. Badges appear as a row below; tap any one for its full description and when you earned it. Some can be earned more than once, shown as a small number on the badge.</div>
+      <div class="pc-line muted">Both counts are tappable — see who follows you or who you follow. Your three most recent badges show below — tap any one for its full description, and for repeatable ones, every single time you've earned it. "View all" opens Fins of Fame, a full display cabinet of everything there is to earn. Empty slots stay a mystery on purpose — no hints, you only find out what they are by earning them.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">My details</div>
@@ -1680,15 +1685,15 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Your catch history</div>
-      <div class="pc-line muted">Every catch and blank you've logged, newest first. You can remove any of your own entries here — handy for cleaning up a test catch or a genuine mistake.</div>
+      <div class="pc-line muted">Every catch and blank you've logged, newest first. Once you've got more than a handful, a search box appears so you can filter by species, rig or venue. You can remove any of your own entries here — handy for cleaning up a test catch or a genuine mistake.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">My insights</div>
       <div class="pc-line muted">Has its own tab at the bottom now — which rigs and baits actually land fish for you, average soak times, your best venues, soak time distribution, and how your sessions have gone, all calculated from your own catch history.</div>
     </div>
     <div class="profile-catch">
-      <div class="pc-head">Appearance</div>
-      <div class="pc-line muted">Switch between light, dark, or match your device automatically.</div>
+      <div class="pc-head">Personal preferences</div>
+      <div class="pc-line muted">Light or dark theme, whether weights show in kilograms or pounds, and how dates are written.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Delete my data</div>
@@ -1843,6 +1848,27 @@ function lbOzToKg(lb, oz){
   const totalOz = (parseFloat(lb)||0)*16 + (parseFloat(oz)||0);
   return totalOz / 35.27396195;
 }
+// Date order is decided by LOCALE, not by the order of the options object —
+// a common trap. So we resolve the person's preference to an actual locale
+// rather than trying to reorder the fields.
+function dateLocale(){
+  const pref = localStorage.getItem('pk_fishing_date_format') || 'dmy';
+  if(pref === 'mdy') return 'en-US';
+  if(pref === 'device') return [];
+  return 'en-ZA'; // day first, and 24-hour time
+}
+
+// The one function to use anywhere a date is shown
+function fmtDate(value, opts){
+  return new Date(value).toLocaleDateString(dateLocale(), opts || {day:'numeric', month:'short', year:'numeric'});
+}
+function fmtTime(value, opts){
+  return new Date(value).toLocaleTimeString(dateLocale(), opts || {hour:'2-digit', minute:'2-digit'});
+}
+function fmtDateTime(value, opts){
+  return new Date(value).toLocaleString(dateLocale(), opts);
+}
+
 // The one function to use anywhere a weight is shown — formats according
 // to the person's own preference, whatever unit the number is stored in
 function formatWeight(kg){
@@ -5652,7 +5678,7 @@ async function renderSessionUi(){
     document.getElementById('session-active-venue').textContent = activeSession.venue_name || 'Session in progress';
     const started = new Date(activeSession.started_at);
     document.getElementById('session-active-meta').textContent =
-      `started ${started.toLocaleString('en-ZA', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}`;
+      `started ${started.toLocaleString(dateLocale(), {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}`;
     const activeRodsSel = document.getElementById('session-active-rods');
     if(activeRodsSel){
       const rods = normalizeRodsCount(activeSession.rods);
@@ -5760,7 +5786,7 @@ async function openForecast(){
   let html = `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
   hours.forEach(h=>{
     html += `<li>
-      <div class="who"><b>${h.time.toLocaleTimeString('en-ZA', {hour:'2-digit', minute:'2-digit'})}</b></div>
+      <div class="who"><b>${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
       <div class="actions">
         <span class="pill">${h.temp != null ? Math.round(h.temp)+'°C' : '—'}</span>
         <span class="pill">💨 ${h.wind != null ? Math.round(h.wind)+'km/h '+windDirLabel(h.windDir) : '—'}</span>
@@ -5782,7 +5808,7 @@ async function openForecast(){
   if(data.daily && data.daily.time){
     html += `<p class="sub-heading">Next few days</p><ul class="people-list">`;
     data.daily.time.forEach((d, i)=>{
-      const day = new Date(d).toLocaleDateString('en-ZA', {weekday:'short', day:'numeric', month:'short'});
+      const day = new Date(d).toLocaleDateString(dateLocale(), {weekday:'short', day:'numeric', month:'short'});
       html += `<li>
         <div class="who"><b>${escapeHtml(day)}</b></div>
         <div class="actions">
@@ -6152,7 +6178,7 @@ let pendingEntry = null;
 
 function showConfirmation(entry){
   pendingEntry = entry;
-  const timeStr = new Date(entry.time).toLocaleTimeString('en-ZA', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const timeStr = new Date(entry.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(entry.timerElapsed||0);
   let html = `<h3>${entry.caught ? 'Caught a fish?' : 'No catch?'}</h3>`;
   html += `<p><b>${RID_LABEL[entry.rod]}</b>${entry.caught ? ' · '+escapeHtml(entry.hook) : ''}${entry.rodIdentifier ? ' · '+escapeHtml(entry.rodIdentifier) : ''}</p>`;
@@ -6165,7 +6191,7 @@ function showConfirmation(entry){
   if(isToday){
     html += `<p>Time of day: <b>${timeStr}</b></p>`;
   }else{
-    html += `<p>Caught: <b>${entryDate.toLocaleString('en-ZA', {weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}</b></p>`;
+    html += `<p>Caught: <b>${entryDate.toLocaleString(dateLocale(), {weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}</b></p>`;
   }
   html += `<p>Rod timer: <b>${timerStr}</b></p>`;
   if(entry.rig){
@@ -6317,10 +6343,10 @@ function renderProfilePhotoGrid(entries, filterType){
 function catchDetailHtml(c, editable, removable){
   const timeStr = c.hasKnownTime === false
     ? 'not recorded'
-    : new Date(c.time).toLocaleTimeString('en-ZA', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    : new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(c.timerElapsed||0);
   const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
-  const dateStr = new Date(c.time).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'});
+  const dateStr = new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
   let html = `<div class="profile-catch">
     <div class="pc-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <span>${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</span>
@@ -6622,7 +6648,7 @@ function buildInsightsHtml(catches, venues, sessions){
       return {
         id: s.id,
         name: s.venue_name || 'Session',
-        when: started.toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'}),
+        when: started.toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
         count: sc.length,
         weight,
         duration: durationMs,
@@ -7304,6 +7330,12 @@ document.getElementById('weight-unit-select').addEventListener('change', (e)=>{
   // needs to re-render to pick up the new format
   if(currentPerson) renderAll();
 });
+document.getElementById('date-format-select').addEventListener('change', (e)=>{
+  localStorage.setItem('pk_fishing_date_format', e.target.value);
+  // Same reasoning as weight unit — anything already on screen showing a
+  // date needs a re-render to pick up the new format
+  if(currentPerson) renderAll();
+});
 
 // ---------- Onboarding ----------
 function showOnboarding(){
@@ -7838,7 +7870,7 @@ function openBadgeDetailFor(def, count, whenText, personId, isComp){
         if(!rows.length) return;
         histEl.innerHTML = '<p class="sub-heading" style="margin-bottom:8px;">Every time</p>' +
           rows.map(r=>{
-            const when = new Date(r.awarded_at).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'});
+            const when = new Date(r.awarded_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
             return '<div class="pc-line" style="padding:5px 0;border-bottom:1px solid var(--line);">' +
               '<span class="muted">' + when + '</span>' +
               (r.competition_name ? ' \u00b7 ' + escapeHtml(r.competition_name) : '') + '</div>';
@@ -7853,7 +7885,7 @@ function openBadgeDetailFor(def, count, whenText, personId, isComp){
       if(!rows.length) return; // Nothing recorded yet — badges earned before this history existed
       histEl.innerHTML = '<p class="sub-heading" style="margin-bottom:8px;">Every time</p>' +
         rows.map(r=>{
-          const when = new Date(r.event_time).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'});
+          const when = new Date(r.event_time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
           const bits = [];
           if(r.species) bits.push(escapeHtml(r.species));
           if(r.weight) bits.push(formatWeight(r.weight));
@@ -7919,7 +7951,7 @@ function renderCabinet(el, defs, byKey, title, personId, isComp){
       earnedCount++;
       const count = isComp ? e.count : (e.earn_count || 1);
       const whenSrc = isComp ? e.latest : e.earned_at;
-      const when = new Date(whenSrc).toLocaleDateString('en-ZA', {month:'short', year:'numeric'});
+      const when = new Date(whenSrc).toLocaleDateString(dateLocale(), {month:'short', year:'numeric'});
       const bubble = count > 1
         ? '<span style="position:absolute;top:8px;right:10px;background:var(--dam);color:#fff;'
           + 'border:2px solid #2a1a0d;border-radius:999px;min-width:20px;height:20px;display:inline-flex;'
@@ -8116,7 +8148,7 @@ async function openProfile(personId){
     html += `<div style="display:flex;gap:10px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch;">` +
       recentDefs.map(b=>{
         const earned = earnedBadges.find(e=>e.badge_key===b.key);
-        const when = earned ? new Date(earned.earned_at).toLocaleDateString('en-ZA', {month:'short', year:'numeric'}) : '';
+        const when = earned ? new Date(earned.earned_at).toLocaleDateString(dateLocale(), {month:'short', year:'numeric'}) : '';
         const count = earned ? (earned.earn_count || 1) : 1;
         // Only worth showing a number once it's been earned more than once
         const countBubble = count > 1
@@ -8182,7 +8214,7 @@ async function openProfile(personId){
   }else{
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">` +
       speciesStats.map(s=>{
-        const pbDate = s.pb ? new Date(s.pb.time).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'}) : '';
+        const pbDate = s.pb ? new Date(s.pb.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}) : '';
         const pbPhoto = (s.pb && s.pb.photos && s.pb.photos.length) ? s.pb.photos[0] : null;
         return `
         <div class="profile-catch" style="flex:1;min-width:130px;text-align:center;">
@@ -8638,7 +8670,7 @@ async function renderPhotoComments(){
   if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet — be the first to say something.</div>'; return; }
   const myUserId = isSignedIn() ? session.user.id : null;
   el.innerHTML = rows.map(c=>{
-    const time = new Date(c.created_at).toLocaleString('en-ZA', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const time = new Date(c.created_at).toLocaleString(dateLocale(), {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     const isMine = myUserId && c.author_user_id === myUserId;
     const canManage = isMine || isSuperUser();
     return `<div class="comment-item" data-comment-id="${c.id}">
@@ -8755,7 +8787,7 @@ function renderTimers(){
     const label = document.getElementById('start-time-'+r);
     if(label){
       label.textContent = (t && t.running && t.startTs)
-        ? 'Started ' + new Date(t.startTs).toLocaleTimeString('en-ZA', {hour:'2-digit',minute:'2-digit'})
+        ? 'Started ' + new Date(t.startTs).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'})
         : '';
     }
   });
@@ -8796,7 +8828,7 @@ function renderCatchList(rod){
   if(entries.length===0){ el.innerHTML = '<div class="empty">No entries yet this session.</div>'; return; }
   el.innerHTML = entries.slice().reverse().map(c=>{
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)} (${escapeHtml(c.hook||'')})` : `No catch`;
-    const time = new Date(c.time).toLocaleTimeString('en-ZA', {hour:'2-digit',minute:'2-digit'});
+    const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
     const photoCount = (c.photos && c.photos.length) || 0;
     if(photoCount) photoGalleryCache[c.id] = c.photos;
     const thumb = photoCount
@@ -9070,7 +9102,7 @@ function formatTimeAgo(ts){
   if(hrs < 24) return hrs+'h ago';
   const days = Math.floor(hrs/24);
   if(days < 7) return days+'d ago';
-  return new Date(ts).toLocaleDateString('en-ZA', {day:'numeric', month:'short'});
+  return new Date(ts).toLocaleDateString(dateLocale(), {day:'numeric', month:'short'});
 }
 
 async function loadFeedItems(fishermanIds){
@@ -10231,7 +10263,7 @@ async function renderAdminOverview(){
     // so genuinely recent joins always show first regardless of table size
     const rows = await sbGet('fishermen?select=id,name,created_at&order=created_at.desc.nullslast&limit=5');
     signupsEl.innerHTML = rows.length ? rows.map(r=>{
-      const when = r.created_at ? new Date(r.created_at).toLocaleDateString('en-ZA', {day:'numeric', month:'short', year:'numeric'}) : 'Before join dates were tracked';
+      const when = r.created_at ? new Date(r.created_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}) : 'Before join dates were tracked';
       return `<div class="profile-catch"><div class="pc-head">${escapeHtml(r.name)}</div><div class="pc-line muted">${escapeHtml(when)}</div></div>`;
     }).join('') : '<div class="empty">No anglers yet.</div>';
   }catch(e){
@@ -10245,7 +10277,7 @@ async function renderAdminOverview(){
     // round of queries needed just to label who caught what
     catchesEl.innerHTML = rows.length ? rows.map(c=>{
       const angler = people.find(p=>p.id===c.fisherman_id);
-      const when = new Date(c.time).toLocaleDateString('en-ZA', {day:'numeric', month:'short'});
+      const when = new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short'});
       return `<div class="profile-catch">
         <div class="pc-head">${escapeHtml(angler ? angler.name : 'Unknown')} — ${escapeHtml(c.fish_type||'Fish')}</div>
         <div class="pc-line muted">${formatWeight(c.weight)} · ${escapeHtml(when)}</div>
@@ -10464,7 +10496,7 @@ document.getElementById('admin-catch-angler-select').addEventListener('change', 
   }
   catchSel.disabled = false;
   catchSel.innerHTML = '<option value="">Choose...</option>' + adminCatchList.map(c=>{
-    const time = new Date(c.time).toLocaleString('en-ZA', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const time = new Date(c.time).toLocaleString(dateLocale(), {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     const label = c.caught ? `${c.type||'Fish'} — ${formatWeight(c.weight)} (${time})` : `No catch (${time})`;
     return `<option value="${c.id}">${escapeHtml(label)}</option>`;
   }).join('');
@@ -10674,6 +10706,8 @@ await loadTackleCategoryOptions();
     if(themeSel) themeSel.value = localStorage.getItem('pk_fishing_theme') || 'system';
     const unitSel = document.getElementById('weight-unit-select');
     if(unitSel) unitSel.value = getWeightUnit();
+    const dateSel = document.getElementById('date-format-select');
+    if(dateSel) dateSel.value = localStorage.getItem('pk_fishing_date_format') || 'dmy';
   }catch(e){}
   makeCardCollapsible('appearance-card', 'appearance-body', 'pk_fishing_collapse_appearance');
   ['past-catch-weight','edit-catch-weight','admin-catch-weight'].forEach(id=>{
