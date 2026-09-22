@@ -4,6 +4,9 @@
 // - pk-fishing.pages.dev                         -> redirects to pksport.co.za/fishing
 // - other addresses (per-deployment previews)    -> the fishing app, unchanged
 // - pksport.co.za/fishing                        -> the fishing app, served in place (address stays put)
+// - pksport.co.za/golf                           -> the golf app, proxied from its own Cloudflare
+//                                                    project (a separate GitHub repo, so it can't be
+//                                                    served from this project's own assets like fishing is)
 // - pksport.co.za (anything else)                -> the under construction page
 
 const SPORT_HOSTS = new Set(['pksport.co.za', 'www.pksport.co.za']);
@@ -36,6 +39,7 @@ const UNDER_CONSTRUCTION = `<!DOCTYPE html>
   <h1>PK Sport</h1>
   <p>We're building something new. Check back soon.</p>
   <p>Looking for fishing? <a href="/fishing">Open PK Fishing</a></p>
+  <p>Looking for golf? <a href="/golf">Open PK Golf</a></p>
 </main>
 </body>
 </html>`;
@@ -103,6 +107,20 @@ export default {
         }
         return res;
       }
+      // Golf lives on its own Cloudflare project, so it's proxied here rather than served from
+      // this project's own assets. The golf app is one self-contained file with no other local
+      // files (icons, manifest, etc.), so unlike fishing this needs no <base> tag or rewriting.
+      if (url.pathname === '/golf/') {
+        url.pathname = '/golf';
+        return Response.redirect(url.toString(), 301);
+      }
+      if (url.pathname === '/golf' || url.pathname.startsWith('/golf/')) {
+        const upstream = new URL(request.url);
+        upstream.hostname = 'pk-golf.pages.dev';
+        upstream.pathname = url.pathname === '/golf' ? '/' : url.pathname.slice('/golf'.length);
+        return fetch(upstream.toString());
+      }
+
       return new Response(UNDER_CONSTRUCTION, {
         status: 200,
         headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' },
