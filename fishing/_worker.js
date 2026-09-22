@@ -39,7 +39,6 @@ const UNDER_CONSTRUCTION = `<!DOCTYPE html>
   <h1>PK Sport</h1>
   <p>We're building something new. Check back soon.</p>
   <p>Looking for fishing? <a href="/fishing">Open PK Fishing</a></p>
-  <p>Looking for golf? <a href="/golf">Open PK Golf</a></p>
 </main>
 </body>
 </html>`;
