@@ -550,7 +550,7 @@
 <body>
 <div class="app">
   <header class="top" id="app-header">
-    <h1><img src="logo_v3_outlined.png" alt="PK Fishing" style="height:1.7em;vertical-align:middle;margin-right:6px;"> PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
+    <h1><img src="logo_v3_outlined.png" alt="PK Fishing" fetchpriority="high" style="height:1.7em;vertical-align:middle;margin-right:6px;"> PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
     <button id="notif-bell" aria-label="Notifications" style="display:none;">
       🔔<span id="notif-badge" style="display:none;"></span>
     </button>
@@ -716,7 +716,7 @@
         <div id="auth-forms">
           <div id="signup-form" style="display:none;">
             <div class="auth-header">
-              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing"></div>
+              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" loading="lazy" decoding="async"></div>
               <h2 style="margin:6px 0 2px;">PK Fishing</h2>
               <p class="pc-line muted" style="margin:0;">Create your account</p>
             </div>
@@ -746,7 +746,7 @@
 
           <div id="signin-form">
             <div class="auth-header">
-              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing"></div>
+              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" fetchpriority="high"></div>
               <h2 style="margin:6px 0 2px;">PK Fishing</h2>
               <p class="pc-line muted" style="margin:0;">Sign in to your account</p>
             </div>
@@ -810,7 +810,7 @@
         <div id="my-details-body">
           <div class="field" style="text-align:center;">
             <label>Profile picture</label>
-            <img id="details-avatar-preview" src="" alt="Your profile picture" style="display:none;width:88px;height:88px;border-radius:50%;object-fit:cover;margin:4px auto 10px;border:2px solid var(--line);">
+            <img id="details-avatar-preview" src="" alt="Your profile picture" loading="lazy" decoding="async" style="display:none;width:88px;height:88px;border-radius:50%;object-fit:cover;margin:4px auto 10px;border:2px solid var(--line);">
             <div style="display:flex;gap:8px;justify-content:center;margin-bottom:6px;">
               <button type="button" class="mini-btn photo-camera-btn" data-target="details-avatar-input"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
               <button type="button" class="mini-btn photo-gallery-btn" data-target="details-avatar-input"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
@@ -1540,7 +1540,7 @@
 
 <div class="modal-overlay" id="badge-detail-modal">
   <div class="modal-card" style="text-align:center;max-height:82vh;overflow-y:auto;">
-    <img id="badge-detail-img" src="" alt="" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
+    <img id="badge-detail-img" src="" alt="" loading="lazy" decoding="async" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
     <h3 id="badge-detail-title" style="margin:0 0 6px;"></h3>
     <p class="pc-line muted" id="badge-detail-desc" style="margin-bottom:4px;"></p>
     <p class="pc-line muted" id="badge-detail-when"></p>
@@ -1579,7 +1579,7 @@
 
 <div class="modal-overlay" id="onboarding-modal">
   <div class="modal-card">
-    <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;"><img src="logo_v3_outlined.png" alt="" style="height:1.6em;"> Welcome to PK Fishing</h3>
+    <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;"><img src="logo_v3_outlined.png" alt="" loading="lazy" decoding="async" style="height:1.6em;"> Welcome to PK Fishing</h3>
     <p class="pc-line">Here's how it works:</p>
     <div class="profile-catch">
       <div class="pc-head">1. Build your rigs</div>
@@ -1612,7 +1612,7 @@
 <div class="modal-overlay" id="reset-password-modal">
   <div class="modal-card">
     <div class="auth-header">
-      <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing"></div>
+      <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" loading="lazy" decoding="async"></div>
       <h3 style="margin:6px 0 2px;">Set a new password</h3>
     </div>
     <div class="field">
@@ -1743,7 +1743,7 @@
   <div class="modal-card" style="max-width:92vw;max-height:88vh;overflow-y:auto;padding:12px;text-align:center;position:relative;">
     <button type="button" id="photo-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <div id="photo-zoom-stage" style="display:block;width:fit-content;max-width:100%;margin:0 auto;overflow:hidden;border-radius:10px;touch-action:none;">
-      <img id="photo-modal-img" src="" alt="Catch photo" draggable="false" style="max-width:100%;max-height:60vh;display:block;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;">
+      <img id="photo-modal-img" src="" alt="Catch photo" draggable="false" loading="lazy" decoding="async" style="max-width:100%;max-height:60vh;display:block;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;">
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:6px;">Pinch or double-tap to zoom</div>
     <div id="photo-modal-nav" style="display:none;justify-content:space-between;align-items:center;margin-top:8px;">
@@ -2466,7 +2466,7 @@ function renderPhotoPreview(rod){
   preview.style.display = 'flex';
   preview.innerHTML = photos.map((src, i)=>`
     <div class="photo-thumb-wrap">
-      <img class="pc-photo" src="${src}" alt="Catch photo">
+      <img class="pc-photo" src="${src}" alt="Catch photo" loading="lazy" decoding="async">
       <button type="button" class="photo-remove" data-rod="${rod}" data-index="${i}">×</button>
     </div>`).join('');
   preview.querySelectorAll('.photo-remove').forEach(btn=>{
@@ -2528,7 +2528,7 @@ function renderEditPhotoPreview(){
   preview.style.display = 'flex';
   preview.innerHTML = editPhotos.map((src, i)=>`
     <div class="photo-thumb-wrap">
-      <img class="pc-photo" src="${src}" alt="Catch photo">
+      <img class="pc-photo" src="${src}" alt="Catch photo" loading="lazy" decoding="async">
       <button type="button" class="photo-remove" data-index="${i}">×</button>
     </div>`).join('');
   preview.querySelectorAll('.photo-remove').forEach(btn=>{
@@ -2677,7 +2677,7 @@ function avatarHtml(person, size){
   const name = (person && person.name) ? person.name : '?';
   const initial = name.trim().charAt(0).toUpperCase() || '?';
   if(person && person.avatar_url){
-    return `<img src="${escapeHtml(person.avatar_url)}" alt="${escapeHtml(name)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;vertical-align:middle;">`;
+    return `<img src="${escapeHtml(person.avatar_url)}" alt="${escapeHtml(name)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;vertical-align:middle;" loading="lazy" decoding="async">`;
   }
   return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:var(--dam);color:#fff;font-weight:700;font-size:${Math.round(size*0.45)}px;flex-shrink:0;vertical-align:middle;">${escapeHtml(initial)}</span>`;
 }
@@ -6224,7 +6224,7 @@ function showConfirmation(entry){
   html += `<p style="font-size:12px;">${hookParts.join(' &middot; ')}</p>`;
   if(entry.photos && entry.photos.length){
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
-      entry.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      entry.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" loading="lazy" decoding="async" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
       `</div>`;
   }
   document.getElementById('modal-body').innerHTML = html;
@@ -6354,7 +6354,7 @@ function renderProfilePhotoGrid(entries, filterType){
     return;
   }
   grid.innerHTML = filtered.map(e=>
-    `<img class="pc-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="Catch photo" style="width:80px;height:80px;object-fit:cover;margin-top:0;">`
+    `<img class="pc-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="Catch photo" loading="lazy" decoding="async" style="width:80px;height:80px;object-fit:cover;margin-top:0;">`
   ).join('');
 }
 
@@ -6390,7 +6390,7 @@ function catchDetailHtml(c, editable, removable){
   if(c.photos && c.photos.length){
     photoGalleryCache[c.id] = c.photos;
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
-      c.photos.map((p,i)=>`<img class="pc-photo" src="${p}" data-catch-id="${c.id}" data-photo-index="${i}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      c.photos.map((p,i)=>`<img class="pc-photo" src="${p}" data-catch-id="${c.id}" data-photo-index="${i}" alt="Catch photo" loading="lazy" decoding="async" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
       `</div>`;
   }
   html += `</div>`;
@@ -8174,7 +8174,7 @@ async function openProfile(personId){
           : '';
         return `<button type="button" class="badge-strip-item" data-badge-key="${b.key}" data-badge-when="${escapeHtml(when)}" data-badge-count="${count}" style="flex-shrink:0;width:82px;text-align:center;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;position:relative;">
           ${countBubble}
-          <img src="${badgeImageSrc(b.key)}?v=${BADGE_ASSET_VERSION}" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
+          <img src="${badgeImageSrc(b.key)}?v=${BADGE_ASSET_VERSION}" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" loading="lazy" decoding="async" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
           <div style="font-size:11px;font-weight:700;color:var(--ink);line-height:1.2;">${escapeHtml(b.name)}</div>
           <div style="font-size:10px;color:var(--muted);">${escapeHtml(when)}</div>
         </button>`;
@@ -8236,7 +8236,7 @@ async function openProfile(personId){
         const pbPhoto = (s.pb && s.pb.photos && s.pb.photos.length) ? s.pb.photos[0] : null;
         return `
         <div class="profile-catch" style="flex:1;min-width:130px;text-align:center;">
-          ${pbPhoto ? `<img src="${escapeHtml(pbPhoto)}" alt="${escapeHtml(s.species)} PB" class="pb-thumb" data-pb-photo="${escapeHtml(pbPhoto)}" style="width:100%;height:90px;object-fit:cover;border-radius:8px;margin-bottom:6px;cursor:pointer;">` : ''}
+          ${pbPhoto ? `<img src="${escapeHtml(pbPhoto)}" alt="${escapeHtml(s.species)} PB" class="pb-thumb" data-pb-photo="${escapeHtml(pbPhoto)}" loading="lazy" decoding="async" style="width:100%;height:90px;object-fit:cover;border-radius:8px;margin-bottom:6px;cursor:pointer;">` : ''}
           <div class="pc-head">${escapeHtml(s.species)}</div>
           <div class="pc-line"><b>${s.count}</b> caught</div>
           <div class="pc-line muted">${formatWeight(s.totalWeight)} total · ${formatWeight(s.avgWeight)} avg</div>
@@ -8955,7 +8955,7 @@ function renderCatchList(rod){
     const photoCount = (c.photos && c.photos.length) || 0;
     if(photoCount) photoGalleryCache[c.id] = c.photos;
     const thumb = photoCount
-      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
+      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="" loading="lazy" decoding="async">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
       : '';
     return `<div class="catch-log-item">${thumb}<span style="flex:1;">${label} · ${time}</span><button class="edit-catch" data-id="${c.id}">Edit</button><button class="del" data-id="${c.id}" data-rod="${rod}">Remove</button></div>`;
   }).join('');
@@ -9183,7 +9183,7 @@ async function renderLeaderboard(){
   el.innerHTML = visibleStats.map((s,i)=>{
     const photoStrip = (s.bagPhotos && s.bagPhotos.length)
       ? `<div style="display:flex;flex-wrap:wrap;gap:4px;max-width:110px;flex-shrink:0;">` +
-          s.bagPhotos.map(e=>`<img class="catch-log-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="">`).join('') +
+          s.bagPhotos.map(e=>`<img class="catch-log-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="" loading="lazy" decoding="async">`).join('') +
         `</div>`
       : '';
     const statLine = sortMode === 'fish'
@@ -9711,7 +9711,7 @@ async function renderFeed(refetch){
     if(it.photos.length) photoGalleryCache[it.id] = it.photos;
     const photoHtml = it.photos.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">` +
-          it.photos.map((src,i)=>`<img class="pc-photo" src="${src}" data-catch-id="${it.id}" data-photo-index="${i}" alt="" style="width:100%;max-width:220px;height:150px;object-fit:cover;margin-top:0;">`).join('') +
+          it.photos.map((src,i)=>`<img class="pc-photo" src="${src}" data-catch-id="${it.id}" data-photo-index="${i}" alt="" loading="lazy" decoding="async" style="width:100%;max-width:220px;height:150px;object-fit:cover;margin-top:0;">`).join('') +
         `</div>`
       : '';
     return `<div class="profile-catch">
@@ -10494,7 +10494,7 @@ async function renderAdminTackleList(){
       const owner = people.find(p=>p.user_id===it.owner_user_id);
       return `<li>
         <div class="who" style="align-items:center;">
-          ${it.photo ? `<img src="${escapeHtml(it.photo)}" alt="" class="admin-tackle-thumb" data-photo="${escapeHtml(it.photo)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0;">` : ''}
+          ${it.photo ? `<img src="${escapeHtml(it.photo)}" alt="" class="admin-tackle-thumb" data-photo="${escapeHtml(it.photo)}" loading="lazy" decoding="async" style="width:44px;height:44px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0;">` : ''}
           <b>${escapeHtml(it.name)}</b>
           <span class="pill">${escapeHtml(it.category||'Other')}</span>
           ${it.brand ? `<span class="pill">${escapeHtml(it.brand)}</span>` : ''}
