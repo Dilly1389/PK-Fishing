@@ -1494,6 +1494,10 @@
       <button type="button" class="mini-btn" id="session-edit-pin"><i class="ti ti-map-pin" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Drop a pin</button>
     </div>
     <div id="session-edit-results" style="margin-bottom:10px;"></div>
+    <div id="session-edit-feed-wrap" style="margin-bottom:14px;">
+      <h2 style="font-size:14px;font-weight:600;color:var(--muted);margin:0 0 5px;">What happened</h2>
+      <div id="session-edit-feed"></div>
+    </div>
     <div class="field">
       <label>Session Log</label>
       <textarea maxlength="2000" id="session-edit-log" placeholder="How did the session go?" autocomplete="pk-session-edit-log" style="min-height:80px;" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
@@ -4983,6 +4987,33 @@ function normalizeRodsCount(val){
   return n;
 }
 
+// A raw `catches` row from Supabase -> the entry shape used throughout the
+// app. Shared so any code fetching catches independently of loadPerson()
+// (e.g. a single session's catches for the read-only recap below) stays
+// in sync with this mapping instead of drifting from a copy of it.
+function mapCatchRow(c){
+  const entry = {
+    id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
+    time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
+    bom:c.bom||'',
+    rig: c.rig || '',
+    rigId: c.rig_id || null,
+    rodIdentifier: c.rod_identifier || '',
+    castDistance: c.cast_distance ?? null,
+    rodNote: c.rod_note || '',
+    venueId: c.venue_id || null,
+    hasKnownTime: c.has_known_time !== false,
+    moonPhase: c.moon_phase || null,
+    sessionId: c.session_id || null,
+    photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
+    likes: c.likes || 0
+  };
+  for(let n=1; n<=MAX_HOOKS; n++){
+    entry['hook'+n] = c['hook'+n+'_note'] || '';
+  }
+  return entry;
+}
+
 async function loadPerson(id){
   try{
     const [fRows, rodRows, catchRows] = await Promise.all([
@@ -5018,28 +5049,7 @@ async function loadPerson(id){
       }
       notes[r] = noteObj;
     });
-    const catches = catchRows.map(c=>{
-      const entry = {
-        id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
-        time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
-        bom:c.bom||'',
-        rig: c.rig || '',
-        rigId: c.rig_id || null,
-        rodIdentifier: c.rod_identifier || '',
-        castDistance: c.cast_distance ?? null,
-        rodNote: c.rod_note || '',
-        venueId: c.venue_id || null,
-        hasKnownTime: c.has_known_time !== false,
-        moonPhase: c.moon_phase || null,
-        sessionId: c.session_id || null,
-        photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
-        likes: c.likes || 0
-      };
-      for(let n=1; n<=MAX_HOOKS; n++){
-        entry['hook'+n] = c['hook'+n+'_note'] || '';
-      }
-      return entry;
-    });
+    const catches = catchRows.map(mapCatchRow);
     clearDbError();
     return {
       name:f.name, dam:f.dam, competition:f.competition||'', rods:normalizeRodsCount(f.rods), timers, notes, catches,
@@ -7611,6 +7621,23 @@ async function openSessionEdit(sessionId){
   document.getElementById('session-edit-status').textContent = '';
   updateSessionEditCoordsLabel();
   refreshVenueSuggestions();
+
+  // Read-only recap of the session — same cross-rod chronological view as
+  // the live Timers feed, just pointed at this (finished) session's catches.
+  // Fetched directly rather than filtered from currentPerson.catches: on a
+  // shared device the angler picker can point currentPerson at someone
+  // other than the signed-in account, while Insights (and this modal) is
+  // always about the signed-in account's own sessions.
+  document.getElementById('session-edit-feed').innerHTML = '<div class="empty">Loading...</div>';
+  try{
+    const rows = await sbGet('catches?select=*&session_id=eq.'+s.id+'&order=time.asc');
+    document.getElementById('session-edit-feed').innerHTML =
+      sessionFeedRowsHtml(rows.map(mapCatchRow), 'Nothing was logged in this session.');
+  }catch(e){
+    console.error('Could not load session catches', e);
+    document.getElementById('session-edit-feed').innerHTML = '<div class="empty">Could not load what happened this session.</div>';
+  }
+
   document.getElementById('session-edit-modal').showModal();
 }
 
@@ -8989,20 +9016,14 @@ function renderCatchList(rod){
 // A single chronological feed across every rod, so you can see what's
 // happened this session at a glance instead of checking each rod's card
 // in turn. Read-only — edit/remove still live on the per-rod list below.
-function renderSessionFeed(){
-  const card = document.getElementById('session-feed-card');
-  const el = document.getElementById('session-feed-list');
-  if(!card || !el) return;
-  if(!activeSession){ card.style.display = 'none'; return; }
-  card.style.display = 'block';
-  const entries = currentPerson
-    ? currentPerson.catches.filter(c=> c.sessionId === activeSession.id)
-    : [];
+// Shared row renderer for both the live session feed (Timers) and the
+// read-only "What happened" list on a past session (Insights -> Edit
+// session) - same chronological, cross-rod view either way.
+function sessionFeedRowsHtml(entries, emptyMessage){
   if(entries.length===0){
-    el.innerHTML = '<div class="empty">Nothing logged yet this session — your first catch or blank will show up here.</div>';
-    return;
+    return `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
   }
-  el.innerHTML = entries.slice().sort((a,b)=> b.time - a.time).map(c=>{
+  return entries.slice().sort((a,b)=> b.time - a.time).map(c=>{
     const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}` : `No catch`;
     const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
@@ -9013,6 +9034,18 @@ function renderSessionFeed(){
       : '';
     return `<div class="catch-log-item"><span style="font-size:11px;color:var(--muted);flex-shrink:0;min-width:44px;">${time}</span>${thumb}<span style="flex:1;"><b>${rodLabel}</b> · ${label}</span></div>`;
   }).join('');
+}
+
+function renderSessionFeed(){
+  const card = document.getElementById('session-feed-card');
+  const el = document.getElementById('session-feed-list');
+  if(!card || !el) return;
+  if(!activeSession){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const entries = currentPerson
+    ? currentPerson.catches.filter(c=> c.sessionId === activeSession.id)
+    : [];
+  el.innerHTML = sessionFeedRowsHtml(entries, "Nothing logged yet this session — your first catch or blank will show up here.");
 }
 
 // Tabs. Panels reachable from the More menu (feed, tackle, competitions,
