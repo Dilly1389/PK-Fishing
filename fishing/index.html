@@ -509,6 +509,17 @@
   #badge-detail-modal{z-index:2150;}
   /* Pin drop opens on top of the venue/session edit modals */
   #pin-drop-modal{z-index:2200;}
+  /* Pilot: confirm-modal and forecast-modal use the native <dialog> element instead of a
+     manually-toggled overlay div. Same look via the existing .modal-card inside it, but this
+     gets focus trapping, Esc-to-close, top-layer stacking and (via closedby) click-outside-to-close
+     for free — see the Safari fallback script near the end for browsers without closedby support. */
+  dialog#confirm-modal, dialog#forecast-modal{
+    border:none;padding:0;background:transparent;margin:auto;
+    max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);
+  }
+  dialog#confirm-modal::backdrop, dialog#forecast-modal::backdrop{
+    background:rgba(0,0,0,0.55);
+  }
   .modal-card{
     background:var(--card-bg);border-radius:16px;padding:24px 22px;max-width:320px;width:100%;
     text-align:center;border:1px solid var(--line);
@@ -1423,7 +1434,7 @@
   </footer>
 </div>
 
-<div class="modal-overlay" id="confirm-modal">
+<dialog id="confirm-modal" closedby="any" aria-label="Confirm catch details">
   <div class="modal-card">
     <div id="modal-body"></div>
     <div class="row2" style="margin-top:18px;">
@@ -1431,7 +1442,7 @@
       <button class="primary-btn" id="confirm-correct">Correct</button>
     </div>
   </div>
-</div>
+</dialog>
 
 <div class="modal-overlay" id="venue-catches-modal">
   <div class="modal-card wide" style="position:relative;">
@@ -1515,13 +1526,13 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="forecast-modal">
+<dialog id="forecast-modal" closedby="any" aria-label="Forecast">
   <div class="modal-card wide" style="position:relative;">
     <button type="button" id="forecast-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;">Forecast</h3>
     <div id="forecast-body"></div>
   </div>
-</div>
+</dialog>
 
 <div class="modal-overlay" id="badge-bookcase-modal">
   <div class="modal-card wide" style="padding:16px 14px;position:relative;">
@@ -5774,7 +5785,7 @@ async function renderSessionWeather(){
 async function openForecast(){
   const modal = document.getElementById('forecast-modal');
   const body = document.getElementById('forecast-body');
-  modal.classList.add('open');
+  modal.showModal();
   body.innerHTML = '<div class="empty">Loading forecast...</div>';
 
   const coords = weatherCache.coords;
@@ -6228,7 +6239,7 @@ function showConfirmation(entry){
       `</div>`;
   }
   document.getElementById('modal-body').innerHTML = html;
-  document.getElementById('confirm-modal').classList.add('open');
+  document.getElementById('confirm-modal').showModal();
 }
 
 document.getElementById('confirm-correct').addEventListener('click', async ()=>{
@@ -6289,7 +6300,7 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   renderNotes();
   renderTimers();
 
-  document.getElementById('confirm-modal').classList.remove('open');
+  document.getElementById('confirm-modal').close();
   pendingEntry = null;
   await saveRodState(currentPersonId, rod);
 
@@ -6342,7 +6353,7 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
 
 document.getElementById('confirm-edit').addEventListener('click', ()=>{
   pendingEntry = null;
-  document.getElementById('confirm-modal').classList.remove('open');
+  document.getElementById('confirm-modal').close();
 });
 
 function renderProfilePhotoGrid(entries, filterType){
@@ -7842,7 +7853,7 @@ document.getElementById('follow-list-close').addEventListener('click', ()=>{
   document.getElementById('follow-list-modal').classList.remove('open');
 });
 document.getElementById('forecast-modal-x').addEventListener('click', ()=>{
-  document.getElementById('forecast-modal').classList.remove('open');
+  document.getElementById('forecast-modal').close();
 });
 // Some badges have species-specific artwork — right now just Double Digits
 // (carp vs barbel vs yellowfish), since showing the species actually landed
@@ -10922,6 +10933,20 @@ if('serviceWorker' in navigator){
   });
 }
 
+// Fallback for browsers without the `closedby` attribute (Safari, as of writing) — click the
+// backdrop of any closedby="any" dialog to close it, matching what closedby gives natively
+// elsewhere. Applies to every current and future dialog with that attribute.
+if(!('closedBy' in HTMLDialogElement.prototype)){
+  document.querySelectorAll('dialog[closedby="any"]').forEach(dialog=>{
+    dialog.addEventListener('click', (e)=>{
+      if(e.target !== dialog) return;
+      const rect = dialog.getBoundingClientRect();
+      const insideContent = rect.top <= e.clientY && e.clientY <= rect.top + rect.height
+        && rect.left <= e.clientX && e.clientX <= rect.left + rect.width;
+      if(!insideContent) dialog.close();
+    });
+  });
+}
 </script>
 </body>
 </html>
