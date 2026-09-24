@@ -7531,7 +7531,7 @@ async function openVenueEdit(venueId){
 
 function updateVenueEditCoordsLabel(){
   const el = document.getElementById('venue-edit-coords');
-  el.textContent = editingVenueCoords
+  el.innerHTML = editingVenueCoords
     ? `<i class="ti ti-map-pin" style="vertical-align:-2px;" aria-hidden="true"></i> ${editingVenueCoords.lat.toFixed(4)}, ${editingVenueCoords.lng.toFixed(4)}`
     : 'No map location set yet.';
 }
@@ -7643,7 +7643,7 @@ async function openSessionEdit(sessionId){
 
 function updateSessionEditCoordsLabel(){
   const el = document.getElementById('session-edit-coords');
-  el.textContent = editingSessionCoords
+  el.innerHTML = editingSessionCoords
     ? `<i class="ti ti-map-pin" style="vertical-align:-2px;" aria-hidden="true"></i> ${editingSessionCoords.lat.toFixed(4)}, ${editingSessionCoords.lng.toFixed(4)}`
     : 'No map location set for this venue yet.';
 }
