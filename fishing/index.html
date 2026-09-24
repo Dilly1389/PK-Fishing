@@ -493,31 +493,26 @@
   }
   .status{font-size:12px;color:var(--muted);margin-top:8px;min-height:14px;}
 
-  .modal-overlay{
-    position:fixed;inset:0;background:rgba(0,0,0,0.55);display:none;
-    align-items:center;justify-content:center;padding:20px;
-    /* Above Leaflet, whose own panes and controls sit in the 400-1000 range.
-       Insights is a panel rather than a modal now, so its map is part of the
-       page and would otherwise cover anything opened from it. */
-    z-index:2000;
-  }
-  .modal-overlay.open{display:flex;}
-  /* These open on top of an already-open modal, so they need to win the
-     stacking order regardless of where they sit in the DOM */
-  #badge-detail-modal, #badge-bookcase-modal, #follow-list-modal, #session-edit-modal, #venue-edit-modal, #venue-catches-modal, #forecast-modal, #edit-catch-modal{z-index:2100;}
-  /* The detail popup opens from inside the bookcase, so it has to win over it */
-  #badge-detail-modal{z-index:2150;}
-  /* Pin drop opens on top of the venue/session edit modals */
-  #pin-drop-modal{z-index:2200;}
-  /* Pilot: confirm-modal and forecast-modal use the native <dialog> element instead of a
-     manually-toggled overlay div. Same look via the existing .modal-card inside it, but this
-     gets focus trapping, Esc-to-close, top-layer stacking and (via closedby) click-outside-to-close
+  /* Every modal now uses the native <dialog> element instead of a manually-toggled
+     overlay div. Same look via the existing .modal-card inside it, but this gets focus
+     trapping, Esc-to-close, native top-layer stacking (so no more manual z-index juggling
+     for modals that open on top of another modal) and (via closedby) click-outside-to-close
      for free — see the Safari fallback script near the end for browsers without closedby support. */
-  dialog#confirm-modal, dialog#forecast-modal{
+  dialog#confirm-modal, dialog#forecast-modal, dialog#venue-catches-modal, dialog#venue-edit-modal,
+  dialog#session-edit-modal, dialog#recast-confirm-modal, dialog#pin-drop-modal, dialog#badge-bookcase-modal,
+  dialog#badge-detail-modal, dialog#follow-list-modal, dialog#profile-modal, dialog#notif-modal,
+  dialog#onboarding-modal, dialog#reset-password-modal, dialog#timers-help-modal, dialog#profile-help-modal,
+  dialog#tackle-help-modal, dialog#photo-modal, dialog#edit-catch-modal{
     border:none;padding:0;background:transparent;margin:auto;
     max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);
   }
-  dialog#confirm-modal::backdrop, dialog#forecast-modal::backdrop{
+  dialog#confirm-modal::backdrop, dialog#forecast-modal::backdrop, dialog#venue-catches-modal::backdrop,
+  dialog#venue-edit-modal::backdrop, dialog#session-edit-modal::backdrop, dialog#recast-confirm-modal::backdrop,
+  dialog#pin-drop-modal::backdrop, dialog#badge-bookcase-modal::backdrop, dialog#badge-detail-modal::backdrop,
+  dialog#follow-list-modal::backdrop, dialog#profile-modal::backdrop, dialog#notif-modal::backdrop,
+  dialog#onboarding-modal::backdrop, dialog#reset-password-modal::backdrop, dialog#timers-help-modal::backdrop,
+  dialog#profile-help-modal::backdrop, dialog#tackle-help-modal::backdrop, dialog#photo-modal::backdrop,
+  dialog#edit-catch-modal::backdrop{
     background:rgba(0,0,0,0.55);
   }
   .modal-card{
@@ -1444,15 +1439,15 @@
   </div>
 </dialog>
 
-<div class="modal-overlay" id="venue-catches-modal">
+<dialog id="venue-catches-modal" closedby="any" aria-label="Venue catches">
   <div class="modal-card wide" style="position:relative;">
     <button type="button" id="venue-catches-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;" id="venue-catches-title"></h3>
     <div id="venue-catches-body"></div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="venue-edit-modal">
+<dialog id="venue-edit-modal" closedby="any" aria-label="Edit venue">
   <div class="modal-card" style="position:relative;">
     <button type="button" id="venue-edit-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;">Edit venue</h3>
@@ -1473,9 +1468,9 @@
     <button class="primary-btn" id="venue-edit-save">Save changes</button>
     <div class="status" id="venue-edit-status"></div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="session-edit-modal">
+<dialog id="session-edit-modal" closedby="any" aria-label="Edit session">
   <div class="modal-card" style="position:relative;">
     <button type="button" id="session-edit-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;">Edit session</h3>
@@ -1496,9 +1491,9 @@
     <button class="primary-btn" id="session-edit-save">Save changes</button>
     <div class="status" id="session-edit-status"></div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="recast-confirm-modal">
+<dialog id="recast-confirm-modal" closedby="any" aria-label="Recast this rod?">
   <div class="modal-card">
     <h3 style="margin-top:0;">↻ Recast this rod?</h3>
     <p class="pc-line muted">Restarts the clock and keeps your rig, bait and hooks exactly as they are. Nothing gets logged — it's not a blank, just a fresh soak time.</p>
@@ -1513,9 +1508,9 @@
       <button class="primary-btn" id="recast-confirm-yes">Yes, recast</button>
     </div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="pin-drop-modal">
+<dialog id="pin-drop-modal" closedby="any" aria-label="Drop a pin">
   <div class="modal-card wide" style="position:relative;">
     <button type="button" id="pin-drop-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:500;">×</button>
     <h3 style="margin-top:0;">Drop a pin</h3>
@@ -1524,7 +1519,7 @@
     <p class="pc-line muted" id="pin-drop-readout">No spot chosen yet.</p>
     <button class="primary-btn" id="pin-drop-confirm" disabled>Use this spot</button>
   </div>
-</div>
+</dialog>
 
 <dialog id="forecast-modal" closedby="any" aria-label="Forecast">
   <div class="modal-card wide" style="position:relative;">
@@ -1534,7 +1529,7 @@
   </div>
 </dialog>
 
-<div class="modal-overlay" id="badge-bookcase-modal">
+<dialog id="badge-bookcase-modal" closedby="any" aria-label="Fins of Fame badge cabinet">
   <div class="modal-card wide" style="padding:16px 14px;position:relative;">
     <button type="button" id="badge-bookcase-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <!-- Two cabinets side by side, swiped horizontally. Scroll snapping
@@ -1547,9 +1542,9 @@
     <p class="pc-line muted" style="text-align:center;">The empty slots are still a mystery — no hints here, you'll only find out what they are by earning them.</p>
     <button class="primary-btn" id="badge-bookcase-close" style="margin-top:12px;">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="badge-detail-modal">
+<dialog id="badge-detail-modal" closedby="any" aria-label="Badge details">
   <div class="modal-card" style="text-align:center;max-height:82vh;overflow-y:auto;">
     <img id="badge-detail-img" src="" alt="" loading="lazy" decoding="async" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
     <h3 id="badge-detail-title" style="margin:0 0 6px;"></h3>
@@ -1558,25 +1553,25 @@
     <div id="badge-detail-history" style="text-align:left;margin-top:10px;"></div>
     <button class="mini-btn" id="badge-detail-close" style="margin-top:12px;">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="follow-list-modal">
+<dialog id="follow-list-modal" closedby="any" aria-label="Follow list">
   <div class="modal-card">
     <h3 id="follow-list-title" style="margin-top:0;"></h3>
     <div id="follow-list-body"></div>
     <button class="mini-btn" id="follow-list-close" style="margin-top:12px;">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="profile-modal">
+<dialog id="profile-modal" closedby="any" aria-label="Profile">
   <div class="modal-card wide" style="position:relative;">
     <button type="button" id="profile-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <div id="profile-body"></div>
     <button class="primary-btn" id="profile-close">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="notif-modal">
+<dialog id="notif-modal" closedby="any" aria-label="Notifications">
   <div class="modal-card">
     <h3 style="margin-top:0;">Notifications</h3>
     <div style="display:flex;gap:8px;margin-bottom:10px;">
@@ -1586,9 +1581,9 @@
     <div id="notif-list"><div class="empty">No notifications yet — you'll hear when someone follows you, likes a catch, or adds you to a competition.</div></div>
     <button class="primary-btn" id="notif-close" style="margin-top:14px;">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="onboarding-modal">
+<dialog id="onboarding-modal" closedby="any" aria-label="Welcome to PK Fishing">
   <div class="modal-card">
     <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;"><img src="logo_v3_outlined.png" alt="" loading="lazy" decoding="async" style="height:1.6em;"> Welcome to PK Fishing</h3>
     <p class="pc-line">Here's how it works:</p>
@@ -1618,9 +1613,9 @@
     </div>
     <button class="primary-btn" id="onboarding-close" style="margin-top:14px;">Got it</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="reset-password-modal">
+<dialog id="reset-password-modal" closedby="any" aria-label="Set a new password">
   <div class="modal-card">
     <div class="auth-header">
       <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" loading="lazy" decoding="async"></div>
@@ -1639,9 +1634,9 @@
     <button class="primary-btn" id="reset-password-save-btn">Save new password</button>
     <div class="status" id="reset-password-status"></div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="timers-help-modal">
+<dialog id="timers-help-modal" closedby="any" aria-label="How Timers works">
   <div class="modal-card">
     <h3 style="margin-top:0;"><i class="ti ti-clock" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How Timers works</h3>
     <div class="profile-catch">
@@ -1674,9 +1669,9 @@
     </div>
     <button class="primary-btn" id="timers-help-close" style="margin-top:14px;">Got it</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="profile-help-modal">
+<dialog id="profile-help-modal" closedby="any" aria-label="How the Profile works">
   <div class="modal-card">
     <h3 style="margin-top:0;"><i class="ti ti-user" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How the Profile works</h3>
     <div class="profile-catch">
@@ -1713,9 +1708,9 @@
     </div>
     <button class="primary-btn" id="profile-help-close" style="margin-top:14px;">Got it</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="tackle-help-modal">
+<dialog id="tackle-help-modal" closedby="any" aria-label="How the Tackle Box works">
   <div class="modal-card">
     <h3 style="margin-top:0;"><i class="ti ti-fish" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How the Tackle Box works</h3>
     <div class="profile-catch">
@@ -1748,9 +1743,9 @@
     </div>
     <button class="primary-btn" id="tackle-help-close" style="margin-top:14px;">Got it</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="photo-modal">
+<dialog id="photo-modal" closedby="any" aria-label="Photo">
   <div class="modal-card" style="max-width:92vw;max-height:88vh;overflow-y:auto;padding:12px;text-align:center;position:relative;">
     <button type="button" id="photo-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <div id="photo-zoom-stage" style="display:block;width:fit-content;max-width:100%;margin:0 auto;overflow:hidden;border-radius:10px;touch-action:none;">
@@ -1776,9 +1771,9 @@
       <div id="photo-comments-list" style="margin-top:10px;"></div>
     </div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="edit-catch-modal">
+<dialog id="edit-catch-modal" closedby="any" aria-label="Edit catch">
   <div class="modal-card wide">
     <h3 style="margin-bottom:14px;">Edit catch</h3>
     <div class="catch-toggle" id="edit-catch-toggle">
@@ -1816,7 +1811,7 @@
     </div>
     <div class="status" id="edit-catch-status"></div>
   </div>
-</div>
+</dialog>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -2530,7 +2525,7 @@ function openEditCatch(catchId, catchObj){
   document.getElementById('edit-catch-weight').value = c.weight || '';
   document.getElementById('edit-catch-status').textContent = '';
   renderEditPhotoPreview();
-  document.getElementById('edit-catch-modal').classList.add('open');
+  document.getElementById('edit-catch-modal').showModal();
 }
 
 function renderEditPhotoPreview(){
@@ -2580,7 +2575,7 @@ document.getElementById('edit-catch-photo-input').addEventListener('change', asy
 
 document.getElementById('edit-catch-cancel').addEventListener('click', ()=>{
   editingCatchId = null;
-  document.getElementById('edit-catch-modal').classList.remove('open');
+  document.getElementById('edit-catch-modal').close();
 });
 
 document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
@@ -2605,7 +2600,7 @@ document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
       photos: JSON.stringify(c.photos)
     });
     editingCatchId = null;
-    document.getElementById('edit-catch-modal').classList.remove('open');
+    document.getElementById('edit-catch-modal').close();
     renderCatchList(c.rod);
     // If the profile view is open, refresh it too — that's where past
     // catches are edited from, and it wouldn't otherwise update
@@ -3498,7 +3493,7 @@ document.getElementById('reset-password-save-btn').addEventListener('click', asy
     setKeepSignedIn(true);
     saveSession({access_token: pendingRecovery.accessToken, refresh_token: pendingRecovery.refreshToken, user});
     pendingRecovery = null;
-    document.getElementById('reset-password-modal').classList.remove('open');
+    document.getElementById('reset-password-modal').close();
     st.textContent = '';
 
     await loadPeople();
@@ -3799,7 +3794,7 @@ function switchToTab(tabName){
 }
 
 async function goToNotificationTarget(n){
-  document.getElementById('notif-modal').classList.remove('open');
+  document.getElementById('notif-modal').close();
   if(!n.target_type) return;
   if(n.target_type === 'tackle'){
     // A whole-box share has no specific item, so just open the tab
@@ -5257,12 +5252,12 @@ function openRecastConfirm(rod){
   optionsEl.querySelectorAll('.recast-reason-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> performRecast(recastConfirmRod, btn.dataset.reason));
   });
-  document.getElementById('recast-confirm-modal').classList.add('open');
+  document.getElementById('recast-confirm-modal').showModal();
 }
 
 document.getElementById('recast-log-blank-instead').addEventListener('click', ()=>{
   const rod = recastConfirmRod;
-  document.getElementById('recast-confirm-modal').classList.remove('open');
+  document.getElementById('recast-confirm-modal').close();
   if(!rod) return;
   // Exactly the same path as tapping "No catch" directly on the rod card
   catchToggle[rod] = false;
@@ -5273,7 +5268,7 @@ document.getElementById('recast-log-blank-instead').addEventListener('click', ()
 });
 
 async function performRecast(rod, reason){
-  document.getElementById('recast-confirm-modal').classList.remove('open');
+  document.getElementById('recast-confirm-modal').close();
   if(!currentPerson || !rod) return;
   currentPerson.timers[rod] = {running:true, startTs:Date.now(), accumulatedMs:0};
   renderTimers();
@@ -5305,7 +5300,7 @@ async function performRecast(rod, reason){
 
 document.getElementById('recast-confirm-yes').addEventListener('click', ()=> performRecast(recastConfirmRod));
 document.getElementById('recast-confirm-cancel').addEventListener('click', ()=>{
-  document.getElementById('recast-confirm-modal').classList.remove('open');
+  document.getElementById('recast-confirm-modal').close();
 });
 
 function attachRodCardHandlers(){
@@ -7139,7 +7134,7 @@ function openVenueCatches(venue, venueCatches){
     </div>`;
   html += sorted.map(c=>catchDetailHtml(c, false)).join('');
   body.innerHTML = html;
-  document.getElementById('venue-catches-modal').classList.add('open');
+  document.getElementById('venue-catches-modal').showModal();
 }
 
 function renderVenueMap(venues, allCatches){
@@ -7368,29 +7363,29 @@ document.getElementById('date-format-select').addEventListener('change', (e)=>{
 
 // ---------- Onboarding ----------
 function showOnboarding(){
-  document.getElementById('onboarding-modal').classList.add('open');
+  document.getElementById('onboarding-modal').showModal();
 }
 document.getElementById('onboarding-close').addEventListener('click', ()=>{
-  document.getElementById('onboarding-modal').classList.remove('open');
+  document.getElementById('onboarding-modal').close();
 });
 document.getElementById('show-onboarding-btn').addEventListener('click', showOnboarding);
 document.getElementById('tackle-help-btn').addEventListener('click', ()=>{
-  document.getElementById('tackle-help-modal').classList.add('open');
+  document.getElementById('tackle-help-modal').showModal();
 });
 document.getElementById('tackle-help-close').addEventListener('click', ()=>{
-  document.getElementById('tackle-help-modal').classList.remove('open');
+  document.getElementById('tackle-help-modal').close();
 });
 document.getElementById('profile-help-btn').addEventListener('click', ()=>{
-  document.getElementById('profile-help-modal').classList.add('open');
+  document.getElementById('profile-help-modal').showModal();
 });
 document.getElementById('profile-help-close').addEventListener('click', ()=>{
-  document.getElementById('profile-help-modal').classList.remove('open');
+  document.getElementById('profile-help-modal').close();
 });
 document.getElementById('timers-help-btn').addEventListener('click', ()=>{
-  document.getElementById('timers-help-modal').classList.add('open');
+  document.getElementById('timers-help-modal').showModal();
 });
 document.getElementById('timers-help-close').addEventListener('click', ()=>{
-  document.getElementById('timers-help-modal').classList.remove('open');
+  document.getElementById('timers-help-modal').close();
 });
 
 // ---------- Log a past catch ----------
@@ -7429,7 +7424,7 @@ let pinDropOnConfirm = null;
 
 async function openPinDrop(startCoords, onConfirm){
   pinDropOnConfirm = onConfirm;
-  document.getElementById('pin-drop-modal').classList.add('open');
+  document.getElementById('pin-drop-modal').showModal();
   document.getElementById('pin-drop-readout').textContent = 'No spot chosen yet.';
   document.getElementById('pin-drop-confirm').disabled = true;
   pinDropChoice = null;
@@ -7483,7 +7478,7 @@ document.getElementById('past-catch-venue-pin').addEventListener('click', ()=>{
 document.getElementById('pin-drop-confirm').addEventListener('click', ()=>{
   if(!pinDropChoice) return;
   if(pinDropOnConfirm) pinDropOnConfirm({lat: pinDropChoice.lat, lng: pinDropChoice.lng});
-  document.getElementById('pin-drop-modal').classList.remove('open');
+  document.getElementById('pin-drop-modal').close();
 });
 
 // ---------- Editing a session's venue ----------
@@ -7508,7 +7503,7 @@ async function openVenueEdit(venueId){
   document.getElementById('venue-edit-results').innerHTML = '';
   document.getElementById('venue-edit-status').textContent = '';
   updateVenueEditCoordsLabel();
-  document.getElementById('venue-edit-modal').classList.add('open');
+  document.getElementById('venue-edit-modal').showModal();
 }
 
 function updateVenueEditCoordsLabel(){
@@ -7569,7 +7564,7 @@ document.getElementById('venue-edit-save').addEventListener('click', async ()=>{
       activeSession.venue_name = newName;
       await renderSessionUi();
     }
-    document.getElementById('venue-edit-modal').classList.remove('open');
+    document.getElementById('venue-edit-modal').close();
     editingVenue = null;
     await openInsights();
   }catch(e){
@@ -7579,10 +7574,10 @@ document.getElementById('venue-edit-save').addEventListener('click', async ()=>{
 });
 
 document.getElementById('venue-catches-x').addEventListener('click', ()=>{
-  document.getElementById('venue-catches-modal').classList.remove('open');
+  document.getElementById('venue-catches-modal').close();
 });
 document.getElementById('venue-edit-x').addEventListener('click', ()=>{
-  document.getElementById('venue-edit-modal').classList.remove('open');
+  document.getElementById('venue-edit-modal').close();
   editingVenue = null;
 });
 
@@ -7603,7 +7598,7 @@ async function openSessionEdit(sessionId){
   document.getElementById('session-edit-status').textContent = '';
   updateSessionEditCoordsLabel();
   refreshVenueSuggestions();
-  document.getElementById('session-edit-modal').classList.add('open');
+  document.getElementById('session-edit-modal').showModal();
 }
 
 function updateSessionEditCoordsLabel(){
@@ -7687,7 +7682,7 @@ document.getElementById('session-edit-save').addEventListener('click', async ()=
       await renderSessionUi();
     }
 
-    document.getElementById('session-edit-modal').classList.remove('open');
+    document.getElementById('session-edit-modal').close();
     editingSession = null;
     await openInsights();
   }catch(e){
@@ -7697,12 +7692,12 @@ document.getElementById('session-edit-save').addEventListener('click', async ()=
 });
 
 document.getElementById('session-edit-x').addEventListener('click', ()=>{
-  document.getElementById('session-edit-modal').classList.remove('open');
+  document.getElementById('session-edit-modal').close();
   editingSession = null;
 });
 
 document.getElementById('pin-drop-x').addEventListener('click', ()=>{
-  document.getElementById('pin-drop-modal').classList.remove('open');
+  document.getElementById('pin-drop-modal').close();
 });
 
 document.getElementById('past-catch-venue-lookup').addEventListener('click', async ()=>{
@@ -7842,15 +7837,15 @@ function openFollowList(title, ids, idType){
     ).join('');
     body.querySelectorAll('.follow-list-item').forEach(btn=>{
       btn.addEventListener('click', ()=>{
-        document.getElementById('follow-list-modal').classList.remove('open');
+        document.getElementById('follow-list-modal').close();
         openProfile(btn.dataset.id);
       });
     });
   }
-  document.getElementById('follow-list-modal').classList.add('open');
+  document.getElementById('follow-list-modal').showModal();
 }
 document.getElementById('follow-list-close').addEventListener('click', ()=>{
-  document.getElementById('follow-list-modal').classList.remove('open');
+  document.getElementById('follow-list-modal').close();
 });
 document.getElementById('forecast-modal-x').addEventListener('click', ()=>{
   document.getElementById('forecast-modal').close();
@@ -7885,7 +7880,7 @@ function openBadgeDetailFor(def, count, whenText, personId, isComp){
   document.getElementById('badge-detail-when').textContent =
     count > 1 ? whenText + ' \u00b7 earned ' + count + ' times'
               : whenText.replace('First earned', 'Earned');
-  document.getElementById('badge-detail-modal').classList.add('open');
+  document.getElementById('badge-detail-modal').showModal();
 
   const histEl = document.getElementById('badge-detail-history');
   histEl.innerHTML = '';
@@ -7931,7 +7926,7 @@ async function openBadgeBookcase(personId){
   const elComp = document.getElementById('badge-bookcase-cabinet-comp');
   el.innerHTML = '<div class="empty">Loading...</div>';
   elComp.innerHTML = '';
-  document.getElementById('badge-bookcase-modal').classList.add('open');
+  document.getElementById('badge-bookcase-modal').showModal();
 
   const [earned, compAwards] = await Promise.all([
     loadBadgesFor(personId),
@@ -8097,14 +8092,14 @@ function renderBookcaseDots(){
 }
 
 document.getElementById('badge-bookcase-close').addEventListener('click', ()=>{
-  document.getElementById('badge-bookcase-modal').classList.remove('open');
+  document.getElementById('badge-bookcase-modal').close();
 });
 document.getElementById('badge-bookcase-x').addEventListener('click', ()=>{
-  document.getElementById('badge-bookcase-modal').classList.remove('open');
+  document.getElementById('badge-bookcase-modal').close();
 });
 
 document.getElementById('badge-detail-close').addEventListener('click', ()=>{
-  document.getElementById('badge-detail-modal').classList.remove('open');
+  document.getElementById('badge-detail-modal').close();
 });
 
 // Which profile is currently open — so an edit made from it can refresh it
@@ -8298,7 +8293,7 @@ async function openProfile(personId){
   }
   html += `<div id="profile-catch-list-container"></div>`;
   document.getElementById('profile-body').innerHTML = html;
-  document.getElementById('profile-modal').classList.add('open');
+  document.getElementById('profile-modal').showModal();
 
   // Re-runs on every search keystroke / filter change — re-renders just
   // the catch list itself and re-attaches its own edit/remove handlers,
@@ -8447,7 +8442,7 @@ async function openProfile(personId){
         people = people.filter(x=>x.id!==p.id);
         if(currentPersonId===p.id){ currentPersonId=null; currentPerson=null; }
         populateAnglerSelect();
-        document.getElementById('profile-modal').classList.remove('open');
+        document.getElementById('profile-modal').close();
       }catch(e){
         console.error(e);
         adminDeleteConfirmBtn.textContent = 'Yes, delete permanently';
@@ -8466,10 +8461,10 @@ async function openProfile(personId){
   }
 }
 document.getElementById('profile-close').addEventListener('click', ()=>{
-  document.getElementById('profile-modal').classList.remove('open');
+  document.getElementById('profile-modal').close();
 });
 document.getElementById('profile-modal-x').addEventListener('click', ()=>{
-  document.getElementById('profile-modal').classList.remove('open');
+  document.getElementById('profile-modal').close();
 });
 
 let currentPhotoCatchId = null;
@@ -8637,15 +8632,10 @@ function openPhotoModal(src, catchId, index){
   }else if(likeWrap){
     likeWrap.innerHTML = '';
   }
-  document.getElementById('photo-modal').classList.add('open');
+  document.getElementById('photo-modal').showModal();
 }
 document.getElementById('photo-modal-x').addEventListener('click', ()=>{
-  document.getElementById('photo-modal').classList.remove('open');
-});
-document.getElementById('photo-modal').addEventListener('click', (e)=>{
-  if(e.target.id === 'photo-modal'){
-    document.getElementById('photo-modal').classList.remove('open');
-  }
+  document.getElementById('photo-modal').close();
 });
 document.addEventListener('click', (e)=>{
   if(e.target.classList && (e.target.classList.contains('pc-photo') || e.target.classList.contains('catch-log-photo'))){
@@ -9047,11 +9037,11 @@ setInterval(()=>{ if(isSignedIn()) refreshNotifBadge(); }, 60000);
 
 
 document.getElementById('notif-bell').addEventListener('click', ()=>{
-  document.getElementById('notif-modal').classList.add('open');
+  document.getElementById('notif-modal').showModal();
   renderNotifPanel();
 });
 document.getElementById('notif-close').addEventListener('click', ()=>{
-  document.getElementById('notif-modal').classList.remove('open');
+  document.getElementById('notif-modal').close();
 });
 document.getElementById('notif-clear-all').addEventListener('click', async ()=>{
   if(!isSignedIn()) return;
@@ -10808,7 +10798,7 @@ async function renderSpectatorCompetition(compId){
   // tokens in the URL. Handle that first, before anything else runs.
   const cameFromOAuth = await handleOAuthReturn();
   if(cameFromOAuth === 'recovery'){
-    document.getElementById('reset-password-modal').classList.add('open');
+    document.getElementById('reset-password-modal').showModal();
   }
   if(!cameFromOAuth) loadSessionFromStorage();
   try{
