@@ -51,7 +51,12 @@
     --paper:#FAFAFA;
     --card-bg:#ffffff;
     --ink:#2A1414;
-    --muted:#9C6B6B;
+    /* Was #9C6B6B (4.43:1 on white/paper cards — just under the 4.5:1 AA
+       floor for normal text, and this color is used at sizes as small as
+       11-12px for labels, helper text and status messages). Darkened to
+       clear AA at 5.98:1; the dark-mode equivalent (#C79999, 7.1:1) was
+       already fine and is left untouched. */
+    --muted:#8A5555;
     --line:#F0D6D6;
     --catch-green:#A61B2B;
     /* --khaki reads fine as light text on the dark red header, but at
