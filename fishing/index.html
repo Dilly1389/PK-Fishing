@@ -715,6 +715,11 @@
           </div>
         </div>
 
+        <div id="session-feed-card" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;">
+          <h2 style="font-size:14px;font-weight:600;color:var(--muted);margin:0 0 5px;">This session</h2>
+          <div id="session-feed-list"></div>
+        </div>
+
         <div id="rod-cards"></div>
       </div>
     </div>
@@ -2607,6 +2612,7 @@ document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
     editingCatchId = null;
     document.getElementById('edit-catch-modal').close();
     renderCatchList(c.rod);
+    renderSessionFeed();
     // If the profile view is open, refresh it too — that's where past
     // catches are edited from, and it wouldn't otherwise update
     const profileModal = document.getElementById('profile-modal');
@@ -5737,6 +5743,7 @@ async function renderSessionUi(){
     wireVenueSuggestions('session-venue', 'venue-suggestion-list');
     wireVenueSuggestions('past-catch-venue', 'venue-suggestion-list-past');
   }
+  renderSessionFeed();
 }
 
 // Cached per session, so switching tabs or re-rendering doesn't refetch
@@ -6340,6 +6347,7 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   // Re-render now the entry has its session attached — the earlier render
   // ran before that, so the list would have filtered it out
   renderCatchList(rod);
+  renderSessionFeed();
   await checkAndUpdatePersonalBest(entry);
   if(entry.caught && entry.type){
     await ensureSpeciesInRecords(currentPersonId, entry.type);
@@ -8972,9 +8980,39 @@ function renderCatchList(rod){
     btn.addEventListener('click', async ()=>{
       currentPerson.catches = currentPerson.catches.filter(c=>c.id!==btn.dataset.id);
       renderCatchList(rod);
+      renderSessionFeed();
       await removeCatch(btn.dataset.id);
     });
   });
+}
+
+// A single chronological feed across every rod, so you can see what's
+// happened this session at a glance instead of checking each rod's card
+// in turn. Read-only — edit/remove still live on the per-rod list below.
+function renderSessionFeed(){
+  const card = document.getElementById('session-feed-card');
+  const el = document.getElementById('session-feed-list');
+  if(!card || !el) return;
+  if(!activeSession){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const entries = currentPerson
+    ? currentPerson.catches.filter(c=> c.sessionId === activeSession.id)
+    : [];
+  if(entries.length===0){
+    el.innerHTML = '<div class="empty">Nothing logged yet this session — your first catch or blank will show up here.</div>';
+    return;
+  }
+  el.innerHTML = entries.slice().sort((a,b)=> b.time - a.time).map(c=>{
+    const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
+    const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}` : `No catch`;
+    const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
+    const photoCount = (c.photos && c.photos.length) || 0;
+    if(photoCount) photoGalleryCache[c.id] = c.photos;
+    const thumb = photoCount
+      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="" loading="lazy" decoding="async">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
+      : '';
+    return `<div class="catch-log-item"><span style="font-size:11px;color:var(--muted);flex-shrink:0;min-width:44px;">${time}</span>${thumb}<span style="flex:1;"><b>${rodLabel}</b> · ${label}</span></div>`;
+  }).join('');
 }
 
 // Tabs. Panels reachable from the More menu (feed, tackle, competitions,
