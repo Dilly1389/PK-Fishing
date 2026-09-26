@@ -51,7 +51,12 @@
     --paper:#FAFAFA;
     --card-bg:#ffffff;
     --ink:#2A1414;
-    --muted:#9C6B6B;
+    /* Was #9C6B6B (4.43:1 on white/paper cards — just under the 4.5:1 AA
+       floor for normal text, and this color is used at sizes as small as
+       11-12px for labels, helper text and status messages). Darkened to
+       clear AA at 5.98:1; the dark-mode equivalent (#C79999, 7.1:1) was
+       already fine and is left untouched. */
+    --muted:#8A5555;
     --line:#F0D6D6;
     --catch-green:#A61B2B;
     /* --khaki reads fine as light text on the dark red header, but at
@@ -381,6 +386,7 @@
     vertical-align:middle;
   }
   .people-list .actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .tackle-thumb{display:none;width:44px;height:44px;border-radius:6px;object-fit:cover;margin-right:8px;vertical-align:middle;border:1px solid var(--line);cursor:pointer;}
   /* Vertical "how full is the tub" slider for baits and dips */
   .fill-level-wrap{
     display:flex;align-items:center;gap:8px;margin-top:6px;
@@ -492,22 +498,28 @@
   }
   .status{font-size:12px;color:var(--muted);margin-top:8px;min-height:14px;}
 
-  .modal-overlay{
-    position:fixed;inset:0;background:rgba(0,0,0,0.55);display:none;
-    align-items:center;justify-content:center;padding:20px;
-    /* Above Leaflet, whose own panes and controls sit in the 400-1000 range.
-       Insights is a panel rather than a modal now, so its map is part of the
-       page and would otherwise cover anything opened from it. */
-    z-index:2000;
+  /* Every modal now uses the native <dialog> element instead of a manually-toggled
+     overlay div. Same look via the existing .modal-card inside it, but this gets focus
+     trapping, Esc-to-close, native top-layer stacking (so no more manual z-index juggling
+     for modals that open on top of another modal) and (via closedby) click-outside-to-close
+     for free — see the Safari fallback script near the end for browsers without closedby support. */
+  dialog#confirm-modal, dialog#forecast-modal, dialog#venue-catches-modal, dialog#venue-edit-modal,
+  dialog#session-edit-modal, dialog#recast-confirm-modal, dialog#pin-drop-modal, dialog#badge-bookcase-modal,
+  dialog#badge-detail-modal, dialog#follow-list-modal, dialog#profile-modal, dialog#notif-modal,
+  dialog#onboarding-modal, dialog#reset-password-modal, dialog#timers-help-modal, dialog#profile-help-modal,
+  dialog#tackle-help-modal, dialog#photo-modal, dialog#edit-catch-modal{
+    border:none;padding:0;background:transparent;margin:auto;
+    max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);
   }
-  .modal-overlay.open{display:flex;}
-  /* These open on top of an already-open modal, so they need to win the
-     stacking order regardless of where they sit in the DOM */
-  #badge-detail-modal, #badge-bookcase-modal, #follow-list-modal, #session-edit-modal, #venue-edit-modal, #venue-catches-modal, #forecast-modal, #edit-catch-modal{z-index:2100;}
-  /* The detail popup opens from inside the bookcase, so it has to win over it */
-  #badge-detail-modal{z-index:2150;}
-  /* Pin drop opens on top of the venue/session edit modals */
-  #pin-drop-modal{z-index:2200;}
+  dialog#confirm-modal::backdrop, dialog#forecast-modal::backdrop, dialog#venue-catches-modal::backdrop,
+  dialog#venue-edit-modal::backdrop, dialog#session-edit-modal::backdrop, dialog#recast-confirm-modal::backdrop,
+  dialog#pin-drop-modal::backdrop, dialog#badge-bookcase-modal::backdrop, dialog#badge-detail-modal::backdrop,
+  dialog#follow-list-modal::backdrop, dialog#profile-modal::backdrop, dialog#notif-modal::backdrop,
+  dialog#onboarding-modal::backdrop, dialog#reset-password-modal::backdrop, dialog#timers-help-modal::backdrop,
+  dialog#profile-help-modal::backdrop, dialog#tackle-help-modal::backdrop, dialog#photo-modal::backdrop,
+  dialog#edit-catch-modal::backdrop{
+    background:rgba(0,0,0,0.55);
+  }
   .modal-card{
     background:var(--card-bg);border-radius:16px;padding:24px 22px;max-width:320px;width:100%;
     text-align:center;border:1px solid var(--line);
@@ -544,12 +556,12 @@
   }
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 </head>
 <body>
 <div class="app">
   <header class="top" id="app-header">
-    <h1><img src="logo_v3_outlined.png" alt="PK Fishing" style="height:1.7em;vertical-align:middle;margin-right:6px;"> PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
+    <h1><img src="logo_v3_outlined.png" alt="PK Fishing" fetchpriority="high" style="height:1.7em;vertical-align:middle;margin-right:6px;"> PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
     <button id="notif-bell" aria-label="Notifications" style="display:none;">
       🔔<span id="notif-badge" style="display:none;"></span>
     </button>
@@ -577,6 +589,10 @@
     <!-- TIMERS -->
     <!-- HOME -->
     <div class="panel active" id="panel-home">
+      <div style="text-align:center;margin-bottom:14px;">
+        <button type="button" class="mini-btn" id="show-onboarding-btn"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How it works</button>
+      </div>
+
       <div id="home-weather" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;"></div>
 
       <button class="primary-btn" id="home-start-session" style="margin-bottom:14px;">+ Start a session</button>
@@ -586,13 +602,6 @@
 
       <p class="sub-heading">Latest from your mates</p>
       <div id="home-feed"><div class="empty">Loading...</div></div>
-
-      <!-- Sits at the bottom deliberately: Home is about what's happening
-           right now, so this shouldn't push that down. On a new account
-           where the rest is still empty, it ends up prominent anyway. -->
-      <div style="text-align:center;margin-top:18px;">
-        <button type="button" class="mini-btn" id="show-onboarding-btn"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How it works</button>
-      </div>
     </div>
 
     <!-- MORE -->
@@ -706,6 +715,11 @@
           </div>
         </div>
 
+        <div id="session-feed-card" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;">
+          <h2 style="font-size:14px;font-weight:600;color:var(--muted);margin:0 0 5px;">This session</h2>
+          <div id="session-feed-list"></div>
+        </div>
+
         <div id="rod-cards"></div>
       </div>
     </div>
@@ -718,7 +732,7 @@
         <div id="auth-forms">
           <div id="signup-form" style="display:none;">
             <div class="auth-header">
-              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing"></div>
+              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" loading="lazy" decoding="async"></div>
               <h2 style="margin:6px 0 2px;">PK Fishing</h2>
               <p class="pc-line muted" style="margin:0;">Create your account</p>
             </div>
@@ -748,7 +762,7 @@
 
           <div id="signin-form">
             <div class="auth-header">
-              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing"></div>
+              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" fetchpriority="high"></div>
               <h2 style="margin:6px 0 2px;">PK Fishing</h2>
               <p class="pc-line muted" style="margin:0;">Sign in to your account</p>
             </div>
@@ -812,7 +826,7 @@
         <div id="my-details-body">
           <div class="field" style="text-align:center;">
             <label>Profile picture</label>
-            <img id="details-avatar-preview" src="" alt="Your profile picture" style="display:none;width:88px;height:88px;border-radius:50%;object-fit:cover;margin:4px auto 10px;border:2px solid var(--line);">
+            <img id="details-avatar-preview" src="" alt="Your profile picture" loading="lazy" decoding="async" style="display:none;width:88px;height:88px;border-radius:50%;object-fit:cover;margin:4px auto 10px;border:2px solid var(--line);">
             <div style="display:flex;gap:8px;justify-content:center;margin-bottom:6px;">
               <button type="button" class="mini-btn photo-camera-btn" data-target="details-avatar-input"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
               <button type="button" class="mini-btn photo-gallery-btn" data-target="details-avatar-input"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
@@ -921,7 +935,7 @@
       </section>
 
       <section class="card" id="appearance-card">
-        <h2>Appearance</h2>
+        <h2>Personal preferences</h2>
         <div id="appearance-body">
           <div class="field">
             <label>Theme</label>
@@ -935,7 +949,15 @@
             <label>Weight unit</label>
             <select id="weight-unit-select">
               <option value="kg">Kilograms (kg)</option>
-              <option value="lb">Pounds & ounces (lb/oz)</option>
+              <option value="lb">Pounds &amp; ounces (lb/oz)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Date format</label>
+            <select id="date-format-select">
+              <option value="dmy">Day first (17 Sept 2026)</option>
+              <option value="mdy">Month first (Sept 17, 2026)</option>
+              <option value="device">Match my device</option>
             </select>
           </div>
         </div>
@@ -1417,7 +1439,7 @@
   </footer>
 </div>
 
-<div class="modal-overlay" id="confirm-modal">
+<dialog id="confirm-modal" closedby="any" aria-label="Confirm catch details">
   <div class="modal-card">
     <div id="modal-body"></div>
     <div class="row2" style="margin-top:18px;">
@@ -1425,17 +1447,17 @@
       <button class="primary-btn" id="confirm-correct">Correct</button>
     </div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="venue-catches-modal">
+<dialog id="venue-catches-modal" closedby="any" aria-label="Venue catches">
   <div class="modal-card wide" style="position:relative;">
     <button type="button" id="venue-catches-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;" id="venue-catches-title"></h3>
     <div id="venue-catches-body"></div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="venue-edit-modal">
+<dialog id="venue-edit-modal" closedby="any" aria-label="Edit venue">
   <div class="modal-card" style="position:relative;">
     <button type="button" id="venue-edit-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;">Edit venue</h3>
@@ -1456,9 +1478,9 @@
     <button class="primary-btn" id="venue-edit-save">Save changes</button>
     <div class="status" id="venue-edit-status"></div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="session-edit-modal">
+<dialog id="session-edit-modal" closedby="any" aria-label="Edit session">
   <div class="modal-card" style="position:relative;">
     <button type="button" id="session-edit-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;">Edit session</h3>
@@ -1472,6 +1494,10 @@
       <button type="button" class="mini-btn" id="session-edit-pin"><i class="ti ti-map-pin" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Drop a pin</button>
     </div>
     <div id="session-edit-results" style="margin-bottom:10px;"></div>
+    <div id="session-edit-feed-wrap" style="margin-bottom:14px;">
+      <h2 style="font-size:14px;font-weight:600;color:var(--muted);margin:0 0 5px;">What happened</h2>
+      <div id="session-edit-feed"></div>
+    </div>
     <div class="field">
       <label>Session Log</label>
       <textarea maxlength="2000" id="session-edit-log" placeholder="How did the session go?" autocomplete="pk-session-edit-log" style="min-height:80px;" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
@@ -1479,9 +1505,9 @@
     <button class="primary-btn" id="session-edit-save">Save changes</button>
     <div class="status" id="session-edit-status"></div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="recast-confirm-modal">
+<dialog id="recast-confirm-modal" closedby="any" aria-label="Recast this rod?">
   <div class="modal-card">
     <h3 style="margin-top:0;">↻ Recast this rod?</h3>
     <p class="pc-line muted">Restarts the clock and keeps your rig, bait and hooks exactly as they are. Nothing gets logged — it's not a blank, just a fresh soak time.</p>
@@ -1496,9 +1522,9 @@
       <button class="primary-btn" id="recast-confirm-yes">Yes, recast</button>
     </div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="pin-drop-modal">
+<dialog id="pin-drop-modal" closedby="any" aria-label="Drop a pin">
   <div class="modal-card wide" style="position:relative;">
     <button type="button" id="pin-drop-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:500;">×</button>
     <h3 style="margin-top:0;">Drop a pin</h3>
@@ -1507,53 +1533,59 @@
     <p class="pc-line muted" id="pin-drop-readout">No spot chosen yet.</p>
     <button class="primary-btn" id="pin-drop-confirm" disabled>Use this spot</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="forecast-modal">
+<dialog id="forecast-modal" closedby="any" aria-label="Forecast">
   <div class="modal-card wide" style="position:relative;">
     <button type="button" id="forecast-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;">Forecast</h3>
     <div id="forecast-body"></div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="badge-bookcase-modal">
+<dialog id="badge-bookcase-modal" closedby="any" aria-label="Fins of Fame badge cabinet">
   <div class="modal-card wide" style="padding:16px 14px;position:relative;">
     <button type="button" id="badge-bookcase-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
-    <div id="badge-bookcase-cabinet"></div>
-    <p class="pc-line muted" style="margin-top:12px;text-align:center;">The empty slots are still a mystery — no hints here, you'll only find out what they are by earning them.</p>
+    <!-- Two cabinets side by side, swiped horizontally. Scroll snapping
+         does the work — no JS gesture handling needed. -->
+    <div id="badge-bookcase-pages" style="display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:14px;scrollbar-width:none;-ms-overflow-style:none;">
+      <div style="flex:0 0 100%;scroll-snap-align:center;"><div id="badge-bookcase-cabinet"></div></div>
+      <div style="flex:0 0 100%;scroll-snap-align:center;"><div id="badge-bookcase-cabinet-comp"></div></div>
+    </div>
+    <div id="badge-bookcase-dots" style="display:flex;gap:7px;justify-content:center;padding:12px 0 2px;"></div>
+    <p class="pc-line muted" style="text-align:center;">The empty slots are still a mystery — no hints here, you'll only find out what they are by earning them.</p>
     <button class="primary-btn" id="badge-bookcase-close" style="margin-top:12px;">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="badge-detail-modal">
+<dialog id="badge-detail-modal" closedby="any" aria-label="Badge details">
   <div class="modal-card" style="text-align:center;max-height:82vh;overflow-y:auto;">
-    <img id="badge-detail-img" src="" alt="" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
+    <img id="badge-detail-img" src="" alt="" loading="lazy" decoding="async" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
     <h3 id="badge-detail-title" style="margin:0 0 6px;"></h3>
     <p class="pc-line muted" id="badge-detail-desc" style="margin-bottom:4px;"></p>
     <p class="pc-line muted" id="badge-detail-when"></p>
     <div id="badge-detail-history" style="text-align:left;margin-top:10px;"></div>
     <button class="mini-btn" id="badge-detail-close" style="margin-top:12px;">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="follow-list-modal">
+<dialog id="follow-list-modal" closedby="any" aria-label="Follow list">
   <div class="modal-card">
     <h3 id="follow-list-title" style="margin-top:0;"></h3>
     <div id="follow-list-body"></div>
     <button class="mini-btn" id="follow-list-close" style="margin-top:12px;">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="profile-modal">
+<dialog id="profile-modal" closedby="any" aria-label="Profile">
   <div class="modal-card wide" style="position:relative;">
     <button type="button" id="profile-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <div id="profile-body"></div>
     <button class="primary-btn" id="profile-close">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="notif-modal">
+<dialog id="notif-modal" closedby="any" aria-label="Notifications">
   <div class="modal-card">
     <h3 style="margin-top:0;">Notifications</h3>
     <div style="display:flex;gap:8px;margin-bottom:10px;">
@@ -1563,11 +1595,11 @@
     <div id="notif-list"><div class="empty">No notifications yet — you'll hear when someone follows you, likes a catch, or adds you to a competition.</div></div>
     <button class="primary-btn" id="notif-close" style="margin-top:14px;">Close</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="onboarding-modal">
+<dialog id="onboarding-modal" closedby="any" aria-label="Welcome to PK Fishing">
   <div class="modal-card">
-    <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;"><img src="logo_v3_outlined.png" alt="" style="height:1.6em;"> Welcome to PK Fishing</h3>
+    <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;"><img src="logo_v3_outlined.png" alt="" loading="lazy" decoding="async" style="height:1.6em;"> Welcome to PK Fishing</h3>
     <p class="pc-line">Here's how it works:</p>
     <div class="profile-catch">
       <div class="pc-head">1. Build your rigs</div>
@@ -1595,12 +1627,12 @@
     </div>
     <button class="primary-btn" id="onboarding-close" style="margin-top:14px;">Got it</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="reset-password-modal">
+<dialog id="reset-password-modal" closedby="any" aria-label="Set a new password">
   <div class="modal-card">
     <div class="auth-header">
-      <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing"></div>
+      <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" loading="lazy" decoding="async"></div>
       <h3 style="margin:6px 0 2px;">Set a new password</h3>
     </div>
     <div class="field">
@@ -1616,9 +1648,9 @@
     <button class="primary-btn" id="reset-password-save-btn">Save new password</button>
     <div class="status" id="reset-password-status"></div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="timers-help-modal">
+<dialog id="timers-help-modal" closedby="any" aria-label="How Timers works">
   <div class="modal-card">
     <h3 style="margin-top:0;"><i class="ti ti-clock" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How Timers works</h3>
     <div class="profile-catch">
@@ -1639,7 +1671,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Recast</div>
-      <div class="pc-line muted">Tangled line, snag, or just going back out with the same bait? Tap Recast to restart the clock without touching your rig or hooks. Nothing gets logged — it's not a blank, just a fresh soak time.</div>
+      <div class="pc-line muted">Tangled line, snag, or just going back out with the same bait? Tap Recast, pick what happened, and it restarts the clock without touching your rig or hooks — it's not a blank, just a fresh soak time. If a rod's been out over an hour, you'll get a gentle nudge asking whether it's honestly worth logging as a blank instead, with a one-tap way to do that if so.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Logging a catch</div>
@@ -1651,14 +1683,14 @@
     </div>
     <button class="primary-btn" id="timers-help-close" style="margin-top:14px;">Got it</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="profile-help-modal">
+<dialog id="profile-help-modal" closedby="any" aria-label="How the Profile works">
   <div class="modal-card">
     <h3 style="margin-top:0;"><i class="ti ti-user" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How the Profile works</h3>
     <div class="profile-catch">
       <div class="pc-head">Followers, following, and badges</div>
-      <div class="pc-line muted">Both counts are tappable — see who follows you or who you follow. Badges appear as a row below; tap any one for its full description and when you earned it. Some can be earned more than once, shown as a small number on the badge.</div>
+      <div class="pc-line muted">Both counts are tappable — see who follows you or who you follow. Your three most recent badges show below — tap any one for its full description, and for repeatable ones, every single time you've earned it. "View all" opens Fins of Fame, a full display cabinet of everything there is to earn. Empty slots stay a mystery on purpose — no hints, you only find out what they are by earning them.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">My details</div>
@@ -1674,15 +1706,15 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Your catch history</div>
-      <div class="pc-line muted">Every catch and blank you've logged, newest first. You can remove any of your own entries here — handy for cleaning up a test catch or a genuine mistake.</div>
+      <div class="pc-line muted">Every catch and blank you've logged, newest first. Once you've got more than a handful, a search box appears so you can filter by species, rig or venue. You can remove any of your own entries here — handy for cleaning up a test catch or a genuine mistake.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">My insights</div>
       <div class="pc-line muted">Has its own tab at the bottom now — which rigs and baits actually land fish for you, average soak times, your best venues, soak time distribution, and how your sessions have gone, all calculated from your own catch history.</div>
     </div>
     <div class="profile-catch">
-      <div class="pc-head">Appearance</div>
-      <div class="pc-line muted">Switch between light, dark, or match your device automatically.</div>
+      <div class="pc-head">Personal preferences</div>
+      <div class="pc-line muted">Light or dark theme, whether weights show in kilograms or pounds, and how dates are written.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Delete my data</div>
@@ -1690,9 +1722,9 @@
     </div>
     <button class="primary-btn" id="profile-help-close" style="margin-top:14px;">Got it</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="tackle-help-modal">
+<dialog id="tackle-help-modal" closedby="any" aria-label="How the Tackle Box works">
   <div class="modal-card">
     <h3 style="margin-top:0;"><i class="ti ti-fish" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How the Tackle Box works</h3>
     <div class="profile-catch">
@@ -1725,12 +1757,15 @@
     </div>
     <button class="primary-btn" id="tackle-help-close" style="margin-top:14px;">Got it</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="photo-modal">
+<dialog id="photo-modal" closedby="any" aria-label="Photo">
   <div class="modal-card" style="max-width:92vw;max-height:88vh;overflow-y:auto;padding:12px;text-align:center;position:relative;">
     <button type="button" id="photo-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
-    <img id="photo-modal-img" src="" alt="Catch photo" style="max-width:100%;max-height:60vh;border-radius:10px;display:block;margin:0 auto;touch-action:pan-y;">
+    <div id="photo-zoom-stage" style="display:block;width:fit-content;max-width:100%;margin:0 auto;overflow:hidden;border-radius:10px;touch-action:none;">
+      <img id="photo-modal-img" src="" alt="Catch photo" draggable="false" loading="lazy" decoding="async" style="max-width:100%;max-height:60vh;display:block;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;">
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;">Pinch or double-tap to zoom</div>
     <div id="photo-modal-nav" style="display:none;justify-content:space-between;align-items:center;margin-top:8px;">
       <button type="button" id="photo-prev-btn" class="mini-btn">‹ Prev</button>
       <span id="photo-modal-counter" style="font-size:12px;color:var(--muted);"></span>
@@ -1750,9 +1785,9 @@
       <div id="photo-comments-list" style="margin-top:10px;"></div>
     </div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="edit-catch-modal">
+<dialog id="edit-catch-modal" closedby="any" aria-label="Edit catch">
   <div class="modal-card wide">
     <h3 style="margin-bottom:14px;">Edit catch</h3>
     <div class="catch-toggle" id="edit-catch-toggle">
@@ -1790,7 +1825,7 @@
     </div>
     <div class="status" id="edit-catch-status"></div>
   </div>
-</div>
+</dialog>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -1837,6 +1872,27 @@ function lbOzToKg(lb, oz){
   const totalOz = (parseFloat(lb)||0)*16 + (parseFloat(oz)||0);
   return totalOz / 35.27396195;
 }
+// Date order is decided by LOCALE, not by the order of the options object —
+// a common trap. So we resolve the person's preference to an actual locale
+// rather than trying to reorder the fields.
+function dateLocale(){
+  const pref = localStorage.getItem('pk_fishing_date_format') || 'dmy';
+  if(pref === 'mdy') return 'en-US';
+  if(pref === 'device') return [];
+  return 'en-ZA'; // day first, and 24-hour time
+}
+
+// The one function to use anywhere a date is shown
+function fmtDate(value, opts){
+  return new Date(value).toLocaleDateString(dateLocale(), opts || {day:'numeric', month:'short', year:'numeric'});
+}
+function fmtTime(value, opts){
+  return new Date(value).toLocaleTimeString(dateLocale(), opts || {hour:'2-digit', minute:'2-digit'});
+}
+function fmtDateTime(value, opts){
+  return new Date(value).toLocaleString(dateLocale(), opts);
+}
+
 // The one function to use anywhere a weight is shown — formats according
 // to the person's own preference, whatever unit the number is stored in
 function formatWeight(kg){
@@ -1861,7 +1917,7 @@ const ALL_BAIT_TYPES = [
 // Bump this whenever a badge image file is replaced with the same filename —
 // otherwise browsers (and CDN caches) can keep serving the old cached version
 // indefinitely, since nothing about the URL itself changes.
-const BADGE_ASSET_VERSION = 11;
+const BADGE_ASSET_VERSION = 12;
 
 const BADGE_DEFS = [
   // One-off badges: `test` returns true once the condition is met.
@@ -1897,6 +1953,24 @@ const BADGE_DEFS = [
    count: s=> s.rareCatchCount},
   {key:'beat_your_best', emoji:'📈', name:'Personal Best',     desc:'Beat your own record for a species',
    count: s=> s.beatenOwnPbCount}
+];
+
+// Competition badges are a different shape to the ones above: awarded by
+// where you finished against other people when a competition ends, not by
+// your own running totals. They live in their own table (competition_badges)
+// because each award is tied to a specific competition and date.
+// metric matches competitions.metric; place is 1/2/3.
+const COMPETITION_BADGE_DEFS = [
+  {key:'comp_weight_1st',  emoji:'🥇', name:'Biggest Bag',        desc:'Heaviest total weight in a competition',        metric:'total_weight', place:1},
+  {key:'comp_weight_2nd',  emoji:'🥈', name:'Bag Runner-up',      desc:'Second heaviest total weight in a competition',  metric:'total_weight', place:2},
+  {key:'comp_weight_3rd',  emoji:'🥉', name:'Bag Third',          desc:'Third heaviest total weight in a competition',   metric:'total_weight', place:3},
+  {key:'comp_catches_1st', emoji:'🥇', name:'Most Catches',       desc:'Most fish landed in a competition',              metric:'catch_count',  place:1},
+  {key:'comp_catches_2nd', emoji:'🥈', name:'Catches Runner-up',  desc:'Second most fish landed in a competition',        metric:'catch_count',  place:2},
+  {key:'comp_catches_3rd', emoji:'🥉', name:'Catches Third',      desc:'Third most fish landed in a competition',         metric:'catch_count',  place:3},
+  {key:'comp_biggest_1st', emoji:'🥇', name:'Biggest Fish',       desc:'Biggest single fish in a competition',            metric:'biggest_fish', place:1},
+  {key:'comp_biggest_2nd', emoji:'🥈', name:'Biggest Runner-up',  desc:'Second biggest single fish in a competition',     metric:'biggest_fish', place:2},
+  {key:'comp_biggest_3rd', emoji:'🥉', name:'Biggest Third',      desc:'Third biggest single fish in a competition',      metric:'biggest_fish', place:3},
+  {key:'here_for_beer',    emoji:'🍺', name:'Here for the Beer',  desc:"Fewest fish in a competition — you're here for the vibes, not the trophy"}
 ];
 
 // The uncommon species — catching one of these is a genuine achievement,
@@ -2412,7 +2486,7 @@ function renderPhotoPreview(rod){
   preview.style.display = 'flex';
   preview.innerHTML = photos.map((src, i)=>`
     <div class="photo-thumb-wrap">
-      <img class="pc-photo" src="${src}" alt="Catch photo">
+      <img class="pc-photo" src="${src}" alt="Catch photo" loading="lazy" decoding="async">
       <button type="button" class="photo-remove" data-rod="${rod}" data-index="${i}">×</button>
     </div>`).join('');
   preview.querySelectorAll('.photo-remove').forEach(btn=>{
@@ -2465,7 +2539,7 @@ function openEditCatch(catchId, catchObj){
   document.getElementById('edit-catch-weight').value = c.weight || '';
   document.getElementById('edit-catch-status').textContent = '';
   renderEditPhotoPreview();
-  document.getElementById('edit-catch-modal').classList.add('open');
+  document.getElementById('edit-catch-modal').showModal();
 }
 
 function renderEditPhotoPreview(){
@@ -2474,7 +2548,7 @@ function renderEditPhotoPreview(){
   preview.style.display = 'flex';
   preview.innerHTML = editPhotos.map((src, i)=>`
     <div class="photo-thumb-wrap">
-      <img class="pc-photo" src="${src}" alt="Catch photo">
+      <img class="pc-photo" src="${src}" alt="Catch photo" loading="lazy" decoding="async">
       <button type="button" class="photo-remove" data-index="${i}">×</button>
     </div>`).join('');
   preview.querySelectorAll('.photo-remove').forEach(btn=>{
@@ -2515,7 +2589,7 @@ document.getElementById('edit-catch-photo-input').addEventListener('change', asy
 
 document.getElementById('edit-catch-cancel').addEventListener('click', ()=>{
   editingCatchId = null;
-  document.getElementById('edit-catch-modal').classList.remove('open');
+  document.getElementById('edit-catch-modal').close();
 });
 
 document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
@@ -2540,8 +2614,9 @@ document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
       photos: JSON.stringify(c.photos)
     });
     editingCatchId = null;
-    document.getElementById('edit-catch-modal').classList.remove('open');
+    document.getElementById('edit-catch-modal').close();
     renderCatchList(c.rod);
+    renderSessionFeed();
     // If the profile view is open, refresh it too — that's where past
     // catches are edited from, and it wouldn't otherwise update
     const profileModal = document.getElementById('profile-modal');
@@ -2623,7 +2698,7 @@ function avatarHtml(person, size){
   const name = (person && person.name) ? person.name : '?';
   const initial = name.trim().charAt(0).toUpperCase() || '?';
   if(person && person.avatar_url){
-    return `<img src="${escapeHtml(person.avatar_url)}" alt="${escapeHtml(name)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;vertical-align:middle;">`;
+    return `<img src="${escapeHtml(person.avatar_url)}" alt="${escapeHtml(name)}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;vertical-align:middle;" loading="lazy" decoding="async">`;
   }
   return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;border-radius:50%;background:var(--dam);color:#fff;font-weight:700;font-size:${Math.round(size*0.45)}px;flex-shrink:0;vertical-align:middle;">${escapeHtml(initial)}</span>`;
 }
@@ -3248,6 +3323,13 @@ function renderAccountArea(){
   document.body.classList.toggle('signed-out-view', isSignedOutNormalView);
   if(appearanceCard) appearanceCard.style.display = isSignedOutNormalView ? 'none' : 'block';
   if(profileHelpBtn) profileHelpBtn.style.display = isSignedOutNormalView ? 'none' : 'inline-block';
+  // With the nav hidden, a signed-out visitor can't leave whatever panel is open, and the
+  // sign-in card only lives on the Profile panel — so always show that one when signed out.
+  const schedulePanel = document.getElementById('panel-schedule');
+  if(isSignedOutNormalView && schedulePanel && !schedulePanel.classList.contains('active')){
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    schedulePanel.classList.add('active');
+  }
 }
 
 function updateTimersVisibility(){
@@ -3426,7 +3508,7 @@ document.getElementById('reset-password-save-btn').addEventListener('click', asy
     setKeepSignedIn(true);
     saveSession({access_token: pendingRecovery.accessToken, refresh_token: pendingRecovery.refreshToken, user});
     pendingRecovery = null;
-    document.getElementById('reset-password-modal').classList.remove('open');
+    document.getElementById('reset-password-modal').close();
     st.textContent = '';
 
     await loadPeople();
@@ -3561,6 +3643,9 @@ await loadTackleCategoryOptions();
       await setActivePerson(myFishermanId);
     }
     updateTimersVisibility();
+    // Someone who arrived via an invite link while signed out — finish the
+    // join now that we know who they are
+    checkPendingCompetitionJoin();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not sign in.';
@@ -3648,6 +3733,12 @@ async function notifyCompetitionAdd(competitionId, fishermanId){
   try{ await sbRpc('notify_competition_add', {p_competition_id: competitionId, p_fisherman_id: fishermanId}); }
   catch(e){ console.error('notify_competition_add failed', e); }
 }
+async function notifyCompetitionJoinRequest(competitionId, fishermanId, competitionName){
+  try{ await sbRpc('notify_competition_join_request', {
+    p_competition_id: competitionId, p_fisherman_id: fishermanId, p_competition_name: competitionName || null
+  }); }
+  catch(e){ console.error('notify_competition_join_request failed', e); }
+}
 async function loadMyNotifications(){
   if(!isSignedIn()) return [];
   try{
@@ -3718,7 +3809,7 @@ function switchToTab(tabName){
 }
 
 async function goToNotificationTarget(n){
-  document.getElementById('notif-modal').classList.remove('open');
+  document.getElementById('notif-modal').close();
   if(!n.target_type) return;
   if(n.target_type === 'tackle'){
     // A whole-box share has no specific item, so just open the tab
@@ -3973,7 +4064,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
       };
       const photoInput = document.getElementById('tackle-edit-photo-'+itemId);
       if(photoInput && photoInput.files[0]){
-        patch.photo = await uploadPhoto(photoInput.files[0], {maxDim: 600, quality: 0.8});
+        patch.photo = await uploadPhoto(photoInput.files[0], {maxDim: 1000, quality: 0.85});
         patch.has_photo = true;
       }
       await sbPatch('tackle_items', 'id=eq.'+itemId, patch);
@@ -4103,11 +4194,26 @@ function renderTackleSharePicker(){
 async function deleteTackleItem(id){
   await sbDelete('tackle_items', 'id=eq.'+id);
 }
-async function viewTacklePhoto(id){
+// Photos shown next to tackle items and rigs. The lists load without photos (fast), then this
+// fetches them in one request per table and fills them in. Tapping one opens the full viewer.
+// The cache is cleared whenever the list is reloaded so edited photos show up.
+let thumbCache = {};
+async function fillThumbs(root, table){
+  const sel = 'img[data-thumb-table="'+table+'"]';
+  if(!root.querySelector(sel)) return;
   try{
-    const rows = await sbGet('tackle_items?id=eq.'+id+'&select=photo');
-    if(rows[0] && rows[0].photo){ openPhotoModal(rows[0].photo, null); }
-  }catch(e){ console.error(e); showDbError('Could not load photo.'); }
+    if(!thumbCache[table]){
+      const rows = await sbGet(table+'?has_photo=eq.true&select=id,photo');
+      thumbCache[table] = new Map(rows.filter(r=>r.photo).map(r=>[r.id, r.photo]));
+    }
+    root.querySelectorAll(sel).forEach(img=>{
+      const src = thumbCache[table].get(img.dataset.thumb);
+      if(!src) return;
+      img.src = src;
+      img.style.display = 'inline-block';
+      img.onclick = ()=> openPhotoModal(src, null);
+    });
+  }catch(e){ console.error('Could not load photos for ' + table, e); }
 }
 
 // ---------- Rigs (built by users, feeds the Rig dropdown on Timers) ----------
@@ -4121,12 +4227,6 @@ async function loadRigsFull(){
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
 }
-async function viewRigPhoto(id){
-  try{
-    const rows = await sbGet('rigs?id=eq.'+id+'&select=photo');
-    if(rows[0] && rows[0].photo){ openPhotoModal(rows[0].photo, null); }
-  }catch(e){ console.error(e); showDbError('Could not load photo.'); }
-}
 // Shows the actual feed methods rather than a bare Bom yes/no
 function feedMethodPills(r){
   let methods = [];
@@ -4139,6 +4239,7 @@ function feedMethodPills(r){
 async function renderRigsList(){
   const el = document.getElementById('rigs-list');
   if(!el) return;
+  delete thumbCache['rigs'];   // re-fetch photos so an edited one shows up
   el.innerHTML = '<div class="empty">Loading...</div>';
   const rigs = await loadRigsFull();
   const myId = isSignedIn() ? session.user.id : null;
@@ -4162,6 +4263,7 @@ async function renderRigsList(){
     html += '<ul class="people-list">' + mine.map(r=>`
       <li>
         <div class="who">
+          ${r.has_photo ? `<img class="tackle-thumb" data-thumb="${r.id}" data-thumb-table="rigs" alt="" loading="lazy" decoding="async">` : ''}
           <b>${escapeHtml(r.name)}</b>
           ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
           ${feedMethodPills(r)}
@@ -4171,7 +4273,6 @@ async function renderRigsList(){
           <input type="checkbox" class="rig-use-toggle" data-rig="${r.id}" ${inUse.has(r.id) ? 'checked' : ''}> Use (show in my Timers rig list)
         </label>
         <div class="actions">
-          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}
           <button class="mini-btn" data-rig-edit="${r.id}">Edit</button>
           <button class="mini-btn danger" data-rig-remove="${r.id}">Remove</button>
         </div>
@@ -4189,13 +4290,13 @@ async function renderRigsList(){
       const already = myCopiedFrom.has(r.id);
       return `<li>
         <div class="who">
+          ${r.has_photo ? `<img class="tackle-thumb" data-thumb="${r.id}" data-thumb-table="rigs" alt="" loading="lazy" decoding="async">` : ''}
           <b>${escapeHtml(r.name)}</b>
           ${r.brand ? `<span class="pill">${escapeHtml(r.brand)}</span>` : ''}
           ${feedMethodPills(r)}
           <span class="pill">${r.hook_count} hook${r.hook_count===1?'':'s'}</span>
         </div>
         <div class="actions">
-          ${r.has_photo ? `<button class="mini-btn" data-rig-photo="${r.id}"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}
           ${isSignedIn()
             ? (already
                 ? `<span class="pc-line muted">Already in your rigs</span>`
@@ -4284,9 +4385,7 @@ async function renderRigsList(){
       if(currentPerson) renderAll();
     });
   });
-  el.querySelectorAll('[data-rig-photo]').forEach(btn=>{
-    btn.addEventListener('click', ()=> viewRigPhoto(btn.dataset.rigPhoto));
-  });
+  fillThumbs(el, 'rigs');
   el.querySelectorAll('[data-rig-edit]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const rigId = btn.dataset.rigEdit;
@@ -4499,6 +4598,7 @@ async function renderTackleList(){
   const el = document.getElementById('tackle-list');
   if(!el) return;
   el.innerHTML = '<div class="empty">Loading...</div>';
+  thumbCache = {};
   tackleItemsCache = await loadTackleItems();
   renderTackleNameSuggestions();
   const sharedWithMeIds = await loadSharedWithMeTackleItemIds();
@@ -4635,6 +4735,7 @@ async function renderTackleList(){
         </div>`) : '';
       return `<li>
         <div class="who">
+          ${it.has_photo ? `<img class="tackle-thumb" data-thumb="${it.id}" data-thumb-table="tackle_items" alt="" loading="lazy" decoding="async">` : ''}
           <b>${escapeHtml(it.name)}</b>
           ${it.brand ? `<span class="pill">${escapeHtml(it.brand)}</span>` : ''}
           ${baitTag}
@@ -4643,7 +4744,6 @@ async function renderTackleList(){
         ${useToggleHtml}
         <div class="actions">
           ${it.notes ? `<span style="font-size:12px;color:var(--muted);margin-right:6px;">${escapeHtml(it.notes)}</span>` : ''}
-          ${it.has_photo ? `<button class="mini-btn" data-tackle-photo="${it.id}"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}
           ${canEdit ? `<button class="mini-btn" data-tackle-edit="${it.id}">Edit</button>` : ''}
           ${canManageShare ? `<button class="mini-btn" data-tackle-manage-share="${it.id}">Share</button>` : ''}
           ${canRemove ? `<button class="mini-btn danger" data-tackle-remove="${it.id}">Remove</button>` : ''}
@@ -4753,9 +4853,7 @@ await loadTackleCategoryOptions();
       if(currentPerson) renderAll();
     });
   });
-  el.querySelectorAll('[data-tackle-photo]').forEach(btn=>{
-    btn.addEventListener('click', ()=> viewTacklePhoto(btn.dataset.tacklePhoto));
-  });
+  fillThumbs(el, 'tackle_items');
   el.querySelectorAll('[data-fill-slider]').forEach(slider=>{
     const id = slider.dataset.fillSlider;
     const bar = el.querySelector('[data-fill-bar="'+id+'"]');
@@ -4826,8 +4924,8 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   try{
     let photo = null;
     if(photoEl.files[0]){
-      // Small thumbnail only — this is reference data, not a showcase photo
-      photo = await uploadPhoto(photoEl.files[0], {maxDim: 600, quality: 0.8});
+      // 1000px is sharp enough to see the detail on a phone without making the list slow to load
+      photo = await uploadPhoto(photoEl.files[0], {maxDim: 1000, quality: 0.85});
     }
     const newItemId = uid();
     const categoryValue = catEl.value;
@@ -4889,6 +4987,33 @@ function normalizeRodsCount(val){
   return n;
 }
 
+// A raw `catches` row from Supabase -> the entry shape used throughout the
+// app. Shared so any code fetching catches independently of loadPerson()
+// (e.g. a single session's catches for the read-only recap below) stays
+// in sync with this mapping instead of drifting from a copy of it.
+function mapCatchRow(c){
+  const entry = {
+    id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
+    time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
+    bom:c.bom||'',
+    rig: c.rig || '',
+    rigId: c.rig_id || null,
+    rodIdentifier: c.rod_identifier || '',
+    castDistance: c.cast_distance ?? null,
+    rodNote: c.rod_note || '',
+    venueId: c.venue_id || null,
+    hasKnownTime: c.has_known_time !== false,
+    moonPhase: c.moon_phase || null,
+    sessionId: c.session_id || null,
+    photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
+    likes: c.likes || 0
+  };
+  for(let n=1; n<=MAX_HOOKS; n++){
+    entry['hook'+n] = c['hook'+n+'_note'] || '';
+  }
+  return entry;
+}
+
 async function loadPerson(id){
   try{
     const [fRows, rodRows, catchRows] = await Promise.all([
@@ -4924,28 +5049,7 @@ async function loadPerson(id){
       }
       notes[r] = noteObj;
     });
-    const catches = catchRows.map(c=>{
-      const entry = {
-        id:c.id, caught:c.caught, rod:c.rod, hook:c.hook||'', type:c.fish_type||'', weight:c.weight||0,
-        time: new Date(c.time).getTime(), timerElapsed:c.timer_elapsed_ms||0,
-        bom:c.bom||'',
-        rig: c.rig || '',
-        rigId: c.rig_id || null,
-        rodIdentifier: c.rod_identifier || '',
-        castDistance: c.cast_distance ?? null,
-        rodNote: c.rod_note || '',
-        venueId: c.venue_id || null,
-        hasKnownTime: c.has_known_time !== false,
-        moonPhase: c.moon_phase || null,
-        sessionId: c.session_id || null,
-        photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
-        likes: c.likes || 0
-      };
-      for(let n=1; n<=MAX_HOOKS; n++){
-        entry['hook'+n] = c['hook'+n+'_note'] || '';
-      }
-      return entry;
-    });
+    const catches = catchRows.map(mapCatchRow);
     clearDbError();
     return {
       name:f.name, dam:f.dam, competition:f.competition||'', rods:normalizeRodsCount(f.rods), timers, notes, catches,
@@ -5169,12 +5273,12 @@ function openRecastConfirm(rod){
   optionsEl.querySelectorAll('.recast-reason-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> performRecast(recastConfirmRod, btn.dataset.reason));
   });
-  document.getElementById('recast-confirm-modal').classList.add('open');
+  document.getElementById('recast-confirm-modal').showModal();
 }
 
 document.getElementById('recast-log-blank-instead').addEventListener('click', ()=>{
   const rod = recastConfirmRod;
-  document.getElementById('recast-confirm-modal').classList.remove('open');
+  document.getElementById('recast-confirm-modal').close();
   if(!rod) return;
   // Exactly the same path as tapping "No catch" directly on the rod card
   catchToggle[rod] = false;
@@ -5185,7 +5289,7 @@ document.getElementById('recast-log-blank-instead').addEventListener('click', ()
 });
 
 async function performRecast(rod, reason){
-  document.getElementById('recast-confirm-modal').classList.remove('open');
+  document.getElementById('recast-confirm-modal').close();
   if(!currentPerson || !rod) return;
   currentPerson.timers[rod] = {running:true, startTs:Date.now(), accumulatedMs:0};
   renderTimers();
@@ -5217,7 +5321,7 @@ async function performRecast(rod, reason){
 
 document.getElementById('recast-confirm-yes').addEventListener('click', ()=> performRecast(recastConfirmRod));
 document.getElementById('recast-confirm-cancel').addEventListener('click', ()=>{
-  document.getElementById('recast-confirm-modal').classList.remove('open');
+  document.getElementById('recast-confirm-modal').close();
 });
 
 function attachRodCardHandlers(){
@@ -5536,7 +5640,7 @@ async function renderActiveCompetitionsBar(){
     // the app even at a handful of users
     const compIds = comps.map(c=>c.id);
     const participantRows = compIds.length
-      ? await sbGet('competition_participants?select=competition_id,fisherman_id&competition_id=in.('+compIds.join(',')+')')
+      ? await sbGet('competition_participants?select=competition_id,fisherman_id&status=eq.approved&competition_id=in.('+compIds.join(',')+')')
       : [];
     const participantsByComp = {};
     participantRows.forEach(r=>{
@@ -5619,7 +5723,7 @@ async function renderSessionUi(){
     document.getElementById('session-active-venue').textContent = activeSession.venue_name || 'Session in progress';
     const started = new Date(activeSession.started_at);
     document.getElementById('session-active-meta').textContent =
-      `started ${started.toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}`;
+      `started ${started.toLocaleString(dateLocale(), {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}`;
     const activeRodsSel = document.getElementById('session-active-rods');
     if(activeRodsSel){
       const rods = normalizeRodsCount(activeSession.rods);
@@ -5649,6 +5753,7 @@ async function renderSessionUi(){
     wireVenueSuggestions('session-venue', 'venue-suggestion-list');
     wireVenueSuggestions('past-catch-venue', 'venue-suggestion-list-past');
   }
+  renderSessionFeed();
 }
 
 // Cached per session, so switching tabs or re-rendering doesn't refetch
@@ -5697,7 +5802,7 @@ async function renderSessionWeather(){
 async function openForecast(){
   const modal = document.getElementById('forecast-modal');
   const body = document.getElementById('forecast-body');
-  modal.classList.add('open');
+  modal.showModal();
   body.innerHTML = '<div class="empty">Loading forecast...</div>';
 
   const coords = weatherCache.coords;
@@ -5727,7 +5832,7 @@ async function openForecast(){
   let html = `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
   hours.forEach(h=>{
     html += `<li>
-      <div class="who"><b>${h.time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</b></div>
+      <div class="who"><b>${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
       <div class="actions">
         <span class="pill">${h.temp != null ? Math.round(h.temp)+'°C' : '—'}</span>
         <span class="pill">💨 ${h.wind != null ? Math.round(h.wind)+'km/h '+windDirLabel(h.windDir) : '—'}</span>
@@ -5749,7 +5854,7 @@ async function openForecast(){
   if(data.daily && data.daily.time){
     html += `<p class="sub-heading">Next few days</p><ul class="people-list">`;
     data.daily.time.forEach((d, i)=>{
-      const day = new Date(d).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
+      const day = new Date(d).toLocaleDateString(dateLocale(), {weekday:'short', day:'numeric', month:'short'});
       html += `<li>
         <div class="who"><b>${escapeHtml(day)}</b></div>
         <div class="actions">
@@ -6119,7 +6224,7 @@ let pendingEntry = null;
 
 function showConfirmation(entry){
   pendingEntry = entry;
-  const timeStr = new Date(entry.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const timeStr = new Date(entry.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(entry.timerElapsed||0);
   let html = `<h3>${entry.caught ? 'Caught a fish?' : 'No catch?'}</h3>`;
   html += `<p><b>${RID_LABEL[entry.rod]}</b>${entry.caught ? ' · '+escapeHtml(entry.hook) : ''}${entry.rodIdentifier ? ' · '+escapeHtml(entry.rodIdentifier) : ''}</p>`;
@@ -6132,7 +6237,7 @@ function showConfirmation(entry){
   if(isToday){
     html += `<p>Time of day: <b>${timeStr}</b></p>`;
   }else{
-    html += `<p>Caught: <b>${entryDate.toLocaleString([], {weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}</b></p>`;
+    html += `<p>Caught: <b>${entryDate.toLocaleString(dateLocale(), {weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'})}</b></p>`;
   }
   html += `<p>Rod timer: <b>${timerStr}</b></p>`;
   if(entry.rig){
@@ -6147,11 +6252,11 @@ function showConfirmation(entry){
   html += `<p style="font-size:12px;">${hookParts.join(' &middot; ')}</p>`;
   if(entry.photos && entry.photos.length){
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
-      entry.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      entry.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" loading="lazy" decoding="async" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
       `</div>`;
   }
   document.getElementById('modal-body').innerHTML = html;
-  document.getElementById('confirm-modal').classList.add('open');
+  document.getElementById('confirm-modal').showModal();
 }
 
 document.getElementById('confirm-correct').addEventListener('click', async ()=>{
@@ -6212,7 +6317,7 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   renderNotes();
   renderTimers();
 
-  document.getElementById('confirm-modal').classList.remove('open');
+  document.getElementById('confirm-modal').close();
   pendingEntry = null;
   await saveRodState(currentPersonId, rod);
 
@@ -6252,6 +6357,7 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   // Re-render now the entry has its session attached — the earlier render
   // ran before that, so the list would have filtered it out
   renderCatchList(rod);
+  renderSessionFeed();
   await checkAndUpdatePersonalBest(entry);
   if(entry.caught && entry.type){
     await ensureSpeciesInRecords(currentPersonId, entry.type);
@@ -6265,7 +6371,7 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
 
 document.getElementById('confirm-edit').addEventListener('click', ()=>{
   pendingEntry = null;
-  document.getElementById('confirm-modal').classList.remove('open');
+  document.getElementById('confirm-modal').close();
 });
 
 function renderProfilePhotoGrid(entries, filterType){
@@ -6277,17 +6383,17 @@ function renderProfilePhotoGrid(entries, filterType){
     return;
   }
   grid.innerHTML = filtered.map(e=>
-    `<img class="pc-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="Catch photo" style="width:80px;height:80px;object-fit:cover;margin-top:0;">`
+    `<img class="pc-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="Catch photo" loading="lazy" decoding="async" style="width:80px;height:80px;object-fit:cover;margin-top:0;">`
   ).join('');
 }
 
 function catchDetailHtml(c, editable, removable){
   const timeStr = c.hasKnownTime === false
     ? 'not recorded'
-    : new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    : new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const timerStr = fmt(c.timerElapsed||0);
   const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
-  const dateStr = new Date(c.time).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'});
+  const dateStr = new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
   let html = `<div class="profile-catch">
     <div class="pc-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <span>${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</span>
@@ -6313,7 +6419,7 @@ function catchDetailHtml(c, editable, removable){
   if(c.photos && c.photos.length){
     photoGalleryCache[c.id] = c.photos;
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
-      c.photos.map((p,i)=>`<img class="pc-photo" src="${p}" data-catch-id="${c.id}" data-photo-index="${i}" alt="Catch photo" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      c.photos.map((p,i)=>`<img class="pc-photo" src="${p}" data-catch-id="${c.id}" data-photo-index="${i}" alt="Catch photo" loading="lazy" decoding="async" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
       `</div>`;
   }
   html += `</div>`;
@@ -6589,7 +6695,7 @@ function buildInsightsHtml(catches, venues, sessions){
       return {
         id: s.id,
         name: s.venue_name || 'Session',
-        when: started.toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}),
+        when: started.toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
         count: sc.length,
         weight,
         duration: durationMs,
@@ -6648,6 +6754,14 @@ async function loadBadgesFor(fishermanId){
     const rows = await sbGet('badges_earned?select=badge_key,earned_at,earn_count,last_earned_at&fisherman_id=eq.'+fishermanId+'&order=earned_at.asc');
     return rows;
   }catch(e){ console.error('loadBadgesFor failed', e); return []; }
+}
+
+// Competition badge awards — one row per win, so the same badge can appear
+// several times with different competitions and dates
+async function loadCompetitionBadgesFor(fishermanId){
+  try{
+    return await sbGet('competition_badges?select=badge_key,competition_name,awarded_at&fisherman_id=eq.'+fishermanId+'&order=awarded_at.desc');
+  }catch(e){ console.error('loadCompetitionBadgesFor failed', e); return []; }
 }
 
 // Build the stats each badge test runs against
@@ -6833,12 +6947,25 @@ async function syncBadgeEvents(fishermanId){
     // versions of the same logic that could quietly drift apart
     const keyOf = e => e.badge_key + '|' + e.dedupe_key;
     const have = new Set(stored.map(keyOf));
+    const wanted = new Set(computed.map(keyOf));
+
     const missing = computed.filter(e => !have.has(keyOf(e)));
-    if(!missing.length) return;
     for(const e of missing){
       try{
         await sbPost('badge_events', Object.assign({id: uid(), fisherman_id: fishermanId}, e));
       }catch(err){ console.error('badge event insert failed', e.badge_key, err); }
+    }
+
+    // The replay works from whatever catches and sessions exist right now,
+    // so anything stored that it no longer produces has had its source
+    // deleted — clear it out rather than leaving orphaned history
+    const orphaned = stored.filter(e => !wanted.has(keyOf(e)));
+    for(const e of orphaned){
+      try{
+        await sbDelete('badge_events', 'fisherman_id=eq.'+fishermanId
+          + '&badge_key=eq.'+encodeURIComponent(e.badge_key)
+          + '&dedupe_key=eq.'+encodeURIComponent(e.dedupe_key));
+      }catch(err){ console.error('badge event cleanup failed', e.badge_key, err); }
     }
   }catch(e){ console.error('syncBadgeEvents failed', e); }
 }
@@ -6862,9 +6989,17 @@ async function checkAndAwardBadges(){
       // Repeatable badges track how many times they've been earned;
       // one-off badges are simply earned or not
       const target = badge.count ? (badge.count(stats) || 0) : (badge.test(stats) ? 1 : 0);
-      if(target <= 0) continue;
 
       try{
+        if(target <= 0){
+          // The catches behind this badge are gone — drop it rather than
+          // leaving a badge with nothing supporting it
+          if(current){
+            await sbDelete('badges_earned', 'fisherman_id=eq.'+myId+'&badge_key=eq.'+badge.key);
+            changed++;
+          }
+          continue;
+        }
         if(!current){
           await sbPost('badges_earned', {
             id: uid(), fisherman_id: myId, badge_key: badge.key,
@@ -6878,6 +7013,13 @@ async function checkAndAwardBadges(){
             earn_count: target, last_earned_at: new Date().toISOString()
           });
           await sbRpc('notify_badge_earned', {p_badge_key: badge.key, p_badge_name: badge.name + ' ×' + target});
+          changed++;
+        }else if(target < (current.earn_count || 1)){
+          // Count dropped because something was deleted — correct it
+          // quietly, no notification for losing ground
+          await sbPatch('badges_earned', 'fisherman_id=eq.'+myId+'&badge_key=eq.'+badge.key, {
+            earn_count: target
+          });
           changed++;
         }
       }catch(e){ console.error('award failed', badge.key, e); }
@@ -7015,7 +7157,7 @@ function openVenueCatches(venue, venueCatches){
     </div>`;
   html += sorted.map(c=>catchDetailHtml(c, false)).join('');
   body.innerHTML = html;
-  document.getElementById('venue-catches-modal').classList.add('open');
+  document.getElementById('venue-catches-modal').showModal();
 }
 
 function renderVenueMap(venues, allCatches){
@@ -7235,32 +7377,38 @@ document.getElementById('weight-unit-select').addEventListener('change', (e)=>{
   // needs to re-render to pick up the new format
   if(currentPerson) renderAll();
 });
+document.getElementById('date-format-select').addEventListener('change', (e)=>{
+  localStorage.setItem('pk_fishing_date_format', e.target.value);
+  // Same reasoning as weight unit — anything already on screen showing a
+  // date needs a re-render to pick up the new format
+  if(currentPerson) renderAll();
+});
 
 // ---------- Onboarding ----------
 function showOnboarding(){
-  document.getElementById('onboarding-modal').classList.add('open');
+  document.getElementById('onboarding-modal').showModal();
 }
 document.getElementById('onboarding-close').addEventListener('click', ()=>{
-  document.getElementById('onboarding-modal').classList.remove('open');
+  document.getElementById('onboarding-modal').close();
 });
 document.getElementById('show-onboarding-btn').addEventListener('click', showOnboarding);
 document.getElementById('tackle-help-btn').addEventListener('click', ()=>{
-  document.getElementById('tackle-help-modal').classList.add('open');
+  document.getElementById('tackle-help-modal').showModal();
 });
 document.getElementById('tackle-help-close').addEventListener('click', ()=>{
-  document.getElementById('tackle-help-modal').classList.remove('open');
+  document.getElementById('tackle-help-modal').close();
 });
 document.getElementById('profile-help-btn').addEventListener('click', ()=>{
-  document.getElementById('profile-help-modal').classList.add('open');
+  document.getElementById('profile-help-modal').showModal();
 });
 document.getElementById('profile-help-close').addEventListener('click', ()=>{
-  document.getElementById('profile-help-modal').classList.remove('open');
+  document.getElementById('profile-help-modal').close();
 });
 document.getElementById('timers-help-btn').addEventListener('click', ()=>{
-  document.getElementById('timers-help-modal').classList.add('open');
+  document.getElementById('timers-help-modal').showModal();
 });
 document.getElementById('timers-help-close').addEventListener('click', ()=>{
-  document.getElementById('timers-help-modal').classList.remove('open');
+  document.getElementById('timers-help-modal').close();
 });
 
 // ---------- Log a past catch ----------
@@ -7299,7 +7447,7 @@ let pinDropOnConfirm = null;
 
 async function openPinDrop(startCoords, onConfirm){
   pinDropOnConfirm = onConfirm;
-  document.getElementById('pin-drop-modal').classList.add('open');
+  document.getElementById('pin-drop-modal').showModal();
   document.getElementById('pin-drop-readout').textContent = 'No spot chosen yet.';
   document.getElementById('pin-drop-confirm').disabled = true;
   pinDropChoice = null;
@@ -7353,7 +7501,7 @@ document.getElementById('past-catch-venue-pin').addEventListener('click', ()=>{
 document.getElementById('pin-drop-confirm').addEventListener('click', ()=>{
   if(!pinDropChoice) return;
   if(pinDropOnConfirm) pinDropOnConfirm({lat: pinDropChoice.lat, lng: pinDropChoice.lng});
-  document.getElementById('pin-drop-modal').classList.remove('open');
+  document.getElementById('pin-drop-modal').close();
 });
 
 // ---------- Editing a session's venue ----------
@@ -7378,12 +7526,12 @@ async function openVenueEdit(venueId){
   document.getElementById('venue-edit-results').innerHTML = '';
   document.getElementById('venue-edit-status').textContent = '';
   updateVenueEditCoordsLabel();
-  document.getElementById('venue-edit-modal').classList.add('open');
+  document.getElementById('venue-edit-modal').showModal();
 }
 
 function updateVenueEditCoordsLabel(){
   const el = document.getElementById('venue-edit-coords');
-  el.textContent = editingVenueCoords
+  el.innerHTML = editingVenueCoords
     ? `<i class="ti ti-map-pin" style="vertical-align:-2px;" aria-hidden="true"></i> ${editingVenueCoords.lat.toFixed(4)}, ${editingVenueCoords.lng.toFixed(4)}`
     : 'No map location set yet.';
 }
@@ -7439,7 +7587,7 @@ document.getElementById('venue-edit-save').addEventListener('click', async ()=>{
       activeSession.venue_name = newName;
       await renderSessionUi();
     }
-    document.getElementById('venue-edit-modal').classList.remove('open');
+    document.getElementById('venue-edit-modal').close();
     editingVenue = null;
     await openInsights();
   }catch(e){
@@ -7449,10 +7597,10 @@ document.getElementById('venue-edit-save').addEventListener('click', async ()=>{
 });
 
 document.getElementById('venue-catches-x').addEventListener('click', ()=>{
-  document.getElementById('venue-catches-modal').classList.remove('open');
+  document.getElementById('venue-catches-modal').close();
 });
 document.getElementById('venue-edit-x').addEventListener('click', ()=>{
-  document.getElementById('venue-edit-modal').classList.remove('open');
+  document.getElementById('venue-edit-modal').close();
   editingVenue = null;
 });
 
@@ -7473,12 +7621,29 @@ async function openSessionEdit(sessionId){
   document.getElementById('session-edit-status').textContent = '';
   updateSessionEditCoordsLabel();
   refreshVenueSuggestions();
-  document.getElementById('session-edit-modal').classList.add('open');
+
+  // Read-only recap of the session — same cross-rod chronological view as
+  // the live Timers feed, just pointed at this (finished) session's catches.
+  // Fetched directly rather than filtered from currentPerson.catches: on a
+  // shared device the angler picker can point currentPerson at someone
+  // other than the signed-in account, while Insights (and this modal) is
+  // always about the signed-in account's own sessions.
+  document.getElementById('session-edit-feed').innerHTML = '<div class="empty">Loading...</div>';
+  try{
+    const rows = await sbGet('catches?select=*&session_id=eq.'+s.id+'&order=time.asc');
+    document.getElementById('session-edit-feed').innerHTML =
+      sessionFeedRowsHtml(rows.map(mapCatchRow), 'Nothing was logged in this session.');
+  }catch(e){
+    console.error('Could not load session catches', e);
+    document.getElementById('session-edit-feed').innerHTML = '<div class="empty">Could not load what happened this session.</div>';
+  }
+
+  document.getElementById('session-edit-modal').showModal();
 }
 
 function updateSessionEditCoordsLabel(){
   const el = document.getElementById('session-edit-coords');
-  el.textContent = editingSessionCoords
+  el.innerHTML = editingSessionCoords
     ? `<i class="ti ti-map-pin" style="vertical-align:-2px;" aria-hidden="true"></i> ${editingSessionCoords.lat.toFixed(4)}, ${editingSessionCoords.lng.toFixed(4)}`
     : 'No map location set for this venue yet.';
 }
@@ -7557,7 +7722,7 @@ document.getElementById('session-edit-save').addEventListener('click', async ()=
       await renderSessionUi();
     }
 
-    document.getElementById('session-edit-modal').classList.remove('open');
+    document.getElementById('session-edit-modal').close();
     editingSession = null;
     await openInsights();
   }catch(e){
@@ -7567,12 +7732,12 @@ document.getElementById('session-edit-save').addEventListener('click', async ()=
 });
 
 document.getElementById('session-edit-x').addEventListener('click', ()=>{
-  document.getElementById('session-edit-modal').classList.remove('open');
+  document.getElementById('session-edit-modal').close();
   editingSession = null;
 });
 
 document.getElementById('pin-drop-x').addEventListener('click', ()=>{
-  document.getElementById('pin-drop-modal').classList.remove('open');
+  document.getElementById('pin-drop-modal').close();
 });
 
 document.getElementById('past-catch-venue-lookup').addEventListener('click', async ()=>{
@@ -7712,18 +7877,18 @@ function openFollowList(title, ids, idType){
     ).join('');
     body.querySelectorAll('.follow-list-item').forEach(btn=>{
       btn.addEventListener('click', ()=>{
-        document.getElementById('follow-list-modal').classList.remove('open');
+        document.getElementById('follow-list-modal').close();
         openProfile(btn.dataset.id);
       });
     });
   }
-  document.getElementById('follow-list-modal').classList.add('open');
+  document.getElementById('follow-list-modal').showModal();
 }
 document.getElementById('follow-list-close').addEventListener('click', ()=>{
-  document.getElementById('follow-list-modal').classList.remove('open');
+  document.getElementById('follow-list-modal').close();
 });
 document.getElementById('forecast-modal-x').addEventListener('click', ()=>{
-  document.getElementById('forecast-modal').classList.remove('open');
+  document.getElementById('forecast-modal').close();
 });
 // Some badges have species-specific artwork — right now just Double Digits
 // (carp vs barbel vs yellowfish), since showing the species actually landed
@@ -7747,26 +7912,44 @@ function badgeImageSrc(key){
 // only what's filled changes. Unearned slots are unlabelled dark recesses —
 // deliberately no hint about what belongs there.
 const CABINET_WOOD = "repeating-linear-gradient(91deg, rgba(255,255,255,.035) 0px, rgba(0,0,0,.05) 2px, rgba(255,255,255,.02) 5px, rgba(0,0,0,.06) 9px), linear-gradient(180deg,#6b4526,#4a2e18)";
-const CABINET_HEX = "polygon(50% 0%, 100% 30%, 100% 70%, 50% 100%, 0% 70%, 0% 30%)";
 
-function openBadgeDetailFor(def, count, whenText, personId){
+function openBadgeDetailFor(def, count, whenText, personId, isComp){
   document.getElementById('badge-detail-title').textContent = def.name + (count > 1 ? ' \u00d7' + count : '');
   document.getElementById('badge-detail-img').src = badgeImageSrc(def.key)+'?v='+BADGE_ASSET_VERSION;
   document.getElementById('badge-detail-desc').textContent = def.desc;
   document.getElementById('badge-detail-when').textContent =
     count > 1 ? whenText + ' \u00b7 earned ' + count + ' times'
               : whenText.replace('First earned', 'Earned');
-  document.getElementById('badge-detail-modal').classList.add('open');
+  document.getElementById('badge-detail-modal').showModal();
 
   const histEl = document.getElementById('badge-detail-history');
   histEl.innerHTML = '';
   if(!personId) return;
+
+  // Competition wins live in their own table and show which competition
+  // each one was won at, not species/weight
+  if(isComp){
+    sbGet('competition_badges?fisherman_id=eq.'+personId+'&badge_key=eq.'+def.key+'&select=awarded_at,competition_name&order=awarded_at.desc')
+      .then(rows=>{
+        if(!rows.length) return;
+        histEl.innerHTML = '<p class="sub-heading" style="margin-bottom:8px;">Every time</p>' +
+          rows.map(r=>{
+            const when = new Date(r.awarded_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+            return '<div class="pc-line" style="padding:5px 0;border-bottom:1px solid var(--line);">' +
+              '<span class="muted">' + when + '</span>' +
+              (r.competition_name ? ' \u00b7 ' + escapeHtml(r.competition_name) : '') + '</div>';
+          }).join('');
+      })
+      .catch(e=> console.error('competition badge history load failed', e));
+    return;
+  }
+
   sbGet('badge_events?fisherman_id=eq.'+personId+'&badge_key=eq.'+def.key+'&select=event_time,species,weight,venue_name&order=event_time.desc')
     .then(rows=>{
       if(!rows.length) return; // Nothing recorded yet — badges earned before this history existed
       histEl.innerHTML = '<p class="sub-heading" style="margin-bottom:8px;">Every time</p>' +
         rows.map(r=>{
-          const when = new Date(r.event_time).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'});
+          const when = new Date(r.event_time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
           const bits = [];
           if(r.species) bits.push(escapeHtml(r.species));
           if(r.weight) bits.push(formatWeight(r.weight));
@@ -7780,29 +7963,59 @@ function openBadgeDetailFor(def, count, whenText, personId){
 
 async function openBadgeBookcase(personId){
   const el = document.getElementById('badge-bookcase-cabinet');
+  const elComp = document.getElementById('badge-bookcase-cabinet-comp');
   el.innerHTML = '<div class="empty">Loading...</div>';
-  document.getElementById('badge-bookcase-modal').classList.add('open');
+  elComp.innerHTML = '';
+  document.getElementById('badge-bookcase-modal').showModal();
 
-  const earned = await loadBadgesFor(personId);
+  const [earned, compAwards] = await Promise.all([
+    loadBadgesFor(personId),
+    loadCompetitionBadgesFor(personId)
+  ]);
+
   const byKey = {};
   earned.forEach(e=>{ byKey[e.badge_key] = e; });
 
-  const shellOpen = '<div style="position:relative;height:100%;box-sizing:border-box;padding:12px 4px 8px;'
+  // Competition badges arrive one row per win — fold them into the same
+  // {count, when} shape the cabinet builder already understands, keeping
+  // the most recent win as the one shown on the shelf
+  const compByKey = {};
+  compAwards.forEach(a=>{
+    if(!compByKey[a.badge_key]){
+      compByKey[a.badge_key] = {count:0, latest:a.awarded_at, latestComp:a.competition_name};
+    }
+    compByKey[a.badge_key].count++;
+  });
+
+  renderCabinet(el, BADGE_DEFS, byKey, 'Fins of Fame', personId, false);
+  renderCabinet(elComp, COMPETITION_BADGE_DEFS, compByKey, 'Trophy Case', personId, true);
+  renderBookcaseDots();
+}
+
+// Shared by both cabinets. `isComp` switches where a tapped badge reads its
+// history from, since competition wins live in their own table.
+function renderCabinet(el, defs, byKey, title, personId, isComp){
+  // The little spotlight only shines on a slot that actually holds a badge —
+  // an unlit slot reads as empty shelf rather than something being hidden
+  const shellOpen = (lit)=> '<div style="position:relative;height:100%;box-sizing:border-box;padding:12px 4px 8px;'
     + 'background:linear-gradient(180deg,#2a1a0d 0%,#3a2513 70%,#2a1a0d 100%);'
     + 'box-shadow:inset 0 5px 10px rgba(0,0,0,.82), inset 0 -4px 8px rgba(0,0,0,.5),'
     + 'inset 4px 0 8px rgba(0,0,0,.45), inset -4px 0 8px rgba(0,0,0,.45);">'
-    + '<div style="position:absolute;top:0;left:10%;right:10%;height:34%;'
-    + 'background:radial-gradient(ellipse at 50% 0%, rgba(255,205,135,.30), rgba(255,205,135,0) 72%);'
-    + 'pointer-events:none;"></div>';
+    + (lit ? '<div style="position:absolute;top:0;left:10%;right:10%;height:34%;'
+      + 'background:radial-gradient(ellipse at 50% 0%, rgba(255,205,135,.30), rgba(255,205,135,0) 72%);'
+      + 'pointer-events:none;"></div>' : '');
 
   let cells = '';
-  BADGE_DEFS.forEach((b, i)=>{
+  let earnedCount = 0;
+  defs.forEach((b, i)=>{
     const e = byKey[b.key];
     const borderR = (i % 3 === 2) ? '' : 'border-right:1px solid rgba(0,0,0,.62);';
     let inner;
     if(e){
-      const count = e.earn_count || 1;
-      const when = new Date(e.earned_at).toLocaleDateString([], {month:'short', year:'numeric'});
+      earnedCount++;
+      const count = isComp ? e.count : (e.earn_count || 1);
+      const whenSrc = isComp ? e.latest : e.earned_at;
+      const when = new Date(whenSrc).toLocaleDateString(dateLocale(), {month:'short', year:'numeric'});
       const bubble = count > 1
         ? '<span style="position:absolute;top:8px;right:10px;background:var(--dam);color:#fff;'
           + 'border:2px solid #2a1a0d;border-radius:999px;min-width:20px;height:20px;display:inline-flex;'
@@ -7819,19 +8032,15 @@ async function openBadgeBookcase(personId){
         + 'text-shadow:0 1px 2px rgba(0,0,0,.85);min-height:22px;">' + escapeHtml(b.name) + '</div>';
       cells += '<div style="height:100%;' + borderR + '"><button type="button" class="bookcase-badge" '
         + 'data-badge-key="' + b.key + '" data-badge-count="' + count + '" data-badge-when="' + escapeHtml(when) + '" '
+        + 'data-badge-comp="' + (isComp ? '1' : '') + '" '
         + 'style="display:block;width:100%;height:100%;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">'
-        + shellOpen + inner + '</div></button></div>';
+        + shellOpen(true) + inner + '</div></button></div>';
     }else{
-      // No label, no tooltip, nothing tappable — an empty slot gives nothing away
-      inner = '<div style="width:64px;height:74px;margin:0 auto;clip-path:' + CABINET_HEX + ';'
-        + 'background:linear-gradient(160deg,#120a04,#2a1a0b);'
-        + 'box-shadow:inset 0 4px 10px rgba(0,0,0,.95), inset 0 -2px 4px rgba(255,190,130,.06);"></div>'
+      inner = '<div style="width:64px;height:74px;margin:0 auto;"></div>'
         + '<div style="margin-top:6px;min-height:22px;"></div>';
-      cells += '<div style="height:100%;' + borderR + '">' + shellOpen + inner + '</div></div>';
+      cells += '<div style="height:100%;' + borderR + '">' + shellOpen(false) + inner + '</div></div>';
     }
   });
-
-  const perRow = 3;
 
   el.innerHTML =
     '<div style="border-radius:8px;overflow:hidden;border:1px solid #1d1009;'
@@ -7842,18 +8051,48 @@ async function openBadgeBookcase(personId){
     + 'background:linear-gradient(180deg,#fbeec2 0%,#d4b06a 38%,#8e6a2c 64%,#e3c68c 100%);'
     + 'border:1px solid #6b4d1e;box-shadow:0 2px 5px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.7);">'
     + '<span style="font-family:Georgia,serif;font-weight:700;font-size:13px;letter-spacing:.13em;'
-    + 'color:#3b2a0b;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,255,255,.5);">Fins of Fame</span></div>'
-    + '<div style="font-size:10.5px;color:#cda67c;margin-top:6px;">' + earned.length + ' of ' + BADGE_DEFS.length + ' earned</div></div>'
-    + '<div style="padding:0 8px;background:' + CABINET_WOOD + ';" id="badge-bookcase-shelves"></div>'
+    + 'color:#3b2a0b;text-transform:uppercase;text-shadow:0 1px 0 rgba(255,255,255,.5);">' + escapeHtml(title) + '</span></div>'
+    + '<div style="font-size:10.5px;color:#cda67c;margin-top:6px;">' + earnedCount + ' of ' + defs.length + ' earned</div></div>'
+    + '<div style="padding:0 8px;background:' + CABINET_WOOD + ';" class="bookcase-shelves"></div>'
     + '<div style="height:15px;background:linear-gradient(180deg,#8a5930 0%,#5c3a1e 40%,#2b1a0c 100%);'
     + 'box-shadow:0 -2px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,220,180,.35);"></div></div>';
 
-  // Build shelves by slicing the rendered cells into rows of three
   const holder = document.createElement('div');
   holder.innerHTML = cells;
   const nodes = Array.from(holder.children);
-  const shelves = document.getElementById('badge-bookcase-shelves');
-  let shelfHtml = '';
+  const shelves = el.querySelector('.bookcase-shelves');
+  const perRow = 3;
+  // Pad the last shelf when the badge count doesn't divide evenly, so it
+  // reads as an empty part of the cabinet rather than a hole in it
+  const remainder = nodes.length % perRow;
+  if(remainder){
+    const makeFiller = ()=>{
+      const filler = document.createElement('div');
+      filler.style.cssText = 'height:100%;border-right:1px solid rgba(0,0,0,.62);';
+      // Deliberately without the top light wash the real niches have —
+      // nothing is displayed here, so there's nothing to light
+      filler.innerHTML = '<div style="position:relative;height:100%;box-sizing:border-box;padding:12px 4px 8px;'
+        + 'background:linear-gradient(180deg,#2a1a0d 0%,#3a2513 70%,#2a1a0d 100%);'
+        + 'box-shadow:inset 0 5px 10px rgba(0,0,0,.82), inset 0 -4px 8px rgba(0,0,0,.5),'
+        + 'inset 4px 0 8px rgba(0,0,0,.45), inset -4px 0 8px rgba(0,0,0,.45);">'
+        + '<div style="width:64px;height:74px;margin:0 auto;"></div>'
+        + '<div style="margin-top:6px;min-height:22px;"></div></div>';
+      return filler;
+    };
+    if(remainder === 1){
+      // A single badge on the last shelf sits centred, with a blank panel
+      // either side — a lone badge stranded on the left looks like the row
+      // is missing two rather than deliberately holding one
+      const only = nodes.pop();
+      only.style.borderRight = '1px solid rgba(0,0,0,.62)';
+      nodes.push(makeFiller(), only, makeFiller());
+    }else{
+      for(let k = 0; k < perRow - remainder; k++) nodes.push(makeFiller());
+    }
+    // The cell that ends up last in the row shouldn't carry a divider
+    const tail = nodes[nodes.length - 1];
+    if(tail) tail.style.borderRight = 'none';
+  }
   for(let i = 0; i < nodes.length; i += perRow){
     const row = document.createElement('div');
     row.style.display = 'grid';
@@ -7868,23 +8107,39 @@ async function openBadgeBookcase(personId){
 
   shelves.querySelectorAll('.bookcase-badge').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      const def = BADGE_DEFS.find(x=>x.key === btn.dataset.badgeKey);
+      const pool = btn.dataset.badgeComp ? COMPETITION_BADGE_DEFS : BADGE_DEFS;
+      const def = pool.find(x=>x.key === btn.dataset.badgeKey);
       if(!def) return;
       const count = parseInt(btn.dataset.badgeCount || '1', 10);
-      openBadgeDetailFor(def, count, btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '', personId);
+      openBadgeDetailFor(def, count, btn.dataset.badgeWhen ? 'First earned ' + btn.dataset.badgeWhen : '', personId, !!btn.dataset.badgeComp);
     });
   });
 }
 
+function renderBookcaseDots(){
+  const pages = document.getElementById('badge-bookcase-pages');
+  const dots = document.getElementById('badge-bookcase-dots');
+  if(!pages || !dots) return;
+  const draw = ()=>{
+    const idx = Math.round(pages.scrollLeft / Math.max(pages.clientWidth, 1));
+    dots.innerHTML = [0,1].map(i=>
+      '<span style="width:7px;height:7px;border-radius:50%;background:'
+      + (i === idx ? 'var(--dam)' : 'var(--line)') + ';"></span>').join('');
+  };
+  draw();
+  pages.onscroll = draw;
+  pages.scrollLeft = 0;
+}
+
 document.getElementById('badge-bookcase-close').addEventListener('click', ()=>{
-  document.getElementById('badge-bookcase-modal').classList.remove('open');
+  document.getElementById('badge-bookcase-modal').close();
 });
 document.getElementById('badge-bookcase-x').addEventListener('click', ()=>{
-  document.getElementById('badge-bookcase-modal').classList.remove('open');
+  document.getElementById('badge-bookcase-modal').close();
 });
 
 document.getElementById('badge-detail-close').addEventListener('click', ()=>{
-  document.getElementById('badge-detail-modal').classList.remove('open');
+  document.getElementById('badge-detail-modal').close();
 });
 
 // Which profile is currently open — so an edit made from it can refresh it
@@ -7957,7 +8212,7 @@ async function openProfile(personId){
     html += `<div style="display:flex;gap:10px;overflow-x:auto;padding:4px 0 10px;-webkit-overflow-scrolling:touch;">` +
       recentDefs.map(b=>{
         const earned = earnedBadges.find(e=>e.badge_key===b.key);
-        const when = earned ? new Date(earned.earned_at).toLocaleDateString([], {month:'short', year:'numeric'}) : '';
+        const when = earned ? new Date(earned.earned_at).toLocaleDateString(dateLocale(), {month:'short', year:'numeric'}) : '';
         const count = earned ? (earned.earn_count || 1) : 1;
         // Only worth showing a number once it's been earned more than once
         const countBubble = count > 1
@@ -7965,7 +8220,7 @@ async function openProfile(personId){
           : '';
         return `<button type="button" class="badge-strip-item" data-badge-key="${b.key}" data-badge-when="${escapeHtml(when)}" data-badge-count="${count}" style="flex-shrink:0;width:82px;text-align:center;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;position:relative;">
           ${countBubble}
-          <img src="${badgeImageSrc(b.key)}?v=${BADGE_ASSET_VERSION}" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
+          <img src="${badgeImageSrc(b.key)}?v=${BADGE_ASSET_VERSION}" alt="${escapeHtml(b.name)}" style="width:62px;height:62px;display:block;margin:0 auto 4px;" loading="lazy" decoding="async" onerror="this.outerHTML='<div style=&quot;width:56px;height:56px;margin:0 auto 4px;border-radius:14px;background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>${b.emoji}</div>';">
           <div style="font-size:11px;font-weight:700;color:var(--ink);line-height:1.2;">${escapeHtml(b.name)}</div>
           <div style="font-size:10px;color:var(--muted);">${escapeHtml(when)}</div>
         </button>`;
@@ -8023,11 +8278,11 @@ async function openProfile(personId){
   }else{
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">` +
       speciesStats.map(s=>{
-        const pbDate = s.pb ? new Date(s.pb.time).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}) : '';
+        const pbDate = s.pb ? new Date(s.pb.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}) : '';
         const pbPhoto = (s.pb && s.pb.photos && s.pb.photos.length) ? s.pb.photos[0] : null;
         return `
         <div class="profile-catch" style="flex:1;min-width:130px;text-align:center;">
-          ${pbPhoto ? `<img src="${escapeHtml(pbPhoto)}" alt="${escapeHtml(s.species)} PB" class="pb-thumb" data-pb-photo="${escapeHtml(pbPhoto)}" style="width:100%;height:90px;object-fit:cover;border-radius:8px;margin-bottom:6px;cursor:pointer;">` : ''}
+          ${pbPhoto ? `<img src="${escapeHtml(pbPhoto)}" alt="${escapeHtml(s.species)} PB" class="pb-thumb" data-pb-photo="${escapeHtml(pbPhoto)}" loading="lazy" decoding="async" style="width:100%;height:90px;object-fit:cover;border-radius:8px;margin-bottom:6px;cursor:pointer;">` : ''}
           <div class="pc-head">${escapeHtml(s.species)}</div>
           <div class="pc-line"><b>${s.count}</b> caught</div>
           <div class="pc-line muted">${formatWeight(s.totalWeight)} total · ${formatWeight(s.avgWeight)} avg</div>
@@ -8078,7 +8333,7 @@ async function openProfile(personId){
   }
   html += `<div id="profile-catch-list-container"></div>`;
   document.getElementById('profile-body').innerHTML = html;
-  document.getElementById('profile-modal').classList.add('open');
+  document.getElementById('profile-modal').showModal();
 
   // Re-runs on every search keystroke / filter change — re-renders just
   // the catch list itself and re-attaches its own edit/remove handlers,
@@ -8227,7 +8482,7 @@ async function openProfile(personId){
         people = people.filter(x=>x.id!==p.id);
         if(currentPersonId===p.id){ currentPersonId=null; currentPerson=null; }
         populateAnglerSelect();
-        document.getElementById('profile-modal').classList.remove('open');
+        document.getElementById('profile-modal').close();
       }catch(e){
         console.error(e);
         adminDeleteConfirmBtn.textContent = 'Yes, delete permanently';
@@ -8246,10 +8501,10 @@ async function openProfile(personId){
   }
 }
 document.getElementById('profile-close').addEventListener('click', ()=>{
-  document.getElementById('profile-modal').classList.remove('open');
+  document.getElementById('profile-modal').close();
 });
 document.getElementById('profile-modal-x').addEventListener('click', ()=>{
-  document.getElementById('profile-modal').classList.remove('open');
+  document.getElementById('profile-modal').close();
 });
 
 let currentPhotoCatchId = null;
@@ -8260,6 +8515,7 @@ let currentPhotoIndex = 0;
 function renderPhotoModalImage(){
   const img = document.getElementById('photo-modal-img');
   img.src = currentPhotoList[currentPhotoIndex] || '';
+  if(typeof resetPhotoZoom === 'function') resetPhotoZoom();
   const nav = document.getElementById('photo-modal-nav');
   if(nav){
     nav.style.display = currentPhotoList.length > 1 ? 'flex' : 'none';
@@ -8279,16 +8535,120 @@ function showPrevPhoto(){
 }
 document.getElementById('photo-next-btn').addEventListener('click', showNextPhoto);
 document.getElementById('photo-prev-btn').addEventListener('click', showPrevPhoto);
+// Zoom and pan for the photo viewer: pinch, double-tap, mouse wheel, drag to move when zoomed.
+// When not zoomed, a horizontal swipe still moves to the previous/next photo.
+var resetPhotoZoom = function(){};
 (function(){
-  let touchStartX = null;
-  const imgEl = document.getElementById('photo-modal-img');
-  imgEl.addEventListener('touchstart', (e)=>{ touchStartX = e.touches[0].clientX; }, {passive:true});
-  imgEl.addEventListener('touchend', (e)=>{
-    if(touchStartX === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    if(Math.abs(dx) > 40){ dx < 0 ? showNextPhoto() : showPrevPhoto(); }
-    touchStartX = null;
-  }, {passive:true});
+  const stage = document.getElementById('photo-zoom-stage');
+  const img = document.getElementById('photo-modal-img');
+  const MAX_SCALE = 5, DOUBLE_TAP_SCALE = 2.5;
+  let scale = 1, tx = 0, ty = 0;
+  const pointers = new Map();
+  let pinch = null, drag = null, swipe = null;
+  let moved = false, lastTap = {t: 0, x: 0, y: 0};
+
+  function apply(){
+    img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+  }
+  // Keep the photo covering the frame so it can't be dragged out of view
+  function clampPan(){
+    const maxX = Math.max(0, (scale - 1) * img.offsetWidth / 2);
+    const maxY = Math.max(0, (scale - 1) * img.offsetHeight / 2);
+    tx = Math.min(maxX, Math.max(-maxX, tx));
+    ty = Math.min(maxY, Math.max(-maxY, ty));
+  }
+  // Zoom to newScale while keeping the point under the fingers (fx, fy, from the frame centre) still
+  function zoomTo(newScale, fx, fy){
+    newScale = Math.min(MAX_SCALE, Math.max(1, newScale));
+    tx = fx - (newScale / scale) * (fx - tx);
+    ty = fy - (newScale / scale) * (fy - ty);
+    scale = newScale;
+    if(scale < 1.001){ scale = 1; tx = 0; ty = 0; }
+    clampPan();
+    apply();
+  }
+  function fromCentre(clientX, clientY){
+    const r = stage.getBoundingClientRect();
+    return { x: clientX - (r.left + r.width / 2), y: clientY - (r.top + r.height / 2) };
+  }
+  function distance(a, b){ return Math.hypot(a.x - b.x, a.y - b.y); }
+  function midpoint(a, b){ return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+  resetPhotoZoom = function(){ scale = 1; tx = 0; ty = 0; pointers.clear(); pinch = drag = swipe = null; apply(); };
+
+  stage.addEventListener('pointerdown', (e)=>{
+    try{ stage.setPointerCapture(e.pointerId); }catch(err){}
+    pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    moved = false;
+    if(pointers.size === 2){
+      const [a, b] = [...pointers.values()];
+      pinch = { dist: distance(a, b), mid: midpoint(a, b) };
+      drag = swipe = null;
+    }else if(pointers.size === 1){
+      if(scale > 1) drag = { x: e.clientX, y: e.clientY, tx, ty };
+      else swipe = { x: e.clientX, y: e.clientY };
+    }
+  });
+  stage.addEventListener('pointermove', (e)=>{
+    if(!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    if(pinch && pointers.size >= 2){
+      const [a, b] = [...pointers.values()];
+      const mid = midpoint(a, b), dist = distance(a, b);
+      if(pinch.dist > 0){
+        const f = fromCentre(mid.x, mid.y);
+        tx += mid.x - pinch.mid.x;   // moving both fingers together pans too
+        ty += mid.y - pinch.mid.y;
+        zoomTo(scale * (dist / pinch.dist), f.x, f.y);
+      }
+      pinch.dist = dist; pinch.mid = mid; moved = true;
+    }else if(drag && scale > 1){
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if(Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+      tx = drag.tx + dx; ty = drag.ty + dy;
+      clampPan(); apply();
+    }else if(swipe){
+      if(Math.abs(e.clientX - swipe.x) > 8 || Math.abs(e.clientY - swipe.y) > 8) moved = true;
+    }
+  });
+  function endPointer(e){
+    if(!pointers.has(e.pointerId)) return;
+    const wasSwipe = swipe, wasPinch = pinch;
+    pointers.delete(e.pointerId);
+    if(wasPinch){
+      if(pointers.size < 2) pinch = null;
+      // One finger left after a pinch: carry on as a pan if zoomed in
+      if(pointers.size === 1 && scale > 1){
+        const p = [...pointers.values()][0];
+        drag = { x: p.x, y: p.y, tx, ty };
+      }
+      return;
+    }
+    drag = null; swipe = null;
+    if(e.type === 'pointercancel') return;
+    if(wasSwipe && scale === 1){
+      const dx = e.clientX - wasSwipe.x, dy = e.clientY - wasSwipe.y;
+      if(Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)){ dx < 0 ? showNextPhoto() : showPrevPhoto(); return; }
+    }
+    if(!moved){
+      const now = Date.now();
+      if(now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40){
+        if(scale > 1){ zoomTo(1, 0, 0); }
+        else{ const f = fromCentre(e.clientX, e.clientY); zoomTo(DOUBLE_TAP_SCALE, f.x, f.y); }
+        lastTap.t = 0;
+      }else{
+        lastTap = { t: now, x: e.clientX, y: e.clientY };
+      }
+    }
+  }
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
+  // Desktop: scroll wheel zooms
+  stage.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const f = fromCentre(e.clientX, e.clientY);
+    const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;   // some browsers report lines, not pixels
+    zoomTo(scale * Math.exp(-dy * 0.0015), f.x, f.y);
+  }, {passive: false});
 })();
 
 function openPhotoModal(src, catchId, index){
@@ -8312,15 +8672,10 @@ function openPhotoModal(src, catchId, index){
   }else if(likeWrap){
     likeWrap.innerHTML = '';
   }
-  document.getElementById('photo-modal').classList.add('open');
+  document.getElementById('photo-modal').showModal();
 }
 document.getElementById('photo-modal-x').addEventListener('click', ()=>{
-  document.getElementById('photo-modal').classList.remove('open');
-});
-document.getElementById('photo-modal').addEventListener('click', (e)=>{
-  if(e.target.id === 'photo-modal'){
-    document.getElementById('photo-modal').classList.remove('open');
-  }
+  document.getElementById('photo-modal').close();
 });
 document.addEventListener('click', (e)=>{
   if(e.target.classList && (e.target.classList.contains('pc-photo') || e.target.classList.contains('catch-log-photo'))){
@@ -8479,7 +8834,7 @@ async function renderPhotoComments(){
   if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet — be the first to say something.</div>'; return; }
   const myUserId = isSignedIn() ? session.user.id : null;
   el.innerHTML = rows.map(c=>{
-    const time = new Date(c.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const time = new Date(c.created_at).toLocaleString(dateLocale(), {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     const isMine = myUserId && c.author_user_id === myUserId;
     const canManage = isMine || isSuperUser();
     return `<div class="comment-item" data-comment-id="${c.id}">
@@ -8596,7 +8951,7 @@ function renderTimers(){
     const label = document.getElementById('start-time-'+r);
     if(label){
       label.textContent = (t && t.running && t.startTs)
-        ? 'Started ' + new Date(t.startTs).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+        ? 'Started ' + new Date(t.startTs).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'})
         : '';
     }
   });
@@ -8637,11 +8992,11 @@ function renderCatchList(rod){
   if(entries.length===0){ el.innerHTML = '<div class="empty">No entries yet this session.</div>'; return; }
   el.innerHTML = entries.slice().reverse().map(c=>{
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)} (${escapeHtml(c.hook||'')})` : `No catch`;
-    const time = new Date(c.time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
     const photoCount = (c.photos && c.photos.length) || 0;
     if(photoCount) photoGalleryCache[c.id] = c.photos;
     const thumb = photoCount
-      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
+      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="" loading="lazy" decoding="async">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
       : '';
     return `<div class="catch-log-item">${thumb}<span style="flex:1;">${label} · ${time}</span><button class="edit-catch" data-id="${c.id}">Edit</button><button class="del" data-id="${c.id}" data-rod="${rod}">Remove</button></div>`;
   }).join('');
@@ -8652,9 +9007,45 @@ function renderCatchList(rod){
     btn.addEventListener('click', async ()=>{
       currentPerson.catches = currentPerson.catches.filter(c=>c.id!==btn.dataset.id);
       renderCatchList(rod);
+      renderSessionFeed();
       await removeCatch(btn.dataset.id);
     });
   });
+}
+
+// A single chronological feed across every rod, so you can see what's
+// happened this session at a glance instead of checking each rod's card
+// in turn. Read-only — edit/remove still live on the per-rod list below.
+// Shared row renderer for both the live session feed (Timers) and the
+// read-only "What happened" list on a past session (Insights -> Edit
+// session) - same chronological, cross-rod view either way.
+function sessionFeedRowsHtml(entries, emptyMessage){
+  if(entries.length===0){
+    return `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
+  }
+  return entries.slice().sort((a,b)=> b.time - a.time).map(c=>{
+    const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
+    const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}` : `No catch`;
+    const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
+    const photoCount = (c.photos && c.photos.length) || 0;
+    if(photoCount) photoGalleryCache[c.id] = c.photos;
+    const thumb = photoCount
+      ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="" loading="lazy" decoding="async">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
+      : '';
+    return `<div class="catch-log-item"><span style="font-size:11px;color:var(--muted);flex-shrink:0;min-width:44px;">${time}</span>${thumb}<span style="flex:1;"><b>${rodLabel}</b> · ${label}</span></div>`;
+  }).join('');
+}
+
+function renderSessionFeed(){
+  const card = document.getElementById('session-feed-card');
+  const el = document.getElementById('session-feed-list');
+  if(!card || !el) return;
+  if(!activeSession){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const entries = currentPerson
+    ? currentPerson.catches.filter(c=> c.sessionId === activeSession.id)
+    : [];
+  el.innerHTML = sessionFeedRowsHtml(entries, "Nothing logged yet this session — your first catch or blank will show up here.");
 }
 
 // Tabs. Panels reachable from the More menu (feed, tackle, competitions,
@@ -8722,11 +9113,11 @@ setInterval(()=>{ if(isSignedIn()) refreshNotifBadge(); }, 60000);
 
 
 document.getElementById('notif-bell').addEventListener('click', ()=>{
-  document.getElementById('notif-modal').classList.add('open');
+  document.getElementById('notif-modal').showModal();
   renderNotifPanel();
 });
 document.getElementById('notif-close').addEventListener('click', ()=>{
-  document.getElementById('notif-modal').classList.remove('open');
+  document.getElementById('notif-modal').close();
 });
 document.getElementById('notif-clear-all').addEventListener('click', async ()=>{
   if(!isSignedIn()) return;
@@ -8822,7 +9213,7 @@ async function renderLeaderboard(){
   const damLabel = document.getElementById('lb-competition-dam');
   if(competitionId){
     try{
-      const rows = await sbGet('competition_participants?select=fisherman_id&competition_id=eq.'+competitionId);
+      const rows = await sbGet('competition_participants?select=fisherman_id&status=eq.approved&competition_id=eq.'+competitionId);
       participantIds = rows.map(r=>r.fisherman_id);
       const compRows = await sbGet('competitions?select=dam&id=eq.'+competitionId);
       if(compRows[0] && compRows[0].dam){
@@ -8869,7 +9260,7 @@ async function renderLeaderboard(){
   el.innerHTML = visibleStats.map((s,i)=>{
     const photoStrip = (s.bagPhotos && s.bagPhotos.length)
       ? `<div style="display:flex;flex-wrap:wrap;gap:4px;max-width:110px;flex-shrink:0;">` +
-          s.bagPhotos.map(e=>`<img class="catch-log-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="">`).join('') +
+          s.bagPhotos.map(e=>`<img class="catch-log-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="" loading="lazy" decoding="async">`).join('') +
         `</div>`
       : '';
     const statLine = sortMode === 'fish'
@@ -8911,7 +9302,7 @@ function formatTimeAgo(ts){
   if(hrs < 24) return hrs+'h ago';
   const days = Math.floor(hrs/24);
   if(days < 7) return days+'d ago';
-  return new Date(ts).toLocaleDateString([], {day:'numeric', month:'short'});
+  return new Date(ts).toLocaleDateString(dateLocale(), {day:'numeric', month:'short'});
 }
 
 async function loadFeedItems(fishermanIds){
@@ -8982,7 +9373,20 @@ function feedRodLabel(it){
 // Newest first. Add an entry here when shipping something people would
 // notice — not every fix, just what's worth knowing about.
 const CHANGELOG = [
-  {version:'1.4', date:'September 2026', changes:[
+  {version:'1.6', date:'24 September 2026', changes:[
+    'Timers now shows a running feed of everything logged this session, across every rod, so you can see what\'s happened at a glance',
+    'Past sessions get the same recap — see what happened in one place from Insights → Edit session'
+  ]},
+  {version:'1.5', date:'20 September 2026', changes:[
+    'Fins of Fame — your badges now live in a wooden display cabinet, with empty slots for the ones you haven\'t earned yet',
+    'Competition badges — gold, silver and bronze and something special.',
+    'Tap any badge to see every time you\'ve earned it, with the date, species and venue',
+    'Invite links for competitions — share a link and the organiser approves whoever asks to join',
+    'Recast now asks what happened, and nudges you to log a blank if a rod\'s been out a while',
+    'Catches logged in a competition need a photo, so the standings stay honest',
+    'Search your catch history by species, rig or venue, and filter tackle by brand'
+  ]},
+  {version:'1.4', date:'9 September 2026', changes:[
     'New Home screen showing live conditions, your running session, competitions and recent catches from mates',
     'Bottom navigation bar, and My Insights is now a full tab rather than a popup',
     'Session Log for notes as you fish, and Local Knowledge saved against each venue',
@@ -8990,26 +9394,26 @@ const CHANGELOG = [
     'Recast button to restart a rod\'s clock without logging anything',
     'Tap a map pin to see everything caught at that water'
   ]},
-  {version:'1.3', date:'September 2026', changes:[
+  {version:'1.3', date:'31 August 2026', changes:[
     'Badges — fifteen to earn, some repeatable, shown on your profile',
     'Follower and following counts on profiles, tappable to see who',
     'Weather and moon phase recorded automatically with every catch',
     'Tap the weather bar for a full forecast including pressure trend',
     'Venue search, drop-a-pin, and manual coordinates for past catches'
   ]},
-  {version:'1.2', date:'September 2026', changes:[
+  {version:'1.2', date:'20 August 2026', changes:[
     'Soak time distribution and rig + bait combinations in Insights',
     'Optional time on past catches, so time-of-day stats stay honest',
     'Whole tackle box sharing, and "Add all" for items shared with you',
     'Photos and filters in the admin tackle view'
   ]},
-  {version:'1.1', date:'September 2026', changes:[
+  {version:'1.1', date:'16 August 2026', changes:[
     'Competitions with live standings and a shareable spectator link',
     'Reel Records for your personal bests by species',
     'Profile pictures, and a redesigned sign-in with Google',
     'Offline support — log catches with no signal, syncs when you reconnect'
   ]},
-  {version:'1.0', date:'August 2026', changes:[
+  {version:'1.0', date:'7 August 2026', changes:[
     'The original launch, as "Dam Log" — three rods, timers, catch and blank logging',
     'Bom and two hook notes per rod',
     'A simple list of fishermen — no accounts yet, just picking a name from a dropdown',
@@ -9388,7 +9792,7 @@ async function renderFeed(refetch){
     if(it.photos.length) photoGalleryCache[it.id] = it.photos;
     const photoHtml = it.photos.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">` +
-          it.photos.map((src,i)=>`<img class="pc-photo" src="${src}" data-catch-id="${it.id}" data-photo-index="${i}" alt="" style="width:100%;max-width:220px;height:150px;object-fit:cover;margin-top:0;">`).join('') +
+          it.photos.map((src,i)=>`<img class="pc-photo" src="${src}" data-catch-id="${it.id}" data-photo-index="${i}" alt="" loading="lazy" decoding="async" style="width:100%;max-width:220px;height:150px;object-fit:cover;margin-top:0;">`).join('') +
         `</div>`
       : '';
     return `<div class="profile-catch">
@@ -9408,10 +9812,211 @@ document.getElementById('feed-search-input').addEventListener('input', ()=> rend
 
 // ---------- Competitions ----------
 async function insertCompetition(item){ await sbPost('competitions', item); }
+// The organiser adding someone directly is already an approval — only
+// invite-link requests go through the pending queue
 async function addCompetitionParticipant(competitionId, fishermanId){
-  await sbPost('competition_participants', {id: uid(), competition_id: competitionId, fisherman_id: fishermanId});
+  await sbPost('competition_participants', {id: uid(), competition_id: competitionId, fisherman_id: fishermanId, status: 'approved'});
   notifyCompetitionAdd(competitionId, fishermanId);
 }
+// ---------- Competition invite links ----------
+// A shared ?join=<competitionId> link. Handled after sign-in, since we need
+// to know who is joining — if they arrive signed out, the id is held and
+// picked up once they've signed in rather than lost.
+let pendingCompetitionJoin = null;
+
+async function handleCompetitionInvite(){
+  const compId = pendingCompetitionJoin
+    || new URLSearchParams(window.location.search).get('join');
+  if(!compId) return;
+
+  if(!isSignedIn()){
+    // Hold it — checkPendingCompetitionJoin() retries after sign-in
+    pendingCompetitionJoin = compId;
+    return;
+  }
+  pendingCompetitionJoin = null;
+
+  const myId = getMyFishermanId();
+  if(!myId) return;
+
+  try{
+    const rows = await sbGet('competitions?select=id,name,end_date,end_time&id=eq.'+compId);
+    const comp = rows[0];
+    if(!comp){ alert('That competition link is no longer valid.'); clearJoinParam(); return; }
+
+    // Joining is allowed right up until it ends — someone turning up late
+    // to a weekend comp is normal; joining after the result is not
+    if(competitionHasEnded(comp)){
+      alert('"' + (comp.name || 'That competition') + '" has already finished, so you can\'t join it now.');
+      clearJoinParam();
+      return;
+    }
+
+    // Check both states — approved means they're in, pending means they've
+    // already asked and are waiting. Neither should create a second row.
+    const [existing, pending] = await Promise.all([
+      loadCompetitionParticipants(compId),
+      loadCompetitionPendingRequests(compId)
+    ]);
+    if(existing.includes(myId)){
+      alert('You\'re already in "' + (comp.name || 'this competition') + '".');
+      clearJoinParam();
+      return;
+    }
+    if(pending.some(r=> r.fisherman_id === myId)){
+      alert('You\'ve already asked to join "' + (comp.name || 'this competition') + '" — waiting on the organiser.');
+      clearJoinParam();
+      return;
+    }
+
+    if(!confirm('Ask to join "' + (comp.name || 'this competition') + '"?')){ clearJoinParam(); return; }
+
+    // Invite-link joins are requests — the organiser approves them, so a
+    // link shared in a group chat can't quietly add strangers
+    await sbPost('competition_participants', {
+      id: uid(), competition_id: compId, fisherman_id: myId,
+      status: 'pending', requested_at: new Date().toISOString()
+    });
+    notifyCompetitionJoinRequest(compId, myId, comp.name);
+    alert('Request sent — the organiser needs to approve you before you\'re in.');
+    clearJoinParam();
+    renderHome();
+  }catch(e){
+    console.error('competition invite failed', e);
+    alert('Could not join that competition right now — try again shortly.');
+  }
+}
+
+// Drop the parameter so a refresh doesn't re-trigger the prompt
+function clearJoinParam(){
+  try{
+    const url = new URL(window.location.href);
+    url.searchParams.delete('join');
+    window.history.replaceState({}, '', url.toString());
+  }catch(e){}
+}
+
+function checkPendingCompetitionJoin(){
+  if(pendingCompetitionJoin && isSignedIn()) handleCompetitionInvite();
+}
+
+function competitionInviteLink(compId){
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('join', compId);
+  return url.toString();
+}
+
+// ---------- Competition badge awards ----------
+// Runs when a competition has ended. Reuses computeCompetitionLeaderboard
+// for the top-3 placements so ranking never drifts from what the standings
+// screen shows, then handles Here for the Beer separately because it needs
+// the full participant roster, not just people who caught something.
+async function awardCompetitionBadges(comp){
+  try{
+    const participantIds = await loadCompetitionParticipants(comp.id);
+    if(!participantIds.length) return;
+
+    const standings = await computeCompetitionLeaderboard(comp, participantIds);
+    const awards = []; // {fisherman_id, badge_key}
+
+    // Top 3 on this competition's own metric. Ties share a place: two
+    // people level on first both get gold, and the next person down gets
+    // bronze — same as how a real podium handles a dead heat.
+    const metricKey = comp.metric==='catch_count' ? 'count' : (comp.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
+    const scored = standings.filter(s=> (s[metricKey]||0) > 0);
+    let place = 0, lastVal = null, seen = 0;
+    for(const s of scored){
+      const val = s[metricKey]||0;
+      seen++;
+      if(val !== lastVal){ place = seen; lastVal = val; }
+      if(place > 3) break;
+      const def = COMPETITION_BADGE_DEFS.find(d=> d.metric === comp.metric && d.place === place);
+      if(def) awards.push({fisherman_id: s.id, badge_key: def.key});
+    }
+
+    // Here for the Beer — fewest fish. Everyone who JOINED counts, including
+    // anyone who never landed a thing (they're absent from standings entirely).
+    const beer = await pickHereForTheBeer(comp, participantIds, standings);
+    beer.forEach(fid=> awards.push({fisherman_id: fid, badge_key: 'here_for_beer'}));
+
+    for(const a of awards){
+      try{
+        await sbPost('competition_badges', {
+          id: uid(),
+          fisherman_id: a.fisherman_id,
+          badge_key: a.badge_key,
+          competition_id: comp.id,
+          competition_name: comp.name || null,
+          awarded_at: new Date().toISOString()
+        });
+      }catch(e){
+        // A duplicate is expected if this reruns — the unique index rejects
+        // it and we simply move on
+        console.error('competition badge insert skipped', a.badge_key, e);
+      }
+    }
+  }catch(e){ console.error('awardCompetitionBadges failed', comp.id, e); }
+}
+
+// Fewest fish, with the agreed tiebreaker chain. Each step only runs while
+// more than one person is still tied.
+async function pickHereForTheBeer(comp, participantIds, standings){
+  const statById = {};
+  standings.forEach(s=>{ statById[s.id] = s; });
+
+  // Everyone who joined, including those with no catches at all
+  let field = participantIds.map(fid=> ({
+    id: fid,
+    count: statById[fid] ? statById[fid].count : 0,
+    weight: statById[fid] ? statById[fid].totalWeight : 0
+  }));
+  if(field.length < 2) return [];
+
+  const narrow = (arr, valueOf, prefer) => {
+    const vals = arr.map(valueOf);
+    const target = prefer === 'min' ? Math.min(...vals) : Math.max(...vals);
+    return arr.filter((x,i)=> vals[i] === target);
+  };
+
+  // 1. Fewest catches
+  field = narrow(field, x=> x.count, 'min');
+  if(field.length === 1) return field.map(x=>x.id);
+
+  // 2. Lowest total weight
+  field = narrow(field, x=> x.weight, 'min');
+  if(field.length === 1) return field.map(x=>x.id);
+
+  // 3. Fewest blanks logged — a blank takes a deliberate "No catch" tap,
+  //    so fewer of them means less active engagement
+  try{
+    const blanks = await sbGet('catches?select=fisherman_id&caught=eq.false&competition_id=eq.'+comp.id);
+    const blankCount = {};
+    blanks.forEach(b=>{ blankCount[b.fisherman_id] = (blankCount[b.fisherman_id]||0) + 1; });
+    field = narrow(field, x=> blankCount[x.id] || 0, 'min');
+    if(field.length === 1) return field.map(x=>x.id);
+  }catch(e){ console.error('blank tiebreak failed', e); }
+
+  // 4. Most total soak time — deliberately the opposite direction to the
+  //    others: recasting resets the clock, so a high soak with nothing to
+  //    show for it usually means the rod just sat there unattended
+  try{
+    const sessions = await sbGet('sessions?select=id,fisherman_id&competition_id=eq.'+comp.id);
+    const sessionOwner = {};
+    sessions.forEach(s=>{ sessionOwner[s.id] = s.fisherman_id; });
+    const soak = {};
+    const catchRows = await sbGet('catches?select=fisherman_id,timer_elapsed_ms&competition_id=eq.'+comp.id);
+    catchRows.forEach(r=>{
+      soak[r.fisherman_id] = (soak[r.fisherman_id]||0) + (r.timer_elapsed_ms||0);
+    });
+    field = narrow(field, x=> soak[x.id] || 0, 'max');
+  }catch(e){ console.error('soak tiebreak failed', e); }
+
+  // Anyone still tied shares it
+  return field.map(x=>x.id);
+}
+
 // Any competition that's finished but hasn't announced its winner yet.
 // Safe to call repeatedly — the results_sent flag stops duplicates.
 async function announceFinishedCompetitions(){
@@ -9420,9 +10025,12 @@ async function announceFinishedCompetitions(){
     const today = new Date().toISOString().slice(0,10);
     // Include today's competitions too — one ending at 16:00 has genuinely
     // finished by 17:00, even though the date hasn't rolled over yet
-    let candidates = await sbGet('competitions?select=id,end_date,end_time&end_date=lte.'+today+'&results_sent=is.false');
+    let candidates = await sbGet('competitions?select=id,name,metric,fish_type_filter,end_date,end_time&end_date=lte.'+today+'&results_sent=is.false');
     const done = candidates.filter(c=> competitionHasEnded(c));
     for(const c of done){
+      // Badges first — if the notify RPC flips results_sent, this branch
+      // won't run again, so awarding before that keeps them from being missed
+      await awardCompetitionBadges(c);
       try{ await sbRpc('notify_competition_results', {p_competition_id: c.id}); }
       catch(e){ console.error('results notify failed', c.id, e); }
     }
@@ -9461,11 +10069,28 @@ async function computeCompetitionLeaderboard(comp, participantIds){
   return stats;
 }
 
+// Approved participants only — pending requests don't compete, don't
+// appear in standings, and can't win badges
 async function loadCompetitionParticipants(competitionId){
   try{
-    const rows = await sbGet('competition_participants?select=fisherman_id&competition_id=eq.'+competitionId);
+    const rows = await sbGet('competition_participants?select=fisherman_id&status=eq.approved&competition_id=eq.'+competitionId);
     return rows.map(r=>r.fisherman_id);
   }catch(e){ console.error(e); return []; }
+}
+
+async function loadCompetitionPendingRequests(competitionId){
+  try{
+    return await sbGet('competition_participants?select=id,fisherman_id,requested_at&status=eq.pending&competition_id=eq.'+competitionId);
+  }catch(e){ console.error(e); return []; }
+}
+
+async function approveCompetitionRequest(rowId, competitionId, fishermanId){
+  await sbPatch('competition_participants', 'id=eq.'+rowId, {status: 'approved'});
+  notifyCompetitionAdd(competitionId, fishermanId);
+}
+
+async function declineCompetitionRequest(rowId){
+  await sbDelete('competition_participants', 'id=eq.'+rowId);
 }
 async function deleteCompetition(id){ await sbDelete('competitions', 'id=eq.'+id); }
 
@@ -9663,8 +10288,10 @@ async function renderCompetitions(){
             <input type="text" maxlength="100" class="competition-add-search" data-competition="${c.id}" placeholder="Type a name or email..." autocomplete="pk-field-32" name="comp-add-${c.id}" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             <div class="competition-add-results" data-competition="${c.id}" style="margin-top:6px;"></div>
           </div>` : ''}
+        ${canDelete ? `<div class="competition-requests" data-competition="${c.id}" style="margin-top:10px;"></div>` : ''}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
           <button class="mini-btn" data-competition-share="${c.id}">Share live standings</button>
+          <button class="mini-btn" data-competition-invite="${c.id}">Invite to join</button>
           ${canDelete ? `<button class="mini-btn" data-competition-edit="${c.id}">Edit</button>` : ''}
           ${canDelete ? `<button class="mini-btn danger" data-competition-remove="${c.id}">Delete competition</button>` : ''}
         </div>
@@ -9700,6 +10327,58 @@ async function renderCompetitions(){
       }catch(e){
         // Sharing cancelled, or clipboard blocked — show the link to copy manually
         if(e && e.name !== 'AbortError') window.prompt('Copy this link:', url);
+      }
+    });
+  });
+  // Pending join requests, organiser only
+  el.querySelectorAll('.competition-requests').forEach(async wrap=>{
+    const compId = wrap.dataset.competition;
+    const pending = await loadCompetitionPendingRequests(compId);
+    if(!pending.length){ wrap.innerHTML = ''; return; }
+    wrap.innerHTML = '<p class="sub-heading" style="margin-bottom:6px;">Wants to join</p>' +
+      pending.map(r=>{
+        const p = people.find(x=>x.id===r.fisherman_id);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);">'
+          + '<span style="font-size:14px;">' + escapeHtml(p ? p.name : 'Unknown') + '</span>'
+          + '<span style="display:flex;gap:6px;">'
+          + '<button type="button" class="mini-btn" data-approve-req="' + r.id + '" data-comp="' + compId + '" data-fid="' + r.fisherman_id + '">Approve</button>'
+          + '<button type="button" class="mini-btn danger" data-decline-req="' + r.id + '">Decline</button>'
+          + '</span></div>';
+      }).join('');
+    wrap.querySelectorAll('[data-approve-req]').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        b.disabled = true;
+        try{
+          await approveCompetitionRequest(b.dataset.approveReq, b.dataset.comp, b.dataset.fid);
+          renderCompetitions();
+        }catch(e){ console.error(e); alert('Could not approve — try again.'); b.disabled = false; }
+      });
+    });
+    wrap.querySelectorAll('[data-decline-req]').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        if(!confirm('Decline this request?')) return;
+        b.disabled = true;
+        try{
+          await declineCompetitionRequest(b.dataset.declineReq);
+          renderCompetitions();
+        }catch(e){ console.error(e); alert('Could not decline — try again.'); b.disabled = false; }
+      });
+    });
+  });
+
+  el.querySelectorAll('[data-competition-invite]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const url = competitionInviteLink(btn.dataset.competitionInvite);
+      try{
+        if(navigator.share){
+          await navigator.share({title: 'Join this competition', url});
+        }else{
+          await navigator.clipboard.writeText(url);
+          btn.textContent = 'Link copied!';
+          setTimeout(()=>{ btn.textContent = 'Invite to join'; }, 1600);
+        }
+      }catch(e){
+        if(e && e.name !== 'AbortError') window.prompt('Copy this invite link:', url);
       }
     });
   });
@@ -9788,7 +10467,7 @@ async function renderAdminOverview(){
     // so genuinely recent joins always show first regardless of table size
     const rows = await sbGet('fishermen?select=id,name,created_at&order=created_at.desc.nullslast&limit=5');
     signupsEl.innerHTML = rows.length ? rows.map(r=>{
-      const when = r.created_at ? new Date(r.created_at).toLocaleDateString([], {day:'numeric', month:'short', year:'numeric'}) : 'Before join dates were tracked';
+      const when = r.created_at ? new Date(r.created_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}) : 'Before join dates were tracked';
       return `<div class="profile-catch"><div class="pc-head">${escapeHtml(r.name)}</div><div class="pc-line muted">${escapeHtml(when)}</div></div>`;
     }).join('') : '<div class="empty">No anglers yet.</div>';
   }catch(e){
@@ -9802,7 +10481,7 @@ async function renderAdminOverview(){
     // round of queries needed just to label who caught what
     catchesEl.innerHTML = rows.length ? rows.map(c=>{
       const angler = people.find(p=>p.id===c.fisherman_id);
-      const when = new Date(c.time).toLocaleDateString([], {day:'numeric', month:'short'});
+      const when = new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short'});
       return `<div class="profile-catch">
         <div class="pc-head">${escapeHtml(angler ? angler.name : 'Unknown')} — ${escapeHtml(c.fish_type||'Fish')}</div>
         <div class="pc-line muted">${formatWeight(c.weight)} · ${escapeHtml(when)}</div>
@@ -9896,7 +10575,7 @@ async function renderAdminTackleList(){
       const owner = people.find(p=>p.user_id===it.owner_user_id);
       return `<li>
         <div class="who" style="align-items:center;">
-          ${it.photo ? `<img src="${escapeHtml(it.photo)}" alt="" class="admin-tackle-thumb" data-photo="${escapeHtml(it.photo)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0;">` : ''}
+          ${it.photo ? `<img src="${escapeHtml(it.photo)}" alt="" class="admin-tackle-thumb" data-photo="${escapeHtml(it.photo)}" loading="lazy" decoding="async" style="width:44px;height:44px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0;">` : ''}
           <b>${escapeHtml(it.name)}</b>
           <span class="pill">${escapeHtml(it.category||'Other')}</span>
           ${it.brand ? `<span class="pill">${escapeHtml(it.brand)}</span>` : ''}
@@ -10021,7 +10700,7 @@ document.getElementById('admin-catch-angler-select').addEventListener('change', 
   }
   catchSel.disabled = false;
   catchSel.innerHTML = '<option value="">Choose...</option>' + adminCatchList.map(c=>{
-    const time = new Date(c.time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    const time = new Date(c.time).toLocaleString(dateLocale(), {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     const label = c.caught ? `${c.type||'Fish'} — ${formatWeight(c.weight)} (${time})` : `No catch (${time})`;
     return `<option value="${c.id}">${escapeHtml(label)}</option>`;
   }).join('');
@@ -10199,7 +10878,7 @@ async function renderSpectatorCompetition(compId){
   // tokens in the URL. Handle that first, before anything else runs.
   const cameFromOAuth = await handleOAuthReturn();
   if(cameFromOAuth === 'recovery'){
-    document.getElementById('reset-password-modal').classList.add('open');
+    document.getElementById('reset-password-modal').showModal();
   }
   if(!cameFromOAuth) loadSessionFromStorage();
   try{
@@ -10223,6 +10902,7 @@ await loadTackleCategoryOptions();
   syncPendingCatches();
   announceFinishedCompetitions();
   checkAndAwardBadges();
+  handleCompetitionInvite();
   if(isSignedIn()){ await loadActiveSession(); await renderSessionUi(); }
   maybeShowInstallBanner();
   try{
@@ -10230,6 +10910,8 @@ await loadTackleCategoryOptions();
     if(themeSel) themeSel.value = localStorage.getItem('pk_fishing_theme') || 'system';
     const unitSel = document.getElementById('weight-unit-select');
     if(unitSel) unitSel.value = getWeightUnit();
+    const dateSel = document.getElementById('date-format-select');
+    if(dateSel) dateSel.value = localStorage.getItem('pk_fishing_date_format') || 'dmy';
   }catch(e){}
   makeCardCollapsible('appearance-card', 'appearance-body', 'pk_fishing_collapse_appearance');
   ['past-catch-weight','edit-catch-weight','admin-catch-weight'].forEach(id=>{
@@ -10239,6 +10921,8 @@ await loadTackleCategoryOptions();
 
   // Return to whichever tab you were last on. Done last, so tabs hidden by
   // sign-in state (Timers, Insights) have already been resolved.
+  // Signed out, the nav is hidden and only the sign-in card should show — don't jump away from it.
+  if(document.body.classList.contains('signed-out-view')) return;
   try{
     const lastTab = localStorage.getItem('pk_fishing_active_tab');
     if(lastTab && document.getElementById('panel-'+lastTab)){
@@ -10319,6 +11003,20 @@ if('serviceWorker' in navigator){
   });
 }
 
+// Fallback for browsers without the `closedby` attribute (Safari, as of writing) — click the
+// backdrop of any closedby="any" dialog to close it, matching what closedby gives natively
+// elsewhere. Applies to every current and future dialog with that attribute.
+if(!('closedBy' in HTMLDialogElement.prototype)){
+  document.querySelectorAll('dialog[closedby="any"]').forEach(dialog=>{
+    dialog.addEventListener('click', (e)=>{
+      if(e.target !== dialog) return;
+      const rect = dialog.getBoundingClientRect();
+      const insideContent = rect.top <= e.clientY && e.clientY <= rect.top + rect.height
+        && rect.left <= e.clientX && e.clientX <= rect.left + rect.width;
+      if(!insideContent) dialog.close();
+    });
+  });
+}
 </script>
 </body>
 </html>
