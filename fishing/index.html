@@ -9347,9 +9347,8 @@ function renderSessionFeed(){
   if(!card || !el) return;
   if(!activeSession){ card.style.display = 'none'; return; }
   card.style.display = 'block';
-  // Content someone came to see, not a form or setting, so it defaults
-  // open like the tackle categories do — Hide/Show is remembered per device
-  makeCardCollapsible('session-feed-card', 'session-feed-list', 'pk_fishing_collapse_sessionfeed', true);
+  // Hidden by default (per Ruan) — Hide/Show is remembered per device once toggled
+  makeCardCollapsible('session-feed-card', 'session-feed-list', 'pk_fishing_collapse_sessionfeed', false);
   const entries = currentPerson
     ? currentPerson.catches.filter(c=> c.sessionId === activeSession.id)
     : [];
