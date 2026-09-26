@@ -934,6 +934,37 @@
         <button class="primary-btn" id="open-insights-btn">View my insights</button>
       </section>
 
+      <section class="card" id="notifications-card">
+        <h2>Notifications</h2>
+        <div id="notifications-body">
+          <p class="pc-line muted">Get notified on this device — even when the app isn't open — when someone follows you, comments on a catch, or a rod's been out a while.</p>
+          <button class="primary-btn" id="enable-push-btn">Enable notifications on this device</button>
+          <div class="status" id="push-status"></div>
+          <div id="notification-prefs" style="display:none;margin-top:14px;">
+            <p class="sub-heading">What to notify me about</p>
+            <label class="check-row"><input type="checkbox" id="notify-pref-badge"> Badges I earn</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-follow"> New followers</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-social"> Comments and likes on my catches</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-competition"> Competition updates</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-friend_catch"> Catches from people I follow</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-tackle_share"> Tackle sharing</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-rod-alert"> Alert me if a rod's been out a while</label>
+            <div class="field" id="rod-alert-minutes-wrap" style="display:none;margin-top:8px;">
+              <label>Alert me after</label>
+              <select id="rod-alert-minutes-select">
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+                <option value="90">1.5 hours</option>
+                <option value="120">2 hours</option>
+                <option value="180">3 hours</option>
+              </select>
+            </div>
+            <button class="mini-btn" id="save-notification-prefs-btn" style="margin-top:10px;">Save preferences</button>
+            <div class="status" id="notification-prefs-status"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="card" id="appearance-card">
         <h2>Personal preferences</h2>
         <div id="appearance-body">
@@ -1711,6 +1742,10 @@
       <div class="pc-head">Ending a session</div>
       <div class="pc-line muted">Clears every rod back to blank — timers, rigs, baits, names — ready for next time. Your logged catches are never affected.</div>
     </div>
+    <div class="profile-catch">
+      <div class="pc-head">Rod alerts</div>
+      <div class="pc-line muted">Turn this on under Profile → Notifications and PK Fishing will notify you — even with the app closed — once a running rod's been out longer than the time you choose. Recasting or starting a rod fresh resets it, so you'll get alerted again on the next long soak.</div>
+    </div>
     <button class="primary-btn" id="timers-help-close" style="margin-top:14px;">Got it</button>
   </div>
 </dialog>
@@ -1745,6 +1780,10 @@
     <div class="profile-catch">
       <div class="pc-head">Personal preferences</div>
       <div class="pc-line muted">Light or dark theme, whether weights show in kilograms or pounds, and how dates are written.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Notifications</div>
+      <div class="pc-line muted">Tap "Enable notifications" once to allow them on this device, then choose what you actually want to hear about — badges, followers, comments and likes, competition updates, catches from people you follow, tackle sharing, and a rod-out-too-long alert with your own time limit. Each device you use needs its own one-time enable, and notifications work on iPhone only once the app is added to your home screen — a regular Safari tab can't receive them.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Delete my data</div>
@@ -4013,6 +4052,130 @@ async function notifyCompetitionJoinRequest(competitionId, fishermanId, competit
   }); }
   catch(e){ console.error('notify_competition_join_request failed', e); }
 }
+
+// ---------- Push notifications ----------
+// Not sensitive - the same key lives in the send-notification-push and
+// check-rod-alerts Edge Functions, which hold the matching private key.
+const VAPID_PUBLIC_KEY = 'BA4I_qvR-4jlMBCGlk7PAuMM7tGsAIlbqxcjSB6vZdRLUEY3JMYZQ83pjDEbO_oWnrNmUILiTAqL1S60yIk7sk8';
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+// The 11 notifications.type values collapse into these 6 user-facing
+// toggles server-side (see TYPE_TO_PREFERENCE in send-notification-push) -
+// kept in sync with that mapping by hand, since they live in different runtimes.
+const NOTIFICATION_PREF_KEYS = ['badge','follow','social','competition','friend_catch','tackle_share'];
+
+async function loadAndRenderNotificationPrefs(){
+  const enableBtn = document.getElementById('enable-push-btn');
+  const prefsWrap = document.getElementById('notification-prefs');
+  if(!enableBtn || !prefsWrap) return;
+
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  if(!supported){
+    enableBtn.disabled = true;
+    enableBtn.textContent = 'Not supported on this browser';
+    return;
+  }
+
+  let subscription = null;
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    subscription = await reg.pushManager.getSubscription();
+  }catch(e){ console.error('Push status check failed', e); }
+
+  enableBtn.textContent = subscription ? 'Notifications enabled on this device' : 'Enable notifications on this device';
+  enableBtn.disabled = !!subscription;
+  prefsWrap.style.display = subscription ? 'block' : 'none';
+
+  if(subscription && isSignedIn()){
+    try{
+      const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_tackle_share,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
+      const f = rows[0];
+      if(f){
+        NOTIFICATION_PREF_KEYS.forEach(key=>{
+          const cb = document.getElementById('notify-pref-'+key);
+          if(cb) cb.checked = f['notify_push_'+key] !== false;
+        });
+        const rodAlertCb = document.getElementById('notify-pref-rod-alert');
+        if(rodAlertCb) rodAlertCb.checked = !!f.notify_push_rod_alert;
+        document.getElementById('rod-alert-minutes-wrap').style.display = f.notify_push_rod_alert ? 'block' : 'none';
+        document.getElementById('rod-alert-minutes-select').value = String(f.rod_alert_minutes || 120);
+      }
+    }catch(e){ console.error('Could not load notification preferences', e); }
+  }
+}
+
+document.getElementById('notify-pref-rod-alert').addEventListener('change', (e)=>{
+  document.getElementById('rod-alert-minutes-wrap').style.display = e.target.checked ? 'block' : 'none';
+});
+
+document.getElementById('enable-push-btn').addEventListener('click', async ()=>{
+  const st = document.getElementById('push-status');
+  if(!isSignedIn()){ st.textContent = 'Sign in first.'; return; }
+  const myId = getMyFishermanId();
+  if(!myId){ st.textContent = 'Could not find your angler profile.'; return; }
+  st.textContent = 'Requesting permission...';
+  try{
+    const permission = await Notification.requestPermission();
+    if(permission !== 'granted'){
+      st.textContent = 'Permission was not granted — you can try again any time.';
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let subscription = await reg.pushManager.getSubscription();
+    if(!subscription){
+      subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    const json = subscription.toJSON();
+    // Upsert, not a plain insert - re-registering the same browser
+    // subscription (e.g. after the DB row was cleaned up server-side but
+    // the browser still holds it) should update cleanly, not error on the
+    // unique endpoint constraint.
+    await sbUpsert('push_subscriptions', {
+      id: uid(), user_id: session.user.id, fisherman_id: myId,
+      endpoint: json.endpoint, p256dh: json.keys.p256dh, auth_key: json.keys.auth,
+      user_agent: navigator.userAgent
+    }, 'endpoint');
+    st.textContent = 'Enabled!';
+    setTimeout(()=> st.textContent='', 1500);
+    await loadAndRenderNotificationPrefs();
+  }catch(e){
+    console.error('Enable push failed', e);
+    st.textContent = 'Could not enable notifications: ' + (e.message || 'unknown error');
+  }
+});
+
+document.getElementById('save-notification-prefs-btn').addEventListener('click', async ()=>{
+  const st = document.getElementById('notification-prefs-status');
+  if(!isSignedIn()) return;
+  const myId = getMyFishermanId();
+  if(!myId) return;
+  const patch = {};
+  NOTIFICATION_PREF_KEYS.forEach(key=>{
+    const cb = document.getElementById('notify-pref-'+key);
+    if(cb) patch['notify_push_'+key] = cb.checked;
+  });
+  patch.notify_push_rod_alert = document.getElementById('notify-pref-rod-alert').checked;
+  patch.rod_alert_minutes = parseInt(document.getElementById('rod-alert-minutes-select').value, 10) || 120;
+  st.textContent = 'Saving...';
+  try{
+    await sbPatch('fishermen', 'id=eq.'+myId, patch);
+    st.textContent = 'Saved.';
+    setTimeout(()=> st.textContent='', 1200);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+  }
+});
+
 async function loadMyNotifications(){
   if(!isSignedIn()) return [];
   try{
@@ -5599,6 +5762,10 @@ async function performRecast(rod, reason){
   currentPerson.timers[rod] = {running:true, startTs:Date.now(), accumulatedMs:0};
   renderTimers();
   await saveRodState(currentPersonId, rod);
+  // Fresh start_ts, same reasoning as the plain Start button — see the
+  // comment there for why this is its own patch rather than part of saveRodState.
+  try{ await sbPatch('rod_state', 'fisherman_id=eq.'+currentPersonId+'&rod=eq.'+rod, {alert_sent_for_start_ts: null}); }
+  catch(e){ console.error('Could not clear rod alert marker', e); }
 
   // Recorded for later — not shown anywhere in Insights yet, but there's
   // no point building the display before there's enough data to make it
@@ -5637,7 +5804,8 @@ function attachRodCardHandlers(){
       const rod = btn.dataset.rod;
       const t = currentPerson.timers[rod];
       const action = btn.dataset.action;
-      if(action==='start' && !t.running){ t.running=true; t.startTs=Date.now(); }
+      let freshStart = false;
+      if(action==='start' && !t.running){ t.running=true; t.startTs=Date.now(); freshStart = true; }
       if(action==='pause' && t.running){ t.accumulatedMs += Date.now()-t.startTs; t.running=false; t.startTs=null; }
       if(action==='reset'){ currentPerson.timers[rod] = {running:false,startTs:null,accumulatedMs:0}; }
       // Recast now opens a confirmation step rather than firing instantly —
@@ -5648,6 +5816,15 @@ function attachRodCardHandlers(){
       }
       renderTimers();
       await saveRodState(currentPersonId, rod);
+      // A fresh start_ts means a brand new run — clear any rod-alert marker
+      // left over from a previous long soak, so the scheduled check can
+      // alert again in its own turn. saveRodState deliberately never touches
+      // this column (it's the Edge Function's to set), so it's cleared here
+      // as its own small patch instead.
+      if(freshStart){
+        try{ await sbPatch('rod_state', 'fisherman_id=eq.'+currentPersonId+'&rod=eq.'+rod, {alert_sent_for_start_ts: null}); }
+        catch(e){ console.error('Could not clear rod alert marker', e); }
+      }
     });
   });
   document.querySelectorAll('.rod-field').forEach(ta=>{
@@ -11226,7 +11403,9 @@ await loadTackleCategoryOptions();
     const dateSel = document.getElementById('date-format-select');
     if(dateSel) dateSel.value = localStorage.getItem('pk_fishing_date_format') || 'dmy';
   }catch(e){}
+  loadAndRenderNotificationPrefs();
   makeCardCollapsible('appearance-card', 'appearance-body', 'pk_fishing_collapse_appearance');
+  makeCardCollapsible('notifications-card', 'notifications-body', 'pk_fishing_collapse_notifications', true);
   ['past-catch-weight','edit-catch-weight','admin-catch-weight'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) setupWeightUnitInput(el);
