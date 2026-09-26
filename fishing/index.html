@@ -1287,6 +1287,11 @@
               <option value="Wafters">Wafters</option>
             </select>
           </div>
+          <div class="field" id="tackle-flavour-wrap" style="display:none;">
+            <label>Flavour (optional)</label>
+            <input type="text" maxlength="100" id="tackle-flavour" list="tackle-flavour-suggestions" placeholder="e.g. Scopex, Tuna & Krill, Strawberry" autocomplete="pk-field-33" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+            <datalist id="tackle-flavour-suggestions"></datalist>
+          </div>
           <div class="field" id="tackle-fill-wrap" style="display:none;">
             <label>How full is it?</label>
             <div class="fill-level-wrap">
@@ -1350,6 +1355,31 @@
           <h2>My Rigs</h2>
           <div id="my-rigs-body">
           <div id="rigs-list"><div class="empty">No rigs built yet — build one above, then tick "Use" to see it on your Timers.</div></div>
+          </div>
+        </section>
+
+        <section class="card" id="build-combo-card">
+          <h2>Build a bait combination</h2>
+          <div id="build-combo-body">
+          <p class="pc-line muted">Save a rig with its baits per hook, so you can set up a rod in one tap on Timers instead of picking everything each time.</p>
+          <div class="field">
+            <label>Combination name</label>
+            <input type="text" maxlength="100" id="combo-name" placeholder="e.g. Winter zig rig" autocomplete="pk-field-35" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label>Rig</label>
+            <select id="combo-rig-select"><option value="">Select a rig</option></select>
+          </div>
+          <div id="combo-hook-fields"></div>
+          <button class="primary-btn" id="combo-create-btn">Save combination</button>
+          <div class="status" id="combo-create-status"></div>
+          </div>
+        </section>
+
+        <section class="card" id="my-combos-card">
+          <h2>My Bait Combinations</h2>
+          <div id="my-combos-body">
+          <div id="combos-list"><div class="empty">No combinations saved yet — build one above, then apply it on Timers in one tap.</div></div>
           </div>
         </section>
 
@@ -2348,6 +2378,250 @@ document.addEventListener('change', (e)=>{
   if(e.target.matches('.multi-picker-type')){
     renderMultiPickerResults(e.target.dataset.rod, e.target.dataset.key);
   }
+});
+
+// ---------- Bait combinations ----------
+// Same search/pill picker as a rod's hook fields above, but backed by a
+// standalone draft object rather than a real rod's saved state — building
+// a combination in the Tackle Box has no rod of its own to write into.
+let comboDraft = { hooks: {} };
+
+function comboPickerFieldHtml(key, label){
+  return `<div class="field">
+    <label>${escapeHtml(label)}</label>
+    <select class="combo-picker-type" data-key="${key}" style="margin-bottom:6px;">
+      <option value="">All bait types</option>
+      ${ALL_BAIT_TYPES.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}
+    </select>
+    <input type="text" maxlength="100" class="combo-picker-search" data-key="${key}" placeholder="Search name or brand — add as many as you like" autocomplete="pk-combo-bait" autocorrect="off" autocapitalize="off" spellcheck="false" role="presentation" data-form-type="other">
+    <div class="combo-picker-results" data-key="${key}"></div>
+    <div class="combo-picker-pills" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
+  </div>`;
+}
+
+function renderComboPickerPills(key){
+  const pillsEl = document.querySelector('.combo-picker-pills[data-key="'+key+'"]');
+  if(!pillsEl) return;
+  const current = comboDraft.hooks[key] || [];
+  pillsEl.innerHTML = current.map(v=>`
+    <span class="pill" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(v)}<button type="button" class="combo-picker-remove" data-key="${key}" data-value="${escapeHtml(v)}" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;">×</button></span>
+  `).join('');
+  pillsEl.querySelectorAll('.combo-picker-remove').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      comboDraft.hooks[key] = (comboDraft.hooks[key]||[]).filter(v=>v!==btn.dataset.value);
+      renderComboPickerPills(key);
+      renderComboPickerResults(key);
+    });
+  });
+}
+
+function renderComboPickerResults(key){
+  const searchEl = document.querySelector('.combo-picker-search[data-key="'+key+'"]');
+  const resultsEl = document.querySelector('.combo-picker-results[data-key="'+key+'"]');
+  const typeEl = document.querySelector('.combo-picker-type[data-key="'+key+'"]');
+  if(!searchEl || !resultsEl) return;
+  const term = searchEl.value.trim().toLowerCase();
+  const typeFilter = typeEl ? typeEl.value : '';
+  const current = comboDraft.hooks[key] || [];
+  const matches = knownBaitNames
+    .filter(item => !current.includes(item.name))
+    .filter(item => !typeFilter || item.type === typeFilter)
+    .filter(item => !term
+      || item.name.toLowerCase().includes(term)
+      || (item.brand || '').toLowerCase().includes(term))
+    .slice(0, 40);
+
+  if(matches.length === 0){
+    resultsEl.innerHTML = '<div class="empty">Nothing in your tackle box matches.</div>';
+    return;
+  }
+
+  resultsEl.innerHTML = `<div style="display:flex;gap:6px;align-items:center;">
+    <select class="combo-picker-select" data-key="${key}" style="flex:1;">
+      ${matches.map(item=>`<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}${item.brand ? ' · '+escapeHtml(item.brand) : ''}${item.type ? ' · '+escapeHtml(item.type) : ''}</option>`).join('')}
+    </select>
+    <button type="button" class="mini-btn combo-picker-add-select" data-key="${key}">Add</button>
+  </div>`;
+
+  resultsEl.querySelector('.combo-picker-add-select').addEventListener('click', ()=>{
+    const sel = resultsEl.querySelector('.combo-picker-select');
+    const value = sel ? sel.value : '';
+    if(!value) return;
+    if(!comboDraft.hooks[key]) comboDraft.hooks[key] = [];
+    if(!comboDraft.hooks[key].includes(value)) comboDraft.hooks[key].push(value);
+    renderComboPickerResults(key);
+    renderComboPickerPills(key);
+  });
+}
+
+document.addEventListener('input', (e)=>{
+  if(e.target.matches('.combo-picker-search')){
+    renderComboPickerResults(e.target.dataset.key);
+  }
+});
+document.addEventListener('change', (e)=>{
+  if(e.target.matches('.combo-picker-type')){
+    renderComboPickerResults(e.target.dataset.key);
+  }
+});
+
+function renderComboHookFields(){
+  const sel = document.getElementById('combo-rig-select');
+  const container = document.getElementById('combo-hook-fields');
+  if(!sel || !container) return;
+  const rigName = sel.value;
+  const rigDef = rigName ? findRigDef(rigName) : null;
+  comboDraft.hooks = {};
+  if(!rigDef || rigDef.hookCount <= 0){ container.innerHTML = ''; return; }
+  let html = '<div class="hooks-row">';
+  for(let n=1; n<=rigDef.hookCount; n++){
+    html += comboPickerFieldHtml('hook'+n, hookDisplayName(rigDef, n));
+  }
+  html += '</div>';
+  container.innerHTML = html;
+  for(let n=1; n<=rigDef.hookCount; n++){
+    renderComboPickerPills('hook'+n);
+    renderComboPickerResults('hook'+n);
+  }
+}
+document.getElementById('combo-rig-select').addEventListener('change', renderComboHookFields);
+
+document.getElementById('combo-create-btn').addEventListener('click', async ()=>{
+  const nameEl = document.getElementById('combo-name');
+  const rigSel = document.getElementById('combo-rig-select');
+  const st = document.getElementById('combo-create-status');
+  const name = nameEl.value.trim();
+  if(!name){ st.textContent = 'Enter a name.'; return; }
+  if(!rigSel.value){ st.textContent = 'Select a rig.'; return; }
+  if(!isSignedIn()){ st.textContent = 'You need to be signed in.'; return; }
+  const rigDef = findRigDef(rigSel.value);
+  const hookBaits = {};
+  if(rigDef){
+    for(let n=1; n<=rigDef.hookCount; n++){
+      const arr = comboDraft.hooks['hook'+n] || [];
+      if(arr.length) hookBaits['hook'+n] = joinMultiValue(arr);
+    }
+  }
+  st.textContent = 'Saving...';
+  try{
+    await sbPost('bait_combinations', {
+      id: uid(),
+      owner_user_id: session.user.id,
+      name,
+      rig_id: rigDef ? rigDef.id : null,
+      rig_name: rigSel.value,
+      hook_baits: hookBaits
+    });
+    nameEl.value = '';
+    rigSel.value = '';
+    comboDraft.hooks = {};
+    document.getElementById('combo-hook-fields').innerHTML = '';
+    st.textContent = 'Saved.';
+    setTimeout(()=> st.textContent='', 1200);
+    renderCombosList();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+  }
+});
+
+async function loadBaitCombinations(){
+  if(!isSignedIn()) return [];
+  try{
+    const rows = await sbGet('bait_combinations?select=*&owner_user_id=eq.'+session.user.id+'&order=name.asc');
+    return rows.map(r=>({
+      id: r.id, name: r.name, rigId: r.rig_id, rigName: r.rig_name,
+      hookBaits: r.hook_baits || {}
+    }));
+  }catch(e){ console.error('loadBaitCombinations failed', e); return []; }
+}
+
+let myBaitCombinations = [];
+
+function comboSummaryText(combo){
+  const rigDef = combo.rigName ? findRigDef(combo.rigName) : null;
+  const parts = Object.keys(combo.hookBaits).sort().map(key=>{
+    const n = parseInt(key.replace('hook',''), 10) || 0;
+    const label = rigDef ? hookDisplayName(rigDef, n) : ('Hook ' + n);
+    return label + ': ' + combo.hookBaits[key];
+  });
+  return parts.length ? parts.join(' · ') : 'No baits saved on this one yet.';
+}
+
+async function renderCombosList(){
+  const el = document.getElementById('combos-list');
+  if(!el) return;
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  myBaitCombinations = await loadBaitCombinations();
+  if(myBaitCombinations.length === 0){
+    el.innerHTML = '<div class="empty">No combinations saved yet — build one above, then apply it on Timers in one tap.</div>';
+    return;
+  }
+  el.innerHTML = '<ul class="people-list">' + myBaitCombinations.map(c=>`
+    <li>
+      <div class="who">
+        <b>${escapeHtml(c.name)}</b>
+        <span class="pill">${escapeHtml(c.rigName || 'Rig removed')}</span>
+      </div>
+      <p class="pc-line muted" style="margin:4px 0;">${escapeHtml(comboSummaryText(c))}</p>
+      <div class="actions">
+        <button class="mini-btn danger" data-combo-remove="${c.id}">Remove</button>
+      </div>
+    </li>`).join('') + '</ul>';
+
+  el.querySelectorAll('[data-combo-remove]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirmDelete('this bait combination')) return;
+      try{
+        await sbDelete('bait_combinations', 'id=eq.'+btn.dataset.comboRemove);
+        renderCombosList();
+        renderAll();
+      }catch(e){
+        console.error(e);
+        alert('Could not remove: ' + (e.message || 'unknown error'));
+      }
+    });
+  });
+}
+
+// Sets the rig and fills every hook with the combination's saved baits in
+// one tap. Mutates currentPerson.notes directly and saves once at the end,
+// deliberately not by setting the rig <select> and dispatching a change
+// event — that handler awaits its own saveRodState, and firing a second
+// one straight after risks two concurrent writes landing out of order.
+document.addEventListener('click', async (e)=>{
+  const btn = e.target.closest('.combo-apply-btn');
+  if(!btn) return;
+  const rod = btn.dataset.rod;
+  const sel = document.querySelector('.combo-apply-select[data-rod="'+rod+'"]');
+  const comboId = sel ? sel.value : '';
+  if(!comboId || !currentPerson) return;
+  const combo = myBaitCombinations.find(c=>c.id===comboId);
+  if(!combo) return;
+
+  const rigSel = document.querySelector('.rod-select[data-rod="'+rod+'"][data-key="rig"]');
+  const rigDef = combo.rigName ? findRigDef(combo.rigName) : null;
+  if(rigSel && rigDef){
+    const otherInput = document.querySelector('.rod-select-other[data-rod="'+rod+'"][data-key="rig"]');
+    if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+    rigSel.value = combo.rigName;
+    currentPerson.notes[rod].rig = combo.rigName;
+    currentPerson.notes[rod].rigId = rigDef.id;
+  }
+  renderRigFields(rod);
+
+  if(rigDef){
+    for(let n=1; n<=rigDef.hookCount; n++){
+      const key = 'hook'+n;
+      if(combo.hookBaits[key] !== undefined){
+        currentPerson.notes[rod][key] = combo.hookBaits[key];
+        renderMultiPickerPills(rod, key);
+        renderMultiPickerResults(rod, key);
+      }
+    }
+  }
+  await saveRodState(currentPersonId, rod);
+  sel.value = '';
 });
 
 function renderRigFields(rod){
@@ -3942,7 +4216,7 @@ function updateTackleVisibility(){
 async function loadTackleItems(){
   try{
     // Keep the list fetch light: never pull the photo blob here, only whether one exists
-    const rows = await sbGet('tackle_items?select=id,name,brand,category,bait_type,notes,has_photo,owner_user_id,is_shared,fill_level&order=category.asc,name.asc');
+    const rows = await sbGet('tackle_items?select=id,name,brand,category,bait_type,flavour,notes,has_photo,owner_user_id,is_shared,fill_level&order=category.asc,name.asc');
     clearDbError();
     return rows;
   }catch(e){ console.error(e); showDbError('Could not reach Supabase.'); return []; }
@@ -3975,7 +4249,7 @@ async function unshareTackleItemWith(tackleItemId, userId){
 async function renderTackleItemEditForm(itemId, containerEl){
   let item;
   try{
-    const rows = await sbGet('tackle_items?id=eq.'+itemId+'&select=id,name,brand,category,bait_type,notes,photo,has_photo');
+    const rows = await sbGet('tackle_items?id=eq.'+itemId+'&select=id,name,brand,category,bait_type,flavour,notes,photo,has_photo');
     item = rows[0];
   }catch(e){ console.error(e); containerEl.innerHTML = '<div class="empty">Could not load item.</div>'; return; }
   if(!item){ containerEl.innerHTML = '<div class="empty">Item not found.</div>'; return; }
@@ -4026,6 +4300,10 @@ async function renderTackleItemEditForm(itemId, containerEl){
       <label>Brand</label>
       <input type="text" maxlength="100" class="tackle-edit-brand" list="tackle-brand-suggestions" value="${escapeHtml(item.brand||'')}" autocomplete="pk-field-22" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
     </div>
+    <div class="field tackle-edit-flavour-wrap" style="display:${(item.category==='Bait'||item.category==='Dips')?'block':'none'};">
+      <label>Flavour</label>
+      <input type="text" maxlength="100" class="tackle-edit-flavour" list="tackle-flavour-suggestions" value="${escapeHtml(item.flavour||'')}" autocomplete="pk-field-34" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </div>
     <div class="field">
       <label>Notes</label>
       <input type="text" maxlength="100" class="tackle-edit-notes" value="${escapeHtml(item.notes||'')}" autocomplete="pk-field-23" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
@@ -4045,8 +4323,10 @@ async function renderTackleItemEditForm(itemId, containerEl){
 
   const catSel = containerEl.querySelector('.tackle-edit-category');
   const baitWrap = containerEl.querySelector('.tackle-edit-baittype-wrap');
+  const flavourWrap = containerEl.querySelector('.tackle-edit-flavour-wrap');
   catSel.addEventListener('change', ()=>{
     baitWrap.style.display = catSel.value === 'Bait' ? 'block' : 'none';
+    flavourWrap.style.display = (catSel.value === 'Bait' || catSel.value === 'Dips') ? 'block' : 'none';
   });
 
   containerEl.querySelector('.tackle-edit-save-btn').addEventListener('click', async ()=>{
@@ -4060,6 +4340,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
         brand: containerEl.querySelector('.tackle-edit-brand').value.trim() || null,
         category: catSel.value,
         bait_type: catSel.value === 'Bait' ? (containerEl.querySelector('.tackle-edit-baittype').value || null) : null,
+        flavour: (catSel.value === 'Bait' || catSel.value === 'Dips') ? (containerEl.querySelector('.tackle-edit-flavour').value.trim() || null) : null,
         notes: containerEl.querySelector('.tackle-edit-notes').value.trim()
       };
       const photoInput = document.getElementById('tackle-edit-photo-'+itemId);
@@ -4560,9 +4841,10 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
 
 document.getElementById('tackle-category').addEventListener('change', (e)=>{
   document.getElementById('tackle-baittype-wrap').style.display = e.target.value === 'Bait' ? 'block' : 'none';
-  // Fill level only applies to consumables
+  // Fill level and flavour only apply to consumables
   const isConsumable = e.target.value === 'Bait' || e.target.value === 'Dips';
   document.getElementById('tackle-fill-wrap').style.display = isConsumable ? 'block' : 'none';
+  document.getElementById('tackle-flavour-wrap').style.display = isConsumable ? 'block' : 'none';
 });
 document.getElementById('tackle-fill-slider').addEventListener('input', (e)=>{
   const v = parseInt(e.target.value, 10);
@@ -4591,6 +4873,12 @@ function renderTackleNameSuggestions(){
   if(brandList){
     const brands = [...new Set(tackleItemsCache.map(it=>it.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
     brandList.innerHTML = brands.map(b=>`<option value="${escapeHtml(b)}"></option>`).join('');
+  }
+  // Same idea for flavours you've already tagged
+  const flavourList = document.getElementById('tackle-flavour-suggestions');
+  if(flavourList){
+    const flavours = [...new Set(tackleItemsCache.map(it=>it.flavour).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    flavourList.innerHTML = flavours.map(f=>`<option value="${escapeHtml(f)}"></option>`).join('');
   }
 }
 
@@ -4695,6 +4983,7 @@ async function renderTackleList(){
   const catHtml = catNames.map(cat=>{
     const rows = byCategory[cat].map(it=>{
       const baitTag = it.bait_type ? `<span class="pill" style="background:var(--khaki);color:var(--ink);">${escapeHtml(it.bait_type)}</span>` : '';
+      const flavourTag = it.flavour ? `<span class="pill" style="opacity:0.85;">${escapeHtml(it.flavour)}</span>` : '';
       const isMine = isSignedIn() && it.owner_user_id === session.user.id;
       let sharedTag = '';
       let useToggleHtml = '';
@@ -4739,6 +5028,7 @@ async function renderTackleList(){
           <b>${escapeHtml(it.name)}</b>
           ${it.brand ? `<span class="pill">${escapeHtml(it.brand)}</span>` : ''}
           ${baitTag}
+          ${flavourTag}
           ${sharedTag}
         </div>
         ${useToggleHtml}
@@ -4912,6 +5202,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   const brandEl = document.getElementById('tackle-brand');
   const fillEl = document.getElementById('tackle-fill-slider');
   const baitTypeEl = document.getElementById('tackle-baittype');
+  const flavourEl = document.getElementById('tackle-flavour');
   const notesEl = document.getElementById('tackle-notes');
   const photoEl = document.getElementById('tackle-photo');
   const everyoneEl = document.getElementById('tackle-shared-everyone');
@@ -4936,6 +5227,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
       category: categoryValue,
       fill_level: (categoryValue === 'Bait' || categoryValue === 'Dips') ? parseInt(fillEl.value, 10) : null,
       bait_type: categoryValue === 'Bait' ? (baitTypeEl.value || null) : null,
+      flavour: (categoryValue === 'Bait' || categoryValue === 'Dips') ? (flavourEl.value.trim() || null) : null,
       notes: notesEl.value.trim(),
       photo,
       has_photo: !!photo,
@@ -4949,11 +5241,13 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
     notesEl.value = '';
     photoEl.value = '';
     baitTypeEl.value = '';
+    flavourEl.value = '';
     catEl.value = '';
     if(everyoneEl) everyoneEl.checked = false;
     document.querySelectorAll('.tackle-share-check').forEach(cb=> cb.checked = false);
     document.getElementById('tackle-baittype-wrap').style.display = 'none';
     document.getElementById('tackle-fill-wrap').style.display = 'none';
+    document.getElementById('tackle-flavour-wrap').style.display = 'none';
     fillEl.value = 100;
     document.getElementById('tackle-fill-bar').style.height = '100%';
     document.getElementById('tackle-fill-readout').textContent = '100% left';
@@ -5176,6 +5470,17 @@ function rodCardHtml(r){
         <label>Rig</label>
         <select class="rod-select" data-rod="${r}" data-key="rig">${buildRigOptionsHtml()}</select>
       </div>
+      ${myBaitCombinations.length ? `
+      <div class="field" style="display:flex;gap:6px;align-items:flex-end;">
+        <div style="flex:1;">
+          <label>Apply a saved combination</label>
+          <select class="combo-apply-select" data-rod="${r}">
+            <option value="">Select one...</option>
+            ${myBaitCombinations.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+        </div>
+        <button type="button" class="mini-btn combo-apply-btn" data-rod="${r}">Apply</button>
+      </div>` : ''}
       <div id="rig-fields-${r}"></div>
       <div class="row2">
         <div class="field">
@@ -9078,6 +9383,7 @@ function goToTab(tabName){
   if(tabName==='timers'){
     updateTimersVisibility();
     loadKnownRigs().then(()=>{ if(currentPerson) renderAll(); });
+    loadBaitCombinations().then(rows=>{ myBaitCombinations = rows; if(currentPerson) renderAll(); });
     loadActiveSession().then(renderSessionUi);
     renderActiveCompetitionsBar();
   }
@@ -9094,9 +9400,14 @@ function goToTab(tabName){
       const feedWrap = document.getElementById('rig-feed-methods');
       if(feedWrap && !feedWrap.innerHTML) feedWrap.innerHTML = feedMethodChecksHtml([], 'rig-feed');
       renderRigsList();
+      const comboRigSel = document.getElementById('combo-rig-select');
+      if(comboRigSel) comboRigSel.innerHTML = buildRigOptionsHtml();
+      renderCombosList();
       makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
       makeCardCollapsible('build-rig-card', 'build-rig-body', 'pk_fishing_collapse_buildrig');
       makeCardCollapsible('my-rigs-card', 'my-rigs-body', 'pk_fishing_collapse_myrigs', true);
+      makeCardCollapsible('build-combo-card', 'build-combo-body', 'pk_fishing_collapse_buildcombo');
+      makeCardCollapsible('my-combos-card', 'my-combos-body', 'pk_fishing_collapse_mycombos', true);
       makeCardCollapsible('tackle-share-box-card', 'tackle-share-box-body', 'pk_fishing_collapse_sharebox');
       makeCardCollapsible('tackle-list-card', 'tackle-list-body', 'pk_fishing_collapse_tacklelist', true);
     }
