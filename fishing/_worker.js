@@ -110,9 +110,18 @@ export default {
         // ("/fishing/"), so without this header the registration throws a
         // SecurityError and push notifications silently never work. Verified
         // by reproducing the exact failure locally before adding this.
+        //
+        // Also forces no-cache: the asset layer's default Cache-Control (a
+        // multi-hour max-age, fine for most static files) is a well-known
+        // trap for a service worker specifically - a browser or this CDN
+        // holding onto a stale sw.js means a future fix here would silently
+        // fail to reach anyone for hours, exactly what just happened with
+        // the header above shipping correctly in the Worker but Cloudflare
+        // still serving an already-cached pre-fix response underneath it.
         if (url.pathname === '/fishing/sw.js' && res.ok) {
           const headers = new Headers(res.headers);
           headers.set('Service-Worker-Allowed', '/fishing');
+          headers.set('Cache-Control', 'no-cache');
           return new Response(res.body, { status: res.status, headers });
         }
         return res;
