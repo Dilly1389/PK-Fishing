@@ -1907,13 +1907,13 @@
         </div>
       </div>
       <div class="field photo-slot-group">
-        <label>Fish photo (up to 2)</label>
+        <label>Fish photo</label>
         <div class="catch-photo-preview" id="edit-catch-photo-preview-fish" style="display:none;"></div>
         <div id="edit-catch-photo-buttons-fish" style="display:flex;gap:8px;"><button type="button" class="mini-btn photo-camera-btn" data-target="edit-catch-photo-input-fish"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="edit-catch-photo-input-fish"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button></div>
         <input type="file" accept="image/*" id="edit-catch-photo-input-fish" style="display:none;">
       </div>
       <div class="field photo-slot-group">
-        <label>Scale photo (up to 1)</label>
+        <label>Scale photo</label>
         <div class="catch-photo-preview" id="edit-catch-photo-preview-scale" style="display:none;"></div>
         <div id="edit-catch-photo-buttons-scale" style="display:flex;gap:8px;"><button type="button" class="mini-btn photo-camera-btn" data-target="edit-catch-photo-input-scale"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="edit-catch-photo-input-scale"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button></div>
         <input type="file" accept="image/*" id="edit-catch-photo-input-scale" style="display:none;">
@@ -4364,6 +4364,12 @@ async function goToNotificationTarget(n){
     switchToTab('tackle');
     return;
   }
+  if(n.target_type === 'timers'){
+    // A rod alert isn't about one specific catch or rod card to jump to -
+    // just get them back to Timers
+    switchToTab('timers');
+    return;
+  }
   if(!n.target_id) return;
   if(n.target_type === 'profile'){
     openProfile(n.target_id);
@@ -5632,7 +5638,10 @@ async function loadPerson(id){
     return {
       name:f.name, dam:f.dam, competition:f.competition||'', rods:normalizeRodsCount(f.rods), timers, notes, catches,
       pbCarpWeight:f.pb_carp_weight||null, pbCarpPhoto:f.pb_carp_photo||null,
-      pbBarbelWeight:f.pb_barbel_weight||null, pbBarbelPhoto:f.pb_barbel_photo||null
+      pbBarbelWeight:f.pb_barbel_weight||null, pbBarbelPhoto:f.pb_barbel_photo||null,
+      // The account-wide rod alert default (Profile -> Notifications), shown
+      // on each rod card's alert summary when that rod has no override of its own
+      rodAlertMinutes: f.rod_alert_minutes || 120
     };
   }catch(e){
     console.error(e);
@@ -5805,24 +5814,18 @@ function rodCardHtml(r){
           <label>Hook</label>
           <select class="catch-hook" data-rod="${r}">${catchHookOptionsHtml(MAX_HOOKS)}</select>
         </div>
-        <div class="row2">
-          <div class="field">
-            <label>Type of fish</label>
-            <select class="catch-type" data-rod="${r}" style="display:none;">${speciesOptionsHtml(people.find(p=>p.id===currentPersonId), 'Select type', true)}</select>
-            <div class="catch-type-buttons" data-rod="${r}" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-            <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-27" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
-          </div>
-          <div class="field">
-            <label>Weight</label>
-            <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4" autocomplete="pk-x11" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
-          </div>
+        <div class="field">
+          <label>Type of fish</label>
+          <select class="catch-type" data-rod="${r}" style="display:none;">${speciesOptionsHtml(people.find(p=>p.id===currentPersonId), 'Select type', true)}</select>
+          <div class="catch-type-buttons" data-rod="${r}" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-27" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="field">
-          <label>Date caught (leave blank for now)</label>
-          <input type="datetime-local" class="catch-date" data-rod="${r}" autocomplete="pk-x12" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <label>Weight</label>
+          <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4" autocomplete="pk-x11" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="field photo-slot-group">
-          <label>Fish photo (optional — up to 2)</label>
+          <label>Fish photo (optional)</label>
           <div class="catch-photo-preview" data-rod="${r}" data-slot="fish" style="display:none;"></div>
           <div class="photo-slot-buttons" data-rod="${r}" data-slot="fish" style="display:flex;gap:8px;">
             <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}" data-slot="fish"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
@@ -5831,7 +5834,7 @@ function rodCardHtml(r){
           <input type="file" accept="image/*" class="catch-photo" data-rod="${r}" data-slot="fish" style="display:none;">
         </div>
         <div class="field photo-slot-group">
-          <label>Scale photo (optional — up to 1)</label>
+          <label>Scale photo (optional)</label>
           <div class="catch-photo-preview" data-rod="${r}" data-slot="scale" style="display:none;"></div>
           <div class="photo-slot-buttons" data-rod="${r}" data-slot="scale" style="display:flex;gap:8px;">
             <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}" data-slot="scale"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
@@ -9641,8 +9644,11 @@ function formatAlertMinutes(mins){
 function updateRodAlertSummary(rod){
   const el = document.querySelector('.rod-alert-summary[data-rod="'+rod+'"]');
   if(!el) return;
-  const mins = currentPerson ? currentPerson.notes[rod].alertMinutes : null;
-  el.textContent = mins ? formatAlertMinutes(mins) : 'your default';
+  if(!currentPerson) return;
+  const override = currentPerson.notes[rod].alertMinutes;
+  el.textContent = override
+    ? formatAlertMinutes(override)
+    : formatAlertMinutes(currentPerson.rodAlertMinutes) + ' (default)';
 }
 function renderNotes(){
   RODS.forEach(r=>{
