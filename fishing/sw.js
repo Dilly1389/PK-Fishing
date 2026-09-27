@@ -22,8 +22,15 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
+      // The large icon shown in the notification body - full colour, opaque
+      // background, this is the actual logo.
       icon: 'icon-192.png',
-      badge: 'icon-192.png',
+      // Android renders "badge" (the small status-bar icon) as a plain white
+      // silhouette using only the image's alpha channel, ignoring colour -
+      // icon-192.png's fully opaque square background used to make that
+      // silhouette a solid white SQUARE. This is a transparent-background
+      // cutout of the same logo mark, so the silhouette is actually recognisable.
+      badge: 'badge-icon.png',
       data: { url: data.url },
     })
   );
