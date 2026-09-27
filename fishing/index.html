@@ -354,6 +354,11 @@
     cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;
   }
   .pc-photo{max-width:100%;border-radius:10px;margin-top:8px;display:block;border:1px solid var(--line);cursor:pointer;}
+  .photo-label-tag{
+    position:absolute;left:4px;bottom:4px;padding:1px 7px;border-radius:999px;
+    background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.02em;pointer-events:none;
+  }
   .catch-log-photo{cursor:pointer;}
   .catch-log-photo{width:34px;height:34px;border-radius:6px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);}
   .lb-photo{width:44px;height:44px;border-radius:8px;}
@@ -1835,6 +1840,7 @@
 <dialog id="photo-modal" closedby="any" aria-label="Photo">
   <div class="modal-card" style="max-width:92vw;max-height:88vh;overflow-y:auto;padding:12px;text-align:center;position:relative;">
     <button type="button" id="photo-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <span id="photo-modal-label" class="photo-label-tag" style="position:absolute;top:14px;left:14px;display:none;z-index:5;"></span>
     <div id="photo-zoom-stage" style="display:block;width:fit-content;max-width:100%;margin:0 auto;overflow:hidden;border-radius:10px;touch-action:none;">
       <img id="photo-modal-img" src="" alt="Catch photo" draggable="false" loading="lazy" decoding="async" style="max-width:100%;max-height:60vh;display:block;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;">
     </div>
@@ -1887,9 +1893,16 @@
         </div>
       </div>
       <div class="field">
-        <label>Photos</label>
-        <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="edit-catch-photo-input"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="edit-catch-photo-input"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button></div><div class="photo-filename" data-target="edit-catch-photo-input" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="edit-catch-photo-input" style="display:none;">
-        <div class="catch-photo-preview" id="edit-catch-photo-preview" style="display:none;"></div>
+        <label>Fish photo (up to 2)</label>
+        <div class="catch-photo-preview" id="edit-catch-photo-preview-fish" style="display:none;"></div>
+        <div id="edit-catch-photo-buttons-fish" style="display:flex;gap:8px;margin-bottom:10px;"><button type="button" class="mini-btn photo-camera-btn" data-target="edit-catch-photo-input-fish"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="edit-catch-photo-input-fish"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button></div>
+        <input type="file" accept="image/*" id="edit-catch-photo-input-fish" style="display:none;">
+      </div>
+      <div class="field">
+        <label>Scale photo (up to 1)</label>
+        <div class="catch-photo-preview" id="edit-catch-photo-preview-scale" style="display:none;"></div>
+        <div id="edit-catch-photo-buttons-scale" style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="edit-catch-photo-input-scale"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="edit-catch-photo-input-scale"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button></div>
+        <input type="file" accept="image/*" id="edit-catch-photo-input-scale" style="display:none;">
       </div>
     </div>
     <div class="row2" style="margin-top:16px;">
@@ -2165,7 +2178,9 @@ let currentPersonId = null;
 let currentPerson = null;
 let catchToggle = {};
 let pendingPhotos = {};
-RODS.forEach(r => { catchToggle[r] = false; pendingPhotos[r] = []; });
+// Parallel to pendingPhotos[rod] - "fish" or "scale" per photo, same index
+let pendingPhotoLabels = {};
+RODS.forEach(r => { catchToggle[r] = false; pendingPhotos[r] = []; pendingPhotoLabels[r] = []; });
 
 function rodsOptionsHtml(selected){
   let html = '';
@@ -2791,28 +2806,43 @@ async function uploadPhoto(file, opts){
 }
 
 
+// Fish gets two slots (different angles / whole fish + close-up are both
+// useful); Scale gets one, since it's just there to back up the weight.
+const PHOTO_SLOT_LIMITS = { fish: 2, scale: 1 };
+
 function renderPhotoPreview(rod){
-  const preview = document.querySelector('.catch-photo-preview[data-rod="'+rod+'"]');
-  if(!preview) return;
-  const photos = pendingPhotos[rod] || [];
-  if(photos.length===0){
-    preview.innerHTML = '';
-    preview.style.display = 'none';
-    return;
-  }
-  preview.style.display = 'flex';
-  preview.innerHTML = photos.map((src, i)=>`
-    <div class="photo-thumb-wrap">
-      <img class="pc-photo" src="${src}" alt="Catch photo" loading="lazy" decoding="async">
-      <button type="button" class="photo-remove" data-rod="${rod}" data-index="${i}">×</button>
-    </div>`).join('');
-  preview.querySelectorAll('.photo-remove').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      const idx = parseInt(btn.dataset.index, 10);
-      pendingPhotos[rod].splice(idx, 1);
-      renderPhotoPreview(rod);
-    });
+  ['fish', 'scale'].forEach(slot=>{
+    const preview = document.querySelector('.catch-photo-preview[data-rod="'+rod+'"][data-slot="'+slot+'"]');
+    const buttonsWrap = document.querySelector('.photo-slot-buttons[data-rod="'+rod+'"][data-slot="'+slot+'"]');
+    if(!preview) return;
+    const photos = pendingPhotos[rod] || [];
+    const labels = pendingPhotoLabels[rod] || [];
+    // Keep each photo's TRUE index into the flat pendingPhotos array (shared
+    // across both slots), so removing one splices the right entry out of it.
+    const entries = photos.map((src, i)=>({src, i})).filter(e=> labels[e.i] === slot);
+    if(entries.length === 0){
+      preview.innerHTML = '';
+      preview.style.display = 'none';
+    }else{
+      preview.style.display = 'flex';
+      preview.innerHTML = entries.map(({src, i})=>`
+        <div class="photo-thumb-wrap">
+          <img class="pc-photo" src="${src}" alt="Catch photo" loading="lazy" decoding="async">
+          <button type="button" class="photo-remove" data-rod="${rod}" data-index="${i}">×</button>
+        </div>`).join('');
+      preview.querySelectorAll('.photo-remove').forEach(btn=>{
+        btn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          const idx = parseInt(btn.dataset.index, 10);
+          pendingPhotos[rod].splice(idx, 1);
+          pendingPhotoLabels[rod].splice(idx, 1);
+          renderPhotoPreview(rod);
+        });
+      });
+    }
+    // Once a slot is full there's nowhere for another photo to go - hide
+    // the Add button rather than let someone tap it into confusion.
+    if(buttonsWrap) buttonsWrap.style.display = entries.length >= PHOTO_SLOT_LIMITS[slot] ? 'none' : 'flex';
   });
 }
 
@@ -2820,6 +2850,7 @@ function renderPhotoPreview(rod){
 let editingCatchId = null;
 let editCaught = false;
 let editPhotos = [];
+let editPhotoLabels = [];
 
 function openEditCatch(catchId, catchObj){
   // catchObj lets this work from the profile view, where the catch may
@@ -2829,6 +2860,7 @@ function openEditCatch(catchId, catchObj){
   editingCatchId = catchId;
   editCaught = !!c.caught;
   editPhotos = (c.photos || []).slice();
+  editPhotoLabels = (c.photoLabels || []).slice();
 
   // Use whoever actually owns this catch's species list, not the editor's —
   // matters when an admin is editing someone else's catch
@@ -2860,20 +2892,31 @@ function openEditCatch(catchId, catchObj){
 }
 
 function renderEditPhotoPreview(){
-  const preview = document.getElementById('edit-catch-photo-preview');
-  if(editPhotos.length===0){ preview.innerHTML=''; preview.style.display='none'; return; }
-  preview.style.display = 'flex';
-  preview.innerHTML = editPhotos.map((src, i)=>`
-    <div class="photo-thumb-wrap">
-      <img class="pc-photo" src="${src}" alt="Catch photo" loading="lazy" decoding="async">
-      <button type="button" class="photo-remove" data-index="${i}">×</button>
-    </div>`).join('');
-  preview.querySelectorAll('.photo-remove').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      editPhotos.splice(parseInt(btn.dataset.index, 10), 1);
-      renderEditPhotoPreview();
-    });
+  ['fish', 'scale'].forEach(slot=>{
+    const preview = document.getElementById('edit-catch-photo-preview-'+slot);
+    const buttonsWrap = document.getElementById('edit-catch-photo-buttons-'+slot);
+    if(!preview) return;
+    const entries = editPhotos.map((src, i)=>({src, i})).filter(e=> (editPhotoLabels[e.i] || 'fish') === slot);
+    if(entries.length === 0){
+      preview.innerHTML = ''; preview.style.display = 'none';
+    }else{
+      preview.style.display = 'flex';
+      preview.innerHTML = entries.map(({src, i})=>`
+        <div class="photo-thumb-wrap">
+          <img class="pc-photo" src="${src}" alt="Catch photo" loading="lazy" decoding="async">
+          <button type="button" class="photo-remove" data-index="${i}">×</button>
+        </div>`).join('');
+      preview.querySelectorAll('.photo-remove').forEach(btn=>{
+        btn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          const idx = parseInt(btn.dataset.index, 10);
+          editPhotos.splice(idx, 1);
+          editPhotoLabels.splice(idx, 1);
+          renderEditPhotoPreview();
+        });
+      });
+    }
+    if(buttonsWrap) buttonsWrap.style.display = entries.length >= PHOTO_SLOT_LIMITS[slot] ? 'none' : 'flex';
   });
 }
 
@@ -2889,19 +2932,22 @@ document.getElementById('edit-catch-type').addEventListener('change', (e)=>{
   document.getElementById('edit-catch-type-other').style.display = e.target.value === 'Other' ? 'block' : 'none';
 });
 
-document.getElementById('edit-catch-photo-input').addEventListener('change', async ()=>{
-  const inp = document.getElementById('edit-catch-photo-input');
-  const file = inp.files[0];
-  if(!file) return;
-  try{
-    const url = await uploadPhoto(file);
-    editPhotos.push(url);
-    renderEditPhotoPreview();
-  }catch(e){
-    console.error('Photo processing failed', e);
-    alert(e.message || 'Could not process that photo.');
-  }
-  inp.value = '';
+['fish', 'scale'].forEach(slot=>{
+  document.getElementById('edit-catch-photo-input-'+slot).addEventListener('change', async ()=>{
+    const inp = document.getElementById('edit-catch-photo-input-'+slot);
+    const file = inp.files[0];
+    if(!file) return;
+    try{
+      const url = await uploadPhoto(file);
+      editPhotos.push(url);
+      editPhotoLabels.push(slot);
+      renderEditPhotoPreview();
+    }catch(e){
+      console.error('Photo processing failed', e);
+      alert(e.message || 'Could not process that photo.');
+    }
+    inp.value = '';
+  });
 });
 
 document.getElementById('edit-catch-cancel').addEventListener('click', ()=>{
@@ -2922,13 +2968,14 @@ document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
   c.type = editCaught ? typeValue : '';
   c.weight = editCaught ? (parseFloat(document.getElementById('edit-catch-weight').value) || 0) : 0;
   c.photos = editCaught ? editPhotos.slice() : [];
+  c.photoLabels = editCaught ? editPhotoLabels.slice() : [];
 
   const st = document.getElementById('edit-catch-status');
   st.textContent = 'Saving...';
   try{
     await sbPatch('catches', 'id=eq.'+c.id, {
       caught: c.caught, hook: c.hook, fish_type: c.type, weight: c.weight,
-      photos: JSON.stringify(c.photos)
+      photos: JSON.stringify(c.photos), photo_labels: JSON.stringify(c.photoLabels)
     });
     editingCatchId = null;
     document.getElementById('edit-catch-modal').close();
@@ -3031,9 +3078,15 @@ document.addEventListener('click', (e)=>{
   const galBtn = e.target.closest('.photo-gallery-btn');
   if(!camBtn && !galBtn) return;
   const btn = camBtn || galBtn;
-  const input = btn.dataset.target
-    ? document.getElementById(btn.dataset.target)
-    : document.querySelector('.catch-photo[data-rod="'+btn.dataset.targetRod+'"]');
+  let input;
+  if(btn.dataset.target){
+    input = document.getElementById(btn.dataset.target);
+  }else{
+    // The Fish/Scale slot buttons on a rod card share the .catch-photo class
+    // for each rod, distinguished by data-slot rather than a separate id
+    const slotSel = btn.dataset.slot ? '[data-slot="'+btn.dataset.slot+'"]' : '';
+    input = document.querySelector('.catch-photo[data-rod="'+btn.dataset.targetRod+'"]'+slotSel);
+  }
   if(!input) return;
   if(camBtn){ input.setAttribute('capture', 'environment'); }
   else{ input.removeAttribute('capture'); }
@@ -3235,6 +3288,7 @@ function buildCatchPayload(personId, entry){
     cast_distance: entry.castDistance ?? null,
     rod_note: entry.rodNote || null,
     photos: JSON.stringify(entry.photos || []),
+    photo_labels: JSON.stringify(entry.photoLabels || []),
     latitude: entry.latitude != null ? entry.latitude : null,
     longitude: entry.longitude != null ? entry.longitude : null,
     venue_id: entry.venueId || null,
@@ -4262,13 +4316,16 @@ async function goToNotificationTarget(n){
     openProfile(n.target_id);
   }else if(n.target_type === 'catch'){
     try{
-      const rows = await sbGet('catches?id=eq.'+n.target_id+'&select=photos,photo');
+      const rows = await sbGet('catches?id=eq.'+n.target_id+'&select=photos,photo,photo_labels');
       if(rows[0]){
         const photos = rows[0].photos
           ? (typeof rows[0].photos === 'string' ? JSON.parse(rows[0].photos) : rows[0].photos)
           : (rows[0].photo ? [rows[0].photo] : []);
         if(photos.length){
           photoGalleryCache[n.target_id] = photos;
+          photoLabelsCache[n.target_id] = rows[0].photo_labels
+            ? (typeof rows[0].photo_labels === 'string' ? JSON.parse(rows[0].photo_labels) : rows[0].photo_labels)
+            : [];
           openPhotoModal(photos[0], n.target_id, 0);
         }
       }
@@ -5467,6 +5524,10 @@ function mapCatchRow(c){
     moonPhase: c.moon_phase || null,
     sessionId: c.session_id || null,
     photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
+    // Older catches predate this column and have no labels at all - that's
+    // fine, every reader treats a missing/short-of-photos labels array as
+    // "no label for this one" rather than an error.
+    photoLabels: c.photo_labels ? (typeof c.photo_labels === 'string' ? JSON.parse(c.photo_labels) : c.photo_labels) : [],
     likes: c.likes || 0
   };
   for(let n=1; n<=MAX_HOOKS; n++){
@@ -5687,13 +5748,20 @@ function rodCardHtml(r){
           <input type="datetime-local" class="catch-date" data-rod="${r}" autocomplete="pk-x12" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="field">
-          <label>Photos (optional — add as many as you like)</label>
-          <div style="display:flex;gap:8px;margin-bottom:6px;">
-            <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
-            <button type="button" class="mini-btn photo-gallery-btn" data-target-rod="${r}"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
+          <label>Fish photo (optional — up to 2)</label>
+          <div class="catch-photo-preview" data-rod="${r}" data-slot="fish" style="display:none;"></div>
+          <div class="photo-slot-buttons" data-rod="${r}" data-slot="fish" style="display:flex;gap:8px;margin-bottom:10px;">
+            <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}" data-slot="fish"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
+            <button type="button" class="mini-btn photo-gallery-btn" data-target-rod="${r}" data-slot="fish"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
           </div>
-          <input type="file" accept="image/*" class="catch-photo" data-rod="${r}" style="display:none;">
-          <div class="catch-photo-preview" data-rod="${r}" style="display:none;"></div>
+          <input type="file" accept="image/*" class="catch-photo" data-rod="${r}" data-slot="fish" style="display:none;">
+          <label>Scale photo (optional — up to 1)</label>
+          <div class="catch-photo-preview" data-rod="${r}" data-slot="scale" style="display:none;"></div>
+          <div class="photo-slot-buttons" data-rod="${r}" data-slot="scale" style="display:flex;gap:8px;margin-bottom:6px;">
+            <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}" data-slot="scale"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
+            <button type="button" class="mini-btn photo-gallery-btn" data-target-rod="${r}" data-slot="scale"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
+          </div>
+          <input type="file" accept="image/*" class="catch-photo" data-rod="${r}" data-slot="scale" style="display:none;">
         </div>
       </div>
       <div class="row2">
@@ -5878,12 +5946,15 @@ function attachRodCardHandlers(){
   document.querySelectorAll('.catch-photo').forEach(inp=>{
     inp.addEventListener('change', async ()=>{
       const rod = inp.dataset.rod;
+      const slot = inp.dataset.slot || 'fish';
       const file = inp.files[0];
       if(!file){ return; }
       try{
         const url = await uploadPhoto(file);
         if(!pendingPhotos[rod]) pendingPhotos[rod] = [];
+        if(!pendingPhotoLabels[rod]) pendingPhotoLabels[rod] = [];
         pendingPhotos[rod].push(url);
+        pendingPhotoLabels[rod].push(slot);
         renderPhotoPreview(rod);
       }catch(e){
         console.error('Photo processing failed', e);
@@ -5930,15 +6001,15 @@ function attachRodCardHandlers(){
       const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
       const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
       const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
-      const photoEl = document.querySelector('.catch-photo[data-rod="'+rod+'"]');
       const dateEl = document.querySelector('.catch-date[data-rod="'+rod+'"]');
       if(typeEl) typeEl.value = '';
       if(typeOtherEl){ typeOtherEl.value = ''; typeOtherEl.style.display = 'none'; }
       renderCatchTypeButtons(rod);
       if(weightEl) weightEl.value = '';
-      if(photoEl) photoEl.value = '';
+      document.querySelectorAll('.catch-photo[data-rod="'+rod+'"]').forEach(el=> el.value = '');
       if(dateEl) dateEl.value = '';
       pendingPhotos[rod] = [];
+      pendingPhotoLabels[rod] = [];
       renderPhotoPreview(rod);
     });
   });
@@ -6474,6 +6545,7 @@ async function clearAllRodState(){
     currentPerson.notes[r] = cleared;
     catchToggle[r] = false;
     pendingPhotos[r] = [];
+    pendingPhotoLabels[r] = [];
     await saveRodState(currentPersonId, r);
   }
   renderAll();
@@ -6698,7 +6770,8 @@ function buildCatchEntry(rod){
     rodIdentifier: rodIdentifier,
     castDistance: notes.castDistance ? parseFloat(notes.castDistance) : null,
     rodNote: notes.rodNote || '',
-    photos: caught ? (pendingPhotos[rod] || []).slice() : []
+    photos: caught ? (pendingPhotos[rod] || []).slice() : [],
+    photoLabels: caught ? (pendingPhotoLabels[rod] || []).slice() : []
   };
   for(let n=1; n<=MAX_HOOKS; n++){
     entry['hook'+n] = notes['hook'+n] || '';
@@ -6779,14 +6852,14 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   const typeEl = document.querySelector('.catch-type[data-rod="'+rod+'"]');
   const typeOtherEl = document.querySelector('.catch-type-other[data-rod="'+rod+'"]');
   const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
-  const photoEl = document.querySelector('.catch-photo[data-rod="'+rod+'"]');
   const dateEl = document.querySelector('.catch-date[data-rod="'+rod+'"]');
   if(typeEl) typeEl.value='';
   if(typeOtherEl){ typeOtherEl.value=''; typeOtherEl.style.display='none'; }
   if(weightEl) weightEl.value='';
-  if(photoEl) photoEl.value='';
+  document.querySelectorAll('.catch-photo[data-rod="'+rod+'"]').forEach(el=> el.value = '');
   if(dateEl) dateEl.value='';
   pendingPhotos[rod] = [];
+  pendingPhotoLabels[rod] = [];
   renderPhotoPreview(rod);
 
   // Reset back to the default No-catch state for the next entry on this rod
@@ -6904,8 +6977,9 @@ function catchDetailHtml(c, editable, removable){
   }
   if(c.photos && c.photos.length){
     photoGalleryCache[c.id] = c.photos;
+    photoLabelsCache[c.id] = c.photoLabels || [];
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
-      c.photos.map((p,i)=>`<img class="pc-photo" src="${p}" data-catch-id="${c.id}" data-photo-index="${i}" alt="Catch photo" loading="lazy" decoding="async" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
+      c.photos.map((p,i)=>`<div class="photo-thumb-wrap"><img class="pc-photo" src="${p}" data-catch-id="${c.id}" data-photo-index="${i}" alt="Catch photo" loading="lazy" decoding="async" style="width:90px;height:90px;object-fit:cover;margin-top:0;">${(c.photoLabels||[])[i] ? `<span class="photo-label-tag">${escapeHtml(c.photoLabels[i])}</span>` : ''}</div>`).join('') +
       `</div>`;
   }
   html += `</div>`;
@@ -8644,6 +8718,7 @@ async function openProfile(personId){
   caughtOnly.forEach(c=>{
     if(c.photos && c.photos.length){
       photoGalleryCache[c.id] = c.photos;
+      photoLabelsCache[c.id] = c.photoLabels || [];
       c.photos.forEach((src,i)=> photoEntries.push({src, catchId:c.id, index:i, type:c.type||''}));
     }
   });
@@ -8995,6 +9070,7 @@ document.getElementById('profile-modal-x').addEventListener('click', ()=>{
 
 let currentPhotoCatchId = null;
 let photoGalleryCache = {};
+let photoLabelsCache = {};
 let currentPhotoList = [];
 let currentPhotoIndex = 0;
 
@@ -9007,6 +9083,12 @@ function renderPhotoModalImage(){
     nav.style.display = currentPhotoList.length > 1 ? 'flex' : 'none';
     const counter = document.getElementById('photo-modal-counter');
     if(counter) counter.textContent = (currentPhotoIndex+1) + ' / ' + currentPhotoList.length;
+  }
+  const labelEl = document.getElementById('photo-modal-label');
+  if(labelEl){
+    const label = currentPhotoCatchId && (photoLabelsCache[currentPhotoCatchId] || [])[currentPhotoIndex];
+    labelEl.textContent = label || '';
+    labelEl.style.display = label ? 'inline-block' : 'none';
   }
 }
 function showNextPhoto(){
@@ -9480,7 +9562,7 @@ function renderCatchList(rod){
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)} (${escapeHtml(c.hook||'')})` : `No catch`;
     const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
     const photoCount = (c.photos && c.photos.length) || 0;
-    if(photoCount) photoGalleryCache[c.id] = c.photos;
+    if(photoCount){ photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || []; }
     const thumb = photoCount
       ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="" loading="lazy" decoding="async">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
       : '';
@@ -9514,7 +9596,7 @@ function sessionFeedRowsHtml(entries, emptyMessage){
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}` : `No catch`;
     const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
     const photoCount = (c.photos && c.photos.length) || 0;
-    if(photoCount) photoGalleryCache[c.id] = c.photos;
+    if(photoCount){ photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || []; }
     const thumb = photoCount
       ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="" loading="lazy" decoding="async">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
       : '';
@@ -9734,6 +9816,7 @@ async function renderLeaderboard(){
       catches.forEach(c=>{
         if(c.photos && c.photos.length){
           photoGalleryCache[c.id] = c.photos;
+          photoLabelsCache[c.id] = c.photoLabels || [];
           c.photos.forEach((src,idx)=> bagPhotos.push({src, catchId:c.id, index:idx}));
         }
       });
@@ -9825,6 +9908,7 @@ async function loadFeedItems(fishermanIds){
         weight: c.weight,
         time: new Date(c.time).getTime(),
         photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
+        photoLabels: c.photo_labels ? (typeof c.photo_labels === 'string' ? JSON.parse(c.photo_labels) : c.photo_labels) : [],
         likes: c.likes || 0
       };
     });
@@ -10284,10 +10368,10 @@ async function renderFeed(refetch){
     return;
   }
   html += items.map(it=>{
-    if(it.photos.length) photoGalleryCache[it.id] = it.photos;
+    if(it.photos.length){ photoGalleryCache[it.id] = it.photos; photoLabelsCache[it.id] = it.photoLabels || []; }
     const photoHtml = it.photos.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">` +
-          it.photos.map((src,i)=>`<img class="pc-photo" src="${src}" data-catch-id="${it.id}" data-photo-index="${i}" alt="" loading="lazy" decoding="async" style="width:100%;max-width:220px;height:150px;object-fit:cover;margin-top:0;">`).join('') +
+          it.photos.map((src,i)=>`<div class="photo-thumb-wrap" style="max-width:220px;"><img class="pc-photo" src="${src}" data-catch-id="${it.id}" data-photo-index="${i}" alt="" loading="lazy" decoding="async" style="width:100%;max-width:220px;height:150px;object-fit:cover;margin-top:0;">${(it.photoLabels||[])[i] ? `<span class="photo-label-tag">${escapeHtml(it.photoLabels[i])}</span>` : ''}</div>`).join('') +
         `</div>`
       : '';
     return `<div class="profile-catch">
