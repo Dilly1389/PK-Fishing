@@ -955,8 +955,7 @@
           <div class="status" id="push-status"></div>
           <div id="notification-prefs" style="display:none;margin-top:14px;">
             <div id="battery-reminder" style="display:none;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:var(--ink);">
-              <b>For reliable background alerts:</b> Android can delay notifications until you open the app, unless Chrome's battery usage is set to Unrestricted.
-              <div style="margin-top:8px;"><a id="battery-settings-link" href="#" class="mini-btn" style="text-decoration:none;">Open Chrome's app settings</a></div>
+              <b>For reliable background alerts:</b> Android can delay notifications until you open the app, unless Chrome's battery usage is set to Unrestricted. Find it under Settings → Apps → Chrome → Battery.
             </div>
             <p class="sub-heading">What to notify me about</p>
             <label class="check-row"><input type="checkbox" id="notify-pref-badge"> Badges I earn</label>
@@ -4226,16 +4225,6 @@ async function loadAndRenderNotificationPrefs(){
 
 document.getElementById('notify-pref-rod-alert').addEventListener('change', (e)=>{
   document.getElementById('rod-alert-minutes-wrap').style.display = e.target.checked ? 'block' : 'none';
-});
-
-// Best-effort deep link to Chrome's own App info page (from there: Battery ->
-// Unrestricted). There's no universal Android intent for the Battery sub-screen
-// itself - App info is the one standard AOSP action every Android version
-// supports - and this can still silently do nothing on some OEM skins, so the
-// plain-text instructions above it are the real fallback, not this link.
-document.getElementById('battery-settings-link').addEventListener('click', (e)=>{
-  e.preventDefault();
-  window.location.href = 'intent://com.android.chrome#Intent;scheme=package;action=android.settings.APPLICATION_DETAILS_SETTINGS;end';
 });
 
 document.getElementById('rod-alert-minutes-select').addEventListener('change', (e)=>{
