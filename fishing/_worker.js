@@ -104,6 +104,17 @@ export default {
           headers.set('Location', '/fishing' + loc);
           return new Response(null, { status: res.status, headers });
         }
+        // sw.js registers with scope "/fishing" (no trailing slash, matching the
+        // page's own address above) to actually control this page - by default
+        // a script can only be granted a scope at or under its own directory
+        // ("/fishing/"), so without this header the registration throws a
+        // SecurityError and push notifications silently never work. Verified
+        // by reproducing the exact failure locally before adding this.
+        if (url.pathname === '/fishing/sw.js' && res.ok) {
+          const headers = new Headers(res.headers);
+          headers.set('Service-Worker-Allowed', '/fishing');
+          return new Response(res.body, { status: res.status, headers });
+        }
         return res;
       }
       // Golf lives on its own Cloudflare project, so it's proxied here rather than served from
