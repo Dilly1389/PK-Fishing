@@ -2194,7 +2194,24 @@ let catchToggle = {};
 let pendingPhotos = {};
 // Parallel to pendingPhotos[rod] - "fish" or "scale" per photo, same index
 let pendingPhotoLabels = {};
-RODS.forEach(r => { catchToggle[r] = false; pendingPhotos[r] = []; pendingPhotoLabels[r] = []; });
+// undefined = follow the auto rule (expanded while idle, collapsed once
+// running); true/false = an explicit manual toggle, cleared again on the
+// next Start/Reset so a temporary "let me check the rig" peek while running
+// doesn't permanently override the auto behavior.
+let rodSetupExpanded = {};
+RODS.forEach(r => { catchToggle[r] = false; pendingPhotos[r] = []; pendingPhotoLabels[r] = []; rodSetupExpanded[r] = undefined; });
+
+function isRodSetupExpanded(rod){
+  if(rodSetupExpanded[rod] !== undefined) return rodSetupExpanded[rod];
+  return !(currentPerson && currentPerson.timers[rod] && currentPerson.timers[rod].running);
+}
+function updateRodSetupVisibility(rod){
+  const wrap = document.querySelector('.rod-setup-fields[data-rod="'+rod+'"]');
+  const btn = document.querySelector('.rod-setup-toggle-btn[data-rod="'+rod+'"]');
+  const expanded = isRodSetupExpanded(rod);
+  if(wrap) wrap.style.display = expanded ? 'block' : 'none';
+  if(btn) btn.textContent = 'Rod setup ' + (expanded ? '▾' : '▸');
+}
 
 function rodsOptionsHtml(selected){
   let html = '';
@@ -5760,6 +5777,8 @@ function rodCardHtml(r){
           <input type="number" min="5" max="1440" step="1" class="rod-alert-custom" data-rod="${r}" placeholder="Minutes" style="display:none;margin-top:8px;">
         </div>
       </div>` : ''}
+      <button type="button" class="mini-btn rod-setup-toggle-btn" data-rod="${r}" style="margin-bottom:10px;">Rod setup ${isRodSetupExpanded(r) ? '▾' : '▸'}</button>
+      <div class="rod-setup-fields" data-rod="${r}" style="display:${isRodSetupExpanded(r) ? 'block' : 'none'};">
       ${isSignedIn() ? `
       <div class="row2">
         <div class="field">
@@ -5802,6 +5821,7 @@ function rodCardHtml(r){
           <label>Rod note</label>
           <input type="text" maxlength="200" class="rod-field" data-rod="${r}" data-key="rodNote" placeholder="Margin, near the reeds..." autocomplete="pk-rod-note-${r}" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
+      </div>
       </div>
       <hr class="divider">
       <p class="sub-heading">Record a catch</p>
@@ -5965,6 +5985,13 @@ function attachRodCardHandlers(){
         openRecastConfirm(rod);
         return;
       }
+      // Starting or resetting is exactly the moment the auto rod-setup-collapse
+      // rule should take back over from any temporary manual toggle - dropping
+      // back to "follow the running state" collapses it on start, re-expands on reset.
+      if(action==='start' || action==='reset'){
+        rodSetupExpanded[rod] = undefined;
+        updateRodSetupVisibility(rod);
+      }
       renderTimers();
       await saveRodState(currentPersonId, rod);
       // A fresh start_ts means a brand new run — clear any rod-alert marker
@@ -6026,6 +6053,13 @@ function attachRodCardHandlers(){
     btn.addEventListener('click', ()=>{
       const wrap = document.querySelector('.rod-alert-fields[data-rod="'+btn.dataset.rod+'"]');
       if(wrap) wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+    });
+  });
+  document.querySelectorAll('.rod-setup-toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const rod = btn.dataset.rod;
+      rodSetupExpanded[rod] = !isRodSetupExpanded(rod);
+      updateRodSetupVisibility(rod);
     });
   });
   document.querySelectorAll('.rod-alert-select').forEach(sel=>{
@@ -9596,6 +9630,10 @@ document.getElementById('photo-comment-post-btn').addEventListener('click', asyn
 
 async function setActivePerson(id){
   currentPersonId = id;
+  // A fresh person means a fresh read of the auto rod-setup-collapse rule -
+  // an override left over from the previous angler on a shared device
+  // shouldn't carry across to this one.
+  RODS.forEach(r => { rodSetupExpanded[r] = undefined; });
   if(!id){ currentPerson = null; renderAll(); return; }
   currentPerson = await loadPerson(id);
   document.getElementById('angler-select').value = id;
