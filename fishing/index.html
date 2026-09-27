@@ -952,6 +952,7 @@
         <div id="notifications-body">
           <p class="pc-line muted">Get notified on this device — even when the app isn't open — when someone follows you, comments on a catch, or a rod's been out a while.</p>
           <button class="primary-btn" id="enable-push-btn">Enable notifications on this device</button>
+          <button class="mini-btn danger" id="disable-push-btn" style="display:none;">Disable notifications on this device</button>
           <div class="status" id="push-status"></div>
           <div id="notification-prefs" style="display:none;margin-top:14px;">
             <div id="battery-reminder" style="display:none;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:var(--ink);">
@@ -4180,8 +4181,10 @@ async function loadAndRenderNotificationPrefs(){
     subscription = await reg.pushManager.getSubscription();
   }catch(e){ console.error('Push status check failed', e); }
 
-  enableBtn.textContent = subscription ? 'Notifications enabled on this device' : 'Enable notifications on this device';
-  enableBtn.disabled = !!subscription;
+  enableBtn.textContent = 'Enable notifications on this device';
+  enableBtn.style.display = subscription ? 'none' : 'block';
+  const disableBtn = document.getElementById('disable-push-btn');
+  if(disableBtn) disableBtn.style.display = subscription ? 'inline-flex' : 'none';
   prefsWrap.style.display = subscription ? 'block' : 'none';
 
   // Android specifically defers background push during Doze/battery
@@ -4267,6 +4270,29 @@ document.getElementById('enable-push-btn').addEventListener('click', async ()=>{
   }catch(e){
     console.error('Enable push failed', e);
     st.textContent = 'Could not enable notifications: ' + (e.message || 'unknown error');
+  }
+});
+
+document.getElementById('disable-push-btn').addEventListener('click', async ()=>{
+  const st = document.getElementById('push-status');
+  st.textContent = 'Disabling...';
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.getSubscription();
+    if(subscription){
+      const endpoint = subscription.endpoint;
+      await subscription.unsubscribe();
+      // Best-effort - the browser side unsubscribe above is what actually
+      // stops it working even if this fails, so don't block on it
+      try{ await sbDelete('push_subscriptions', 'endpoint=eq.'+encodeURIComponent(endpoint)); }
+      catch(e){ console.error('Could not remove push subscription row', e); }
+    }
+    st.textContent = 'Disabled.';
+    setTimeout(()=> st.textContent='', 1500);
+    await loadAndRenderNotificationPrefs();
+  }catch(e){
+    console.error('Disable push failed', e);
+    st.textContent = 'Could not disable: ' + (e.message || 'unknown error');
   }
 });
 
