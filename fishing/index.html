@@ -11682,6 +11682,13 @@ async function renderSpectatorCompetition(compId){
   await loadPeople();
   let oauthProfile = null;
   if(cameFromOAuth && cameFromOAuth !== 'recovery') oauthProfile = await ensureProfileForCurrentUser();
+  // The email/password sign-up form notifies admins of a new angler right
+  // where it creates the profile - Google sign-in creates one here instead,
+  // so it needs the same call or a Google sign-up joins completely silently.
+  if(oauthProfile && oauthProfile.isNew){
+    try{ await sbRpc('notify_admins_new_signup', {p_fisherman_id: oauthProfile.id}); }
+    catch(e){ console.error('admin signup notify failed', e); }
+  }
   renderAccountArea();
   await loadKnownRodOptions();
   await loadKnownRigs();
