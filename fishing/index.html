@@ -947,7 +947,7 @@
         <button class="primary-btn" id="open-insights-btn">View my insights</button>
       </section>
 
-      <section class="card" id="notifications-card">
+      <section class="card" id="notifications-card" style="display:none;">
         <h2>Notifications</h2>
         <div id="notifications-body">
           <p class="pc-line muted">Get notified on this device — even when the app isn't open — when someone follows you, comments on a catch, or a rod's been out a while.</p>
@@ -3673,6 +3673,7 @@ function renderAccountArea(){
   const dangerCard = document.getElementById('danger-zone-card');
   const reelRecordsCard = document.getElementById('reel-records-settings-card');
   const pastCatchCard = document.getElementById('past-catch-card');
+  const notificationsCard = document.getElementById('notifications-card');
   if(session && session.user){
     if(authForms) authForms.style.display = 'none';
     if(signedInArea) signedInArea.style.display = 'block';
@@ -3693,6 +3694,7 @@ function renderAccountArea(){
     }
     if(dangerCard) dangerCard.style.display = 'block';
     if(reelRecordsCard) reelRecordsCard.style.display = 'block';
+    if(notificationsCard) notificationsCard.style.display = 'block';
     populateMyDetails();
     makeCardCollapsible('my-details-card', 'my-details-body', 'pk_fishing_collapse_details');
     makeCardCollapsible('reel-records-settings-card', 'reel-records-settings-body', 'pk_fishing_collapse_reelrecords');
@@ -3708,6 +3710,7 @@ function renderAccountArea(){
     if(pastCatchCard) pastCatchCard.style.display = 'none';
     if(dangerCard) dangerCard.style.display = 'none';
     if(reelRecordsCard) reelRecordsCard.style.display = 'none';
+    if(notificationsCard) notificationsCard.style.display = 'none';
   }
   updateTackleVisibility();
   updateTimersVisibility();
