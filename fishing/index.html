@@ -5745,7 +5745,7 @@ function rodCardHtml(r){
       </div>
       ${isSignedIn() ? `
       <div style="margin-bottom:14px;">
-        <button type="button" class="mini-btn rod-alert-toggle-btn" data-rod="${r}">⏱ Alert: <span class="rod-alert-summary" data-rod="${r}">your default</span></button>
+        <button type="button" class="mini-btn rod-alert-toggle-btn" data-rod="${r}">⏱ Alert:&nbsp;<span class="rod-alert-summary" data-rod="${r}">your default</span></button>
         <div class="field rod-alert-fields" data-rod="${r}" style="display:none;margin-top:10px;">
           <label>Alert time for this rod</label>
           <select class="rod-alert-select" data-rod="${r}">
@@ -6457,10 +6457,17 @@ async function renderSessionWeather(){
   }
   if(moon) parts.push(`${moon.emoji} ${moon.label}`);
 
-  el.style.display = 'block';
   el.style.cursor = weatherCache.coords ? 'pointer' : 'default';
+  // A floated "Forecast ›" here used to fight the weather text for the same
+  // line - fine when short, but wrapped and landed in odd spots once the
+  // text got long (wind, cloud and pressure all present). Flex keeps the
+  // two parts cleanly side by side regardless of length.
+  el.style.display = 'flex';
+  el.style.justifyContent = 'space-between';
+  el.style.alignItems = 'center';
+  el.style.gap = '8px';
   el.innerHTML = `<span>${escapeHtml(parts.join(' · '))}</span>` +
-    (weatherCache.coords ? `<span style="float:right;opacity:.7;">Forecast ›</span>` : '');
+    (weatherCache.coords ? `<span style="opacity:.7;flex-shrink:0;">Forecast ›</span>` : '');
   el.onclick = weatherCache.coords ? openForecast : null;
 }
 
