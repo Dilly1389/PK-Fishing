@@ -954,6 +954,10 @@
           <button class="primary-btn" id="enable-push-btn">Enable notifications on this device</button>
           <div class="status" id="push-status"></div>
           <div id="notification-prefs" style="display:none;margin-top:14px;">
+            <div id="battery-reminder" style="display:none;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;color:var(--ink);">
+              <b>For reliable background alerts:</b> Android can delay notifications until you open the app, unless Chrome's battery usage is set to Unrestricted.
+              <div style="margin-top:8px;"><a id="battery-settings-link" href="#" class="mini-btn" style="text-decoration:none;">Open Chrome's app settings</a></div>
+            </div>
             <p class="sub-heading">What to notify me about</p>
             <label class="check-row"><input type="checkbox" id="notify-pref-badge"> Badges I earn</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-follow"> New followers</label>
@@ -1759,7 +1763,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Rod alerts</div>
-      <div class="pc-line muted">Turn this on under Profile → Notifications and PK Fishing will notify you — even with the app closed — once a running rod's been out longer than the time you choose. Recasting or starting a rod fresh resets it, so you'll get alerted again on the next long soak.</div>
+      <div class="pc-line muted">Turn this on under Profile → Notifications and PK Fishing will notify you — even with the app closed — once a running rod's been out longer than the time you choose. Recasting or starting a rod fresh resets it, so you'll get alerted again on the next long soak. Need one rod checked sooner than the rest — a livebait rod versus a boilie rod, say? Tap "⏱ Alert" on that rod's card to give it its own time instead of your account-wide default.</div>
     </div>
     <button class="primary-btn" id="timers-help-close" style="margin-top:14px;">Got it</button>
   </div>
@@ -4160,6 +4164,15 @@ async function loadAndRenderNotificationPrefs(){
   enableBtn.disabled = !!subscription;
   prefsWrap.style.display = subscription ? 'block' : 'none';
 
+  // Android specifically defers background push during Doze/battery
+  // optimization unless Chrome's battery usage is set to Unrestricted -
+  // desktop and iOS don't have this problem, so only show it on Android.
+  const batteryReminder = document.getElementById('battery-reminder');
+  if(batteryReminder){
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    batteryReminder.style.display = (subscription && isAndroid) ? 'block' : 'none';
+  }
+
   if(subscription && isSignedIn()){
     try{
       const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_tackle_share,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
@@ -4192,6 +4205,16 @@ async function loadAndRenderNotificationPrefs(){
 
 document.getElementById('notify-pref-rod-alert').addEventListener('change', (e)=>{
   document.getElementById('rod-alert-minutes-wrap').style.display = e.target.checked ? 'block' : 'none';
+});
+
+// Best-effort deep link to Chrome's own App info page (from there: Battery ->
+// Unrestricted). There's no universal Android intent for the Battery sub-screen
+// itself - App info is the one standard AOSP action every Android version
+// supports - and this can still silently do nothing on some OEM skins, so the
+// plain-text instructions above it are the real fallback, not this link.
+document.getElementById('battery-settings-link').addEventListener('click', (e)=>{
+  e.preventDefault();
+  window.location.href = 'intent://com.android.chrome#Intent;scheme=package;action=android.settings.APPLICATION_DETAILS_SETTINGS;end';
 });
 
 document.getElementById('rod-alert-minutes-select').addEventListener('change', (e)=>{
@@ -5594,7 +5617,10 @@ async function loadPerson(id){
         rodItemId: row ? (row.rod_item_id||'') : '',
         reelItemId: row ? (row.reel_item_id||'') : '',
         castDistance: row ? (row.cast_distance ?? '') : '',
-        rodNote: row ? (row.rod_note||'') : ''
+        rodNote: row ? (row.rod_note||'') : '',
+        // null/missing = use the account-wide default from Profile ->
+        // Notifications; only set when this rod has its own override.
+        alertMinutes: row ? (row.alert_minutes ?? null) : null
       };
       for(let n=1; n<=MAX_HOOKS; n++){
         noteObj['hook'+n] = row ? (row['hook'+n+'_note']||'') : '';
@@ -5626,7 +5652,8 @@ async function saveRodState(personId, rod){
     identifier: n.identifier, dot_color: n.dotColor, rig: n.rig, rig_id: n.rigId || null, hook_count: n.hookCount,
     rod_item_id: n.rodItemId || null, reel_item_id: n.reelItemId || null,
     cast_distance: n.castDistance ? parseFloat(n.castDistance) : null,
-    rod_note: n.rodNote || null
+    rod_note: n.rodNote || null,
+    alert_minutes: (n.alertMinutes != null && n.alertMinutes > 0) ? n.alertMinutes : null
   };
   for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = n['hook'+i] || ''; }
 
@@ -5707,6 +5734,23 @@ function rodCardHtml(r){
           <span class="start-time-label" id="start-time-${r}"></span>
         </div>
       </div>
+      ${isSignedIn() ? `
+      <div style="margin-bottom:14px;">
+        <button type="button" class="mini-btn rod-alert-toggle-btn" data-rod="${r}">⏱ Alert: <span class="rod-alert-summary" data-rod="${r}">your default</span></button>
+        <div class="field rod-alert-fields" data-rod="${r}" style="display:none;margin-top:10px;">
+          <label>Alert time for this rod</label>
+          <select class="rod-alert-select" data-rod="${r}">
+            <option value="">Use my default</option>
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="90">1.5 hours</option>
+            <option value="120">2 hours</option>
+            <option value="180">3 hours</option>
+            <option value="custom">Custom</option>
+          </select>
+          <input type="number" min="5" max="1440" step="1" class="rod-alert-custom" data-rod="${r}" placeholder="Minutes" style="display:none;margin-top:8px;">
+        </div>
+      </div>` : ''}
       ${isSignedIn() ? `
       <div class="row2">
         <div class="field">
@@ -5973,6 +6017,37 @@ function attachRodCardHandlers(){
       if(!currentPerson) return;
       currentPerson.notes[sel.dataset.rod][sel.dataset.key] = sel.value;
       await saveRodState(currentPersonId, sel.dataset.rod);
+    });
+  });
+  document.querySelectorAll('.rod-alert-toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const wrap = document.querySelector('.rod-alert-fields[data-rod="'+btn.dataset.rod+'"]');
+      if(wrap) wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+    });
+  });
+  document.querySelectorAll('.rod-alert-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const rod = sel.dataset.rod;
+      const customInput = document.querySelector('.rod-alert-custom[data-rod="'+rod+'"]');
+      if(sel.value === 'custom'){
+        if(customInput){ customInput.style.display = 'block'; customInput.focus(); }
+        return; // wait for a number before saving
+      }
+      if(customInput){ customInput.style.display = 'none'; customInput.value = ''; }
+      if(!currentPerson) return;
+      currentPerson.notes[rod].alertMinutes = sel.value ? parseInt(sel.value, 10) : null;
+      await saveRodState(currentPersonId, rod);
+      updateRodAlertSummary(rod);
+    });
+  });
+  document.querySelectorAll('.rod-alert-custom').forEach(inp=>{
+    inp.addEventListener('blur', async ()=>{
+      const rod = inp.dataset.rod;
+      if(!currentPerson) return;
+      const val = parseInt(inp.value, 10);
+      currentPerson.notes[rod].alertMinutes = (val >= 5) ? val : null;
+      await saveRodState(currentPersonId, rod);
+      updateRodAlertSummary(rod);
     });
   });
   document.querySelectorAll('.catch-photo').forEach(inp=>{
@@ -6571,7 +6646,8 @@ async function clearAllRodState(){
       bom:'', rig:'', identifier:'',
       dotColor: '#C1440E',
       hookCount: 2,
-      rodItemId: '', reelItemId: ''
+      rodItemId: '', reelItemId: '',
+      alertMinutes: null
     };
     for(let n=1; n<=MAX_HOOKS; n++){ cleared['hook'+n] = ''; }
     currentPerson.notes[r] = cleared;
@@ -9556,6 +9632,18 @@ function renderTimers(){
     }
   });
 }
+// 30/60/90/120/180 read as their friendly Profile-page names; anything
+// else (a custom value) just shows the raw minutes.
+function formatAlertMinutes(mins){
+  const preset = {30:'30 minutes', 60:'1 hour', 90:'1.5 hours', 120:'2 hours', 180:'3 hours'};
+  return preset[mins] || (mins + ' min');
+}
+function updateRodAlertSummary(rod){
+  const el = document.querySelector('.rod-alert-summary[data-rod="'+rod+'"]');
+  if(!el) return;
+  const mins = currentPerson ? currentPerson.notes[rod].alertMinutes : null;
+  el.textContent = mins ? formatAlertMinutes(mins) : 'your default';
+}
 function renderNotes(){
   RODS.forEach(r=>{
     const rigSel = document.querySelector('.rod-select[data-rod="'+r+'"][data-key="rig"]');
@@ -9577,6 +9665,24 @@ function renderNotes(){
       const gearSel = document.querySelector('.gear-select[data-rod="'+r+'"][data-key="'+k+'"]');
       if(gearSel) gearSel.value = (currentPerson && currentPerson.notes[r][k]) || '';
     });
+
+    const alertMins = currentPerson ? currentPerson.notes[r].alertMinutes : null;
+    const alertSel = document.querySelector('.rod-alert-select[data-rod="'+r+'"]');
+    const alertCustom = document.querySelector('.rod-alert-custom[data-rod="'+r+'"]');
+    if(alertSel){
+      const knownAlertVals = Array.from(alertSel.options).map(o=>o.value).filter(v=>v && v!=='custom');
+      if(!alertMins){
+        alertSel.value = '';
+        if(alertCustom){ alertCustom.style.display = 'none'; alertCustom.value = ''; }
+      }else if(knownAlertVals.includes(String(alertMins))){
+        alertSel.value = String(alertMins);
+        if(alertCustom){ alertCustom.style.display = 'none'; alertCustom.value = ''; }
+      }else{
+        alertSel.value = 'custom';
+        if(alertCustom){ alertCustom.style.display = 'block'; alertCustom.value = alertMins; }
+      }
+    }
+    updateRodAlertSummary(r);
   });
 }
 function renderCatchList(rod){
