@@ -962,7 +962,9 @@
                 <option value="90">1.5 hours</option>
                 <option value="120">2 hours</option>
                 <option value="180">3 hours</option>
+                <option value="custom">Custom</option>
               </select>
+              <input type="number" min="1" max="1440" step="1" id="rod-alert-minutes-custom" placeholder="Minutes" style="display:none;margin-top:8px;" autocomplete="pk-x28" role="presentation" data-form-type="other">
             </div>
             <button class="mini-btn" id="save-notification-prefs-btn" style="margin-top:10px;">Save preferences</button>
             <div class="status" id="notification-prefs-status"></div>
@@ -4162,7 +4164,19 @@ async function loadAndRenderNotificationPrefs(){
         const rodAlertCb = document.getElementById('notify-pref-rod-alert');
         if(rodAlertCb) rodAlertCb.checked = !!f.notify_push_rod_alert;
         document.getElementById('rod-alert-minutes-wrap').style.display = f.notify_push_rod_alert ? 'block' : 'none';
-        document.getElementById('rod-alert-minutes-select').value = String(f.rod_alert_minutes || 120);
+        const minutesSel = document.getElementById('rod-alert-minutes-select');
+        const minutesCustom = document.getElementById('rod-alert-minutes-custom');
+        const minutesVal = f.rod_alert_minutes || 120;
+        const knownMinutes = Array.from(minutesSel.options).map(o=>o.value);
+        if(knownMinutes.includes(String(minutesVal))){
+          minutesSel.value = String(minutesVal);
+          minutesCustom.style.display = 'none';
+          minutesCustom.value = '';
+        }else{
+          minutesSel.value = 'custom';
+          minutesCustom.style.display = 'block';
+          minutesCustom.value = minutesVal;
+        }
       }
     }catch(e){ console.error('Could not load notification preferences', e); }
   }
@@ -4170,6 +4184,10 @@ async function loadAndRenderNotificationPrefs(){
 
 document.getElementById('notify-pref-rod-alert').addEventListener('change', (e)=>{
   document.getElementById('rod-alert-minutes-wrap').style.display = e.target.checked ? 'block' : 'none';
+});
+
+document.getElementById('rod-alert-minutes-select').addEventListener('change', (e)=>{
+  document.getElementById('rod-alert-minutes-custom').style.display = e.target.value === 'custom' ? 'block' : 'none';
 });
 
 document.getElementById('enable-push-btn').addEventListener('click', async ()=>{
@@ -4222,7 +4240,11 @@ document.getElementById('save-notification-prefs-btn').addEventListener('click',
     if(cb) patch['notify_push_'+key] = cb.checked;
   });
   patch.notify_push_rod_alert = document.getElementById('notify-pref-rod-alert').checked;
-  patch.rod_alert_minutes = parseInt(document.getElementById('rod-alert-minutes-select').value, 10) || 120;
+  const minutesSelVal = document.getElementById('rod-alert-minutes-select').value;
+  const minutesRaw = minutesSelVal === 'custom'
+    ? parseInt(document.getElementById('rod-alert-minutes-custom').value, 10)
+    : parseInt(minutesSelVal, 10);
+  patch.rod_alert_minutes = (minutesRaw > 0) ? minutesRaw : 120;
   st.textContent = 'Saving...';
   try{
     await sbPatch('fishermen', 'id=eq.'+myId, patch);
