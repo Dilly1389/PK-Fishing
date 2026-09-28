@@ -20,15 +20,34 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PK Fishing" id="apple-title-meta">
-<!-- PostHog: bare install for now (basic visit/usage numbers via its default
-     autocapture) - custom events for specific actions (catch logged, session
-     started, etc.) are a deliberate follow-up, not done yet. -->
+<!-- PostHog: page-view autocapture plus a small set of custom events for the
+     actions that actually say whether a feature gets used (catch logged,
+     session started, notifications enabled, tackle/rig built, sign-up/sign-in).
+     No email, name, GPS or catch weight/species is ever sent - see pkTrack()
+     and pkIdentify() below for what does and doesn't get captured. -->
 <script>
     !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],Object.defineProperty(u,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e}}),Object.defineProperty(u.people,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(){return u.toString(1)+".people (stub)"}}),o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
     posthog.init('phc_AkoHcXum7GzqdmJB2q2rZbofhxu9avuArZnzWK3q2x6k', {
         api_host: 'https://eu.i.posthog.com',
         defaults: '2026-05-30',
     })
+    // Thin wrappers so every call site stays a one-liner and a blocked/missing
+    // posthog (ad-blockers strip it often) can never break the app.
+    // pkTrack: fire a custom event. Keep properties to non-identifying shape
+    // info only (counts, booleans, enum-like strings) - never raw text, GPS,
+    // email or a person's name.
+    function pkTrack(event, props){
+      try{ if(window.posthog && window.posthog.capture) window.posthog.capture(event, props || {}); }catch(e){}
+    }
+    // pkIdentify: tie events to a returning angler using the same internal
+    // fisherman id already used throughout the app (opaque uuid, not PII) -
+    // never the email or display name.
+    function pkIdentify(fishermanId){
+      try{ if(window.posthog && window.posthog.identify && fishermanId) window.posthog.identify(fishermanId); }catch(e){}
+    }
+    function pkReset(){
+      try{ if(window.posthog && window.posthog.reset) window.posthog.reset(); }catch(e){}
+    }
 </script>
 <script>
   (function(){
@@ -2623,6 +2642,7 @@ document.getElementById('combo-create-btn').addEventListener('click', async ()=>
     comboDraft.hooks = {};
     document.getElementById('combo-hook-fields').innerHTML = '';
     st.textContent = 'Saved.';
+    pkTrack('bait_combination_created');
     setTimeout(()=> st.textContent='', 1200);
     renderCombosList();
   }catch(e){
@@ -4000,6 +4020,8 @@ document.getElementById('signup-btn').addEventListener('click', async ()=>{
     try{ await sbRpc('notify_admins_new_signup', {p_fisherman_id: id}); }
     catch(e){ console.error('admin signup notify failed', e); }
 
+    pkIdentify(id);
+    pkTrack('sign_up', {method: 'email'});
     renderAccountArea();
     await loadGearOptions();
 await loadTackleCategoryOptions();
@@ -4063,7 +4085,9 @@ await loadTackleCategoryOptions();
     populateAnglerSelect();
     if(myFishermanId){
       await setActivePerson(myFishermanId);
+      pkIdentify(myFishermanId);
     }
+    pkTrack('sign_in', {method: 'email'});
     updateTimersVisibility();
     // Someone who arrived via an invite link while signed out — finish the
     // join now that we know who they are
@@ -4088,6 +4112,7 @@ document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
   knownRodGear = [];
   knownReelGear = [];
   followedIds = new Set();
+  pkReset();
   renderAccountArea();
   await setActivePerson(null);
   populateAnglerSelect();
@@ -4272,6 +4297,7 @@ document.getElementById('enable-push-btn').addEventListener('click', async ()=>{
       st.textContent = permission === 'denied'
         ? 'Blocked — allow notifications for this site in your browser settings, then try again.'
         : 'Permission was not granted — you can try again any time.';
+      pkTrack('notifications_permission_result', {result: permission});
       await loadAndRenderNotificationPrefs();
       return;
     }
@@ -4294,6 +4320,7 @@ document.getElementById('enable-push-btn').addEventListener('click', async ()=>{
       user_agent: navigator.userAgent
     }, 'endpoint');
     st.textContent = 'Enabled!';
+    pkTrack('notifications_enabled');
     setTimeout(()=> st.textContent='', 1500);
     await loadAndRenderNotificationPrefs();
   }catch(e){
@@ -4317,6 +4344,7 @@ document.getElementById('disable-push-btn').addEventListener('click', async ()=>
       catch(e){ console.error('Could not remove push subscription row', e); }
     }
     st.textContent = 'Disabled.';
+    pkTrack('notifications_disabled');
     setTimeout(()=> st.textContent='', 1500);
     await loadAndRenderNotificationPrefs();
   }catch(e){
@@ -5177,6 +5205,7 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
     if(feedWrap) feedWrap.innerHTML = feedMethodChecksHtml([], 'rig-feed');
     photoEl.value = '';
     st.textContent = 'Created.';
+    pkTrack('rig_created', {hasPhoto: !!photo, usesBom: feedMethods.length > 0});
     setTimeout(()=> st.textContent='', 1200);
     await loadKnownRigs();
     renderRigsList();
@@ -5600,6 +5629,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
     document.getElementById('tackle-fill-bar').style.height = '100%';
     document.getElementById('tackle-fill-readout').textContent = '100% left';
     st.textContent = 'Added.';
+    pkTrack('tackle_item_added', {category: categoryValue, hasPhoto: !!photo});
     setTimeout(()=> st.textContent='', 1200);
     renderTackleList();
     if(categoryValue === 'Rods' || categoryValue === 'Reels'){
@@ -6691,6 +6721,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
     document.getElementById('session-competition').value = '';
     st.textContent = '';
     activeSession = sessionRecord;
+    pkTrack('session_started', {rods, hasCompetition: !!competitionId});
     await renderSessionUi();
     await renderActiveCompetitionsBar();
     renderAll();
@@ -6771,6 +6802,9 @@ document.getElementById('session-end-btn').addEventListener('click', async ()=>{
   if(!activeSession) return;
   if(!window.confirm('End this session?\n\nYour rods, timers and rig selections will be cleared. Logged catches are kept.')) return;
   const endedAt = new Date().toISOString();
+  const startedAt = activeSession.started_at ? new Date(activeSession.started_at) : null;
+  const durationMinutes = startedAt ? Math.round((new Date(endedAt) - startedAt) / 60000) : null;
+  pkTrack('session_ended', {durationMinutes, rods: activeSession.rods});
   try{
     if(navigator.onLine){
       await sbPatch('sessions', 'id=eq.'+activeSession.id, {ended_at: endedAt});
@@ -7113,6 +7147,11 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   }
 
   await insertCatch(currentPersonId, entry);
+  pkTrack('catch_entry_saved', {
+    caught: !!entry.caught,
+    hasPhoto: !!(entry.photos && entry.photos.length),
+    inSession: !!activeSession
+  });
   // Re-render now the entry has its session attached — the earlier render
   // ran before that, so the list would have filtered it out
   renderCatchList(rod);
@@ -9873,6 +9912,7 @@ function goToTab(tabName){
 
   try{ localStorage.setItem('pk_fishing_active_tab', tabName); }catch(e){}
   window.scrollTo({top: 0, behavior: 'smooth'});
+  pkTrack('tab_viewed', {tab: tabName});
 
   if(tabName==='home') renderHome();
   if(tabName==='whatsnew') renderWhatsNew();
@@ -11714,6 +11754,15 @@ async function renderSpectatorCompetition(compId){
   if(oauthProfile && oauthProfile.isNew){
     try{ await sbRpc('notify_admins_new_signup', {p_fisherman_id: oauthProfile.id}); }
     catch(e){ console.error('admin signup notify failed', e); }
+  }
+  if(oauthProfile){
+    pkIdentify(oauthProfile.id);
+    pkTrack(oauthProfile.isNew ? 'sign_up' : 'sign_in', {method: 'google'});
+  }else if(isSignedIn()){
+    // Returning visit with an existing session already in storage (not a
+    // fresh sign-in) - still worth tying events to who it is.
+    const myId = getMyFishermanId();
+    if(myId) pkIdentify(myId);
   }
   renderAccountArea();
   await loadKnownRodOptions();
