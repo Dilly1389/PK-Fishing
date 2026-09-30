@@ -580,6 +580,11 @@
     border:none;padding:0;background:transparent;margin:auto;
     max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);
   }
+  /* The "How it works" walkthroughs are long reads, so they use more of a wide screen */
+  dialog#onboarding-modal .modal-card, dialog#timers-help-modal .modal-card,
+  dialog#profile-help-modal .modal-card, dialog#tackle-help-modal .modal-card{
+    max-width:min(92vw,560px);max-height:88vh;
+  }
   dialog#confirm-modal::backdrop, dialog#forecast-modal::backdrop, dialog#venue-catches-modal::backdrop,
   dialog#venue-edit-modal::backdrop, dialog#session-edit-modal::backdrop, dialog#recast-confirm-modal::backdrop,
   dialog#pin-drop-modal::backdrop, dialog#badge-bookcase-modal::backdrop, dialog#badge-detail-modal::backdrop,
@@ -663,7 +668,7 @@
     <!-- TIMERS -->
     <!-- HOME -->
     <div class="panel active" id="panel-home">
-      <div style="text-align:center;margin-bottom:14px;">
+      <div style="margin-bottom:14px;">
         <button type="button" class="mini-btn" id="show-onboarding-btn"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How it works</button>
       </div>
 
@@ -1776,23 +1781,23 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">2. Start a session</div>
-      <div class="pc-line muted">On the Timers tab, set your venue and how many rods you're on. If a competition you're in is running, tap its banner to fish it — that tags every catch to it automatically.</div>
+      <div class="pc-line muted">On the Timers tab, set your venue, how many rods you're on and, if you have one, your peg or stand number. If a competition you're in is running, tap its banner to fish it — that tags every catch to it automatically.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">3. Run your timers</div>
-      <div class="pc-line muted">Start a timer when a rod goes out. Pick the rig, feed method and baits you're using for that rod, and jot a distance or a quick note if it's worth remembering.</div>
+      <div class="pc-line muted">Start a timer when a rod goes out. Pick the rig, feed method and baits you're using for that rod — and what went into the bom or PVA bag, if your rig uses one — then jot a distance or a quick note if it's worth remembering. Tap Rebait to put back your last rig and baits in one go.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">4. Log your catches</div>
-      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time, and the weather and moon phase at the time, are all recorded automatically.</div>
+      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time, and the weather and moon phase at the time, are all recorded automatically. The timer resets afterwards, but the rig, distance and note stay on the rod, so you only need to pick new baits before the next cast.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">5. See what's working</div>
-      <div class="pc-line muted">The Insights tab shows which rigs and baits actually land fish for you. Your Reel Records and badges build up on your profile as you go.</div>
+      <div class="pc-line muted">The Insights tab shows which rigs, baits and feed methods actually land fish for you — and how often, like "4 fish from 12 casts" — plus your best venues and how your sessions went. Your Reel Records and badges build up on your profile as you go, from your first catch to weather badges like Rainmaker and Frosty.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">6. Home is your landing spot</div>
-      <div class="pc-line muted">Current conditions, your running session, live competitions, and the latest catches from your mates — all in one place, so you don't need to check three tabs to see what's happening.</div>
+      <div class="pc-line muted">Current conditions, your running session, live competitions, and the latest catches and new badges from your mates — all in one place. Tap a catch to open that angler's profile, or a badge to see what it is and every time they've earned it.</div>
     </div>
     <button class="primary-btn" id="onboarding-close" style="margin-top:14px;">Got it</button>
   </div>
@@ -1824,19 +1829,19 @@
     <h3 style="margin-top:0;"><i class="ti ti-clock" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How Timers works</h3>
     <div class="profile-catch">
       <div class="pc-head">Start a session</div>
-      <div class="pc-line muted">Set your venue and how many rods you're on before your rods appear. If you're taking part in a competition that's running today, a banner shows above — tap it to fish that competition, which locks in the venue and tags every catch to it.</div>
+      <div class="pc-line muted">Set your venue, how many rods you're on and, if you have one, your peg or stand number before your rods appear. You can change the peg at any time, and it shows on your session cards and in Insights. If you're taking part in a competition that's running today, a banner shows above — tap it to fish that competition, which locks in the venue and tags every catch to it.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Conditions and Session Log</div>
-      <div class="pc-line muted">Once a session starts, current weather and moon phase show above your rods — tap it for a full forecast. Below that, Session Log is somewhere to jot how the trip's going as you fish; it's collapsed by default, tap to open it.</div>
+      <div class="pc-line muted">Once a session starts, current weather and moon phase show above your rods — tap it for a full forecast. On a long session the weather is refreshed when you log a catch, so each one gets the conditions from that moment. Below that, Session Log is somewhere to jot how the trip's going as you fish; it's collapsed by default, tap to open it.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Your rods</div>
-      <div class="pc-line muted">Tap a rod's name to rename it. Pick a colour, a rig, a feed method, and baits for each hook — all pulled from your tackle box, so tick "Use" on gear back there if it's missing here. If you've named your hooks (Top, Bottom, whatever you call them), those names show up here too. There's also a spot for the distance you're casting and a quick note on that rod's spot.</div>
+      <div class="pc-line muted">Tap a rod's name to rename it. Pick a colour, a rig, a feed method, and baits for each hook — all pulled from your tackle box (dips included), so tick "Use" on gear back there if it's missing here. If your rig uses a bom, PVA bag, PVA mesh / stick, stringer or bait boat, you can also record what went into it. Back on a rod with nothing picked? Tap Rebait to put back your last rig and baits. If you've named your hooks (Top, Bottom, whatever you call them), those names show up here too. There's also a spot for the distance you're casting and a quick note on that rod's spot.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Running a timer</div>
-      <div class="pc-line muted">Start it when a rod goes out. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. It resets automatically once you log a catch or a blank, ready for the next run. Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
+      <div class="pc-line muted">Start it when a rod goes out. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. It resets automatically once you log a catch or a blank, ready for the next run — your rig, distance and note stay on the rod, and only the baits are cleared. Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Recast</div>
@@ -1845,6 +1850,10 @@
     <div class="profile-catch">
       <div class="pc-head">Logging a catch</div>
       <div class="pc-line muted">Tap "Caught a fish" for the full form, or "No catch" to log a blank instantly. Your soak time is recorded automatically from the timer.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">This session's feed</div>
+      <div class="pc-line muted">A running list of everything logged this session, across every rod, so you can see at a glance what's happened. Past sessions get the same recap from Insights → Edit session.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Ending a session</div>
@@ -1863,7 +1872,7 @@
     <h3 style="margin-top:0;"><i class="ti ti-user" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How the Profile works</h3>
     <div class="profile-catch">
       <div class="pc-head">Followers, following, and badges</div>
-      <div class="pc-line muted">Both counts are tappable — see who follows you or who you follow. Your three most recent badges show below — tap any one for its full description, and for repeatable ones, every single time you've earned it. "View all" opens Fins of Fame, a full display cabinet of everything there is to earn. Empty slots stay a mystery on purpose — no hints, you only find out what they are by earning them.</div>
+      <div class="pc-line muted">Both counts are tappable — see who follows you or who you follow. Your three most recent badges show below — tap any one for its full description, and for repeatable ones, every single time you've earned it. "View all" opens Fins of Fame, a full display cabinet of everything there is to earn, grouped by catches, variety, weather and more, with a separate Trophy Case for competition wins. Empty slots stay a mystery on purpose — no hints, you only find out what they are by earning them. The same works on a friend's profile: tap one of their badges to see every time they've earned it.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">My details</div>
@@ -1883,7 +1892,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">My insights</div>
-      <div class="pc-line muted">Has its own tab at the bottom now — which rigs and baits actually land fish for you, average soak times, your best venues, soak time distribution, and how your sessions have gone, all calculated from your own catch history.</div>
+      <div class="pc-line muted">Has its own tab at the bottom, in four groups you can open and close: Overview, What works, When and where, and Sessions. Every row shows fish from casts, like "4 fish from 12 casts", so you see how often something works, not just how often it caught. It covers your rigs, baits, feed methods and what went in them, soak times, distance, your best venues on a map, and how your sessions went — all calculated from your own catch history.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Personal preferences</div>
@@ -1926,11 +1935,11 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Build a rig, then find it in My Rigs</div>
-      <div class="pc-line muted">Fill in the type, brand, feed method and hook count, and it lands in My Rigs below — fully yours to edit, including naming each hook whatever you actually call it (Top, Bottom, whatever fits). Tick "Use" so it shows up when logging on Timers.</div>
+      <div class="pc-line muted">Fill in the type, brand, feed method (bom, PVA bag, PVA mesh / stick, stringer or bait boat) and hook count, and it lands in My Rigs below — fully yours to edit, including naming each hook whatever you actually call it (Top, Bottom, whatever fits). Tick "Use" so it shows up when logging on Timers.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Bait combinations</div>
-      <div class="pc-line muted">Tag a bait or dip's flavour when you add it (Scopex, Tuna & Krill, whatever it is), then build a combination further down — a rig with a bait picked per hook, saved under one name. Apply it on Timers in a single tap instead of picking rig, baits and hooks separately every time you cast out.</div>
+      <div class="pc-line muted">Give a bait a category, and tag a bait or dip's flavour, when you add it (Scopex, Tuna & Krill, whatever it is), then build a combination further down — a rig with a bait picked per hook, saved under one name. Apply it on Timers in a single tap instead of picking rig, baits and hooks separately every time you cast out.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">The Rig Library</div>
@@ -10896,6 +10905,7 @@ function feedRodLabel(it){
 const CHANGELOG = [
   {version:'1.7', date:'30 September 2026', changes:[
     '6 new weather related badges in Fins of Fame',
+    'Home: tap a catch from your mates to open their profile, or a badge to see every time they earned it. You can now see the details of friends\' badges too',
     'Timers: note your peg or stand number when you start a session, change it any time, and see it on your session cards and in Insights',
     'Maps now have a view switcher (top right): Street, Satellite, Satellite + names and Terrain. The one you pick is remembered, and it applies to the venue map in Insights and to the pin-drop map when you set a venue location',
     'Insights is reorganised into four collapsible groups — Overview, What works, When and where, and Sessions — and every row now reads "4 fish from 12 casts" so you can see how often something works, not just how often it caught',
@@ -11222,8 +11232,8 @@ async function renderHome(){
     ]);
     const recent = items.filter(it=>it.caught).concat(badgeItems).sort((a,b)=> b.time - a.time).slice(0, 5);
     feedWrap.innerHTML = recent.length
-      ? recent.map(it=> it.kind === 'badge' ? `
-        <div class="profile-catch" style="display:flex;gap:10px;align-items:center;">
+      ? recent.map((it, idx)=> it.kind === 'badge' ? `
+        <div class="profile-catch home-feed-item" data-feed-index="${idx}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;cursor:pointer;">
           ${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 34)}
           <div style="flex:1;">
             <div class="pc-line"><b>${escapeHtml(it.fishermanName)}</b> earned <b>${escapeHtml(it.badge.name)}</b></div>
@@ -11231,7 +11241,7 @@ async function renderHome(){
           </div>
           <img src="${badgeImageSrc(it.badge.key)}?v=${BADGE_ASSET_VERSION}" alt="" style="width:34px;height:34px;object-fit:contain;" loading="lazy" decoding="async" onerror="this.outerHTML='<span style=&quot;font-size:24px;&quot;>${it.badge.emoji}</span>';">
         </div>` : `
-        <div class="profile-catch" style="display:flex;gap:10px;align-items:center;">
+        <div class="profile-catch home-feed-item" data-feed-index="${idx}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;cursor:pointer;">
           ${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 34)}
           <div style="flex:1;">
             <div class="pc-line"><b>${escapeHtml(it.fishermanName)}</b> ·${escapeHtml(it.type||'Fish')}</div>
@@ -11240,6 +11250,21 @@ async function renderHome(){
           ${it.likes ? `<span class="pc-line muted">👌${it.likes}</span>` : ''}
         </div>`).join('')
       : '<div class="empty">No catches yet — follow some mates on the Friends tab.</div>';
+    // A badge opens its pop-up; a catch opens the angler's profile
+    feedWrap.querySelectorAll('.home-feed-item').forEach(row=>{
+      const open = ()=>{
+        const it = recent[Number(row.dataset.feedIndex)];
+        if(!it) return;
+        if(it.kind === 'badge'){
+          const when = new Date(it.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+          openBadgeDetailFor(it.badge, 1, 'First earned ' + when, it.fishermanId, false);
+        }else{
+          openProfile(it.fishermanId);
+        }
+      };
+      row.addEventListener('click', open);
+      row.addEventListener('keydown', e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } });
+    });
   }catch(e){
     console.error('home feed failed', e);
     feedWrap.innerHTML = '<div class="empty">Could not load recent catches.</div>';
