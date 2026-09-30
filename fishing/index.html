@@ -7501,10 +7501,13 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   const rod = entry.rod;
   currentPerson.catches.push(entry);
 
-  // Clear this rod's rig/bait/hook notes and reset its timer for the next session,
-  // but keep the identifier, color, and hook count (those are rod-level settings, not per-catch)
+  // Clear this rod's bait/hook notes and reset its timer for the next session,
+  // but keep the rig, identifier, color, and hook count (the rig stays on the
+  // rod between catches; the baits are what change, and Rebait restores those)
   const clearedNotes = {
-    bom:'', rig:'',
+    bom:'',
+    rig: currentPerson.notes[rod].rig || '',
+    rigId: currentPerson.notes[rod].rigId,
     identifier: currentPerson.notes[rod].identifier,
     dotColor: currentPerson.notes[rod].dotColor,
     hookCount: currentPerson.notes[rod].hookCount,
@@ -11508,7 +11511,9 @@ function followInviteLink(fishermanId){
 // for the top-3 placements so ranking never drifts from what the standings
 // screen shows, then handles Here for the Beer separately because it needs
 // the full participant roster, not just people who caught something.
-async function awardCompetitionBadges(comp){
+// The database only lets someone save badges for themselves (admins can save
+// for anyone), so `onlyFishermanId` limits the saving to one person's own.
+async function awardCompetitionBadges(comp, onlyFishermanId){
   try{
     const participantIds = await loadCompetitionParticipants(comp.id);
     if(!participantIds.length) return;
@@ -11537,6 +11542,7 @@ async function awardCompetitionBadges(comp){
     beer.forEach(fid=> awards.push({fisherman_id: fid, badge_key: 'here_for_beer'}));
 
     for(const a of awards){
+      if(onlyFishermanId && a.fisherman_id !== onlyFishermanId) continue;
       try{
         await sbPost('competition_badges', {
           id: uid(),
@@ -11625,12 +11631,37 @@ async function announceFinishedCompetitions(){
     for(const c of done){
       // Badges first — if the notify RPC flips results_sent, this branch
       // won't run again, so awarding before that keeps them from being missed
-      await awardCompetitionBadges(c);
+      await awardCompetitionBadges(c, isSuperUser() ? null : getMyFishermanId());
       try{ await sbRpc('notify_competition_results', {p_competition_id: c.id}); }
       catch(e){ console.error('results notify failed', c.id, e); }
     }
     if(done.length) refreshNotifBadge();
   }catch(e){ console.error('announceFinishedCompetitions failed', e); }
+}
+
+// Every person's app claims their own competition badges for any finished
+// competition they took part in. Whoever opens the app first can only save
+// their own badges, so this is what makes sure nobody's are missed. Each
+// competition is checked once per person on this device; the database rejects
+// a badge that already exists, so re-checking is harmless.
+async function claimMyCompetitionBadges(){
+  const myId = getMyFishermanId();
+  if(!isSignedIn() || !myId || !navigator.onLine) return;
+  const storeKey = 'pk_fishing_comp_badges_checked_' + myId;
+  let checked = [];
+  try{ checked = JSON.parse(localStorage.getItem(storeKey) || '[]'); }catch(e){}
+  try{
+    const mine = await sbGet('competition_participants?select=competition_id&status=eq.approved&fisherman_id=eq.'+myId);
+    const ids = mine.map(r=>r.competition_id).filter(id=> !checked.includes(id));
+    if(!ids.length) return;
+    const today = new Date().toISOString().slice(0,10);
+    const comps = await sbGet('competitions?select=id,name,metric,fish_type_filter,end_date,end_time&end_date=lte.'+today+'&id=in.('+ids.map(encodeURIComponent).join(',')+')');
+    for(const c of comps.filter(c=> competitionHasEnded(c))){
+      await awardCompetitionBadges(c, myId);
+      checked.push(c.id);
+    }
+    try{ localStorage.setItem(storeKey, JSON.stringify(checked)); }catch(e){}
+  }catch(e){ console.error('claimMyCompetitionBadges failed', e); }
 }
 
 async function loadCompetitions(){
@@ -12516,6 +12547,7 @@ await loadTackleCategoryOptions();
   updateOfflineBanner();
   syncPendingCatches();
   announceFinishedCompetitions();
+  claimMyCompetitionBadges();
   checkAndAwardBadges();
   handleCompetitionInvite();
   handleFollowInvite();
