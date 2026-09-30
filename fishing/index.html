@@ -372,6 +372,31 @@
 
   .divider{border:none;border-top:1px solid var(--line);margin:14px 0;}
   .sub-heading{font-size:13px;font-weight:600;color:var(--muted);margin:0 0 10px;}
+  /* Insights: collapsible groups of stat rows */
+  .ins-group{border:1px solid var(--line);border-radius:12px;background:var(--card-bg);margin:0 0 12px;}
+  .ins-group > summary{list-style:none;cursor:pointer;padding:14px 44px 14px 16px;min-height:44px;display:flex;flex-direction:column;gap:2px;position:relative;}
+  .ins-group > summary::-webkit-details-marker{display:none;}
+  .ins-group > summary::after{content:'';position:absolute;right:18px;top:50%;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-70%) rotate(45deg);}
+  .ins-group[open] > summary::after{transform:translateY(-30%) rotate(-135deg);}
+  .ins-group-title{font-weight:700;font-size:16px;color:var(--ink);}
+  .ins-group-hint{font-size:12.5px;color:var(--muted);}
+  .ins-group-body{padding:2px 16px 14px;}
+  .ins-sec{margin-top:18px;}
+  .ins-group-body > .ins-sec:first-child{margin-top:8px;}
+  .ins-list{list-style:none;padding:0;margin:0;}
+  .ins-row{padding:10px 0;border-bottom:1px solid var(--line);}
+  .ins-list > .ins-row:last-child{border-bottom:none;}
+  .ins-row-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+  .ins-main{min-width:0;flex:1;}
+  .ins-main > b{font-size:15px;overflow-wrap:anywhere;}
+  .ins-side{text-align:right;flex-shrink:0;font-size:13.5px;}
+  .ins-sub{font-size:12.5px;color:var(--muted);line-height:1.4;}
+  .ins-bar{background:var(--line);border-radius:4px;height:5px;margin-top:6px;overflow:hidden;}
+  .ins-bar span{display:block;height:100%;background:var(--dam);}
+  .ins-actions{display:flex;gap:6px;margin-top:8px;}
+  .ins-tag{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--dam);color:#fff;font-size:11px;font-weight:700;vertical-align:middle;}
+  .ins-more{margin-top:6px;}
+  .ins-more > summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--dam);padding:10px 0;min-height:44px;box-sizing:border-box;}
 
   .catch-toggle{display:flex;gap:8px;margin-bottom:12px;}
   /* Fish and Scale each get their own boxed group so the two photo slots
@@ -4569,28 +4594,63 @@ async function loadMyNotifications(){
     return rows;
   }catch(e){ console.error(e); return []; }
 }
+// "The app was updated" entry in the bell. Lives on this device rather than in
+// the notifications table, so it never sends a push and needs no database row.
+// Shows whenever the newest CHANGELOG version hasn't been seen or dismissed yet.
+function appUpdateNoticeKey(){ return 'pk_fishing_update_notice_' + session.user.id; }
+function appUpdateNotice(){
+  if(!isSignedIn()) return null;
+  let latest = null;
+  try{ latest = CHANGELOG[0]; }catch(e){}
+  if(!latest) return null;
+  let st = {};
+  try{ st = JSON.parse(localStorage.getItem(appUpdateNoticeKey()) || '{}') || {}; }catch(e){}
+  if(st.dismissed === latest.version) return null;
+  return {version: latest.version, date: latest.date, unread: st.seen !== latest.version};
+}
+function saveAppUpdateNotice(field){
+  const n = appUpdateNotice();
+  if(!n) return;
+  let st = {};
+  try{ st = JSON.parse(localStorage.getItem(appUpdateNoticeKey()) || '{}') || {}; }catch(e){}
+  st[field] = n.version;
+  try{ localStorage.setItem(appUpdateNoticeKey(), JSON.stringify(st)); }catch(e){}
+}
+
 async function refreshNotifBadge(){
   const bell = document.getElementById('notif-bell');
   const badge = document.getElementById('notif-badge');
   if(!bell) return;
   if(!isSignedIn()){ bell.style.display = 'none'; return; }
   bell.style.display = 'block';
+  const notice = appUpdateNotice();
+  let count = notice && notice.unread ? 1 : 0;
   try{
     const rows = await sbGet('notifications?select=id&recipient_user_id=eq.'+session.user.id+'&read=eq.false');
-    if(rows.length > 0){
-      badge.textContent = rows.length > 9 ? '9+' : String(rows.length);
-      badge.style.display = 'flex';
-    }else{
-      badge.style.display = 'none';
-    }
+    count += rows.length;
   }catch(e){ console.error(e); }
+  if(count > 0){
+    badge.textContent = count > 9 ? '9+' : String(count);
+    badge.style.display = 'flex';
+  }else{
+    badge.style.display = 'none';
+  }
 }
 async function renderNotifPanel(){
   const el = document.getElementById('notif-list');
   el.innerHTML = '<div class="empty">Loading...</div>';
   const rows = await loadMyNotifications();
-  if(rows.length === 0){ el.innerHTML = '<div class="empty">No notifications yet.</div>'; return; }
-  el.innerHTML = rows.map(n=>`
+  const notice = appUpdateNotice();
+  if(rows.length === 0 && !notice){ el.innerHTML = '<div class="empty">No notifications yet.</div>'; return; }
+  const noticeHtml = notice ? `
+    <div class="profile-catch notif-item" style="${notice.unread ? 'border-left:3px solid var(--rust);' : ''}display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+      <div style="flex:1;cursor:pointer;" data-update-notice-open>
+        <div class="pc-line">PK Fishing was updated to version ${escapeHtml(notice.version)} — tap to see what's new</div>
+        <div class="pc-line muted">${escapeHtml(notice.date)}</div>
+      </div>
+      <button type="button" class="notif-dismiss" data-update-notice-dismiss title="Dismiss" style="border:none;background:none;cursor:pointer;color:var(--muted);font-weight:700;font-size:18px;padding:0 4px;line-height:1;">×</button>
+    </div>` : '';
+  el.innerHTML = noticeHtml + rows.map(n=>`
     <div class="profile-catch notif-item" data-notif-id="${n.id}" style="${n.read ? '' : 'border-left:3px solid var(--rust);'}display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
       <div style="flex:1;${n.target_type ? 'cursor:pointer;' : ''}" data-notif-body="${n.id}">
         <div class="pc-line">${escapeHtml(n.message)}</div>
@@ -4598,6 +4658,18 @@ async function renderNotifPanel(){
       </div>
       <button type="button" class="notif-dismiss" data-notif-dismiss="${n.id}" title="Dismiss" style="border:none;background:none;cursor:pointer;color:var(--muted);font-weight:700;font-size:18px;padding:0 4px;line-height:1;">×</button>
     </div>`).join('');
+  const noticeOpen = el.querySelector('[data-update-notice-open]');
+  if(noticeOpen) noticeOpen.addEventListener('click', ()=>{
+    document.getElementById('notif-modal').close();
+    goToTab('whatsnew');
+  });
+  const noticeDismiss = el.querySelector('[data-update-notice-dismiss]');
+  if(noticeDismiss) noticeDismiss.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    saveAppUpdateNotice('dismissed');
+    renderNotifPanel();
+    refreshNotifBadge();
+  });
   el.querySelectorAll('[data-notif-body]').forEach(div=>{
     const n = rows.find(x=>x.id===div.dataset.notifBody);
     if(n && n.target_type) div.addEventListener('click', ()=> goToNotificationTarget(n));
@@ -4617,7 +4689,9 @@ async function renderNotifPanel(){
     });
   });
   // Viewing the panel marks everything as read
+  saveAppUpdateNotice('seen');
   const unreadIds = rows.filter(n=>!n.read).map(n=>n.id);
+  if(!unreadIds.length) refreshNotifBadge();
   if(unreadIds.length){
     try{
       await sbPatch('notifications', 'id=in.('+unreadIds.join(',')+')', {read:true});
@@ -7438,37 +7512,176 @@ function fmtDuration(ms){
   return h+'h'+(m>0 ? ' '+m+'m' : '');
 }
 
+// Which Insights groups start open; people's own open/closed choice is remembered per group
+const INSIGHTS_GROUP_DEFAULTS = {overview:true, works:true, where:false, sessions:false};
+function insightsGroupOpen(key){
+  try{
+    const v = localStorage.getItem('pk_fishing_ins_' + key);
+    if(v !== null) return v === '1';
+  }catch(e){}
+  return !!INSIGHTS_GROUP_DEFAULTS[key];
+}
+function saveInsightsGroupOpen(key, open){
+  try{ localStorage.setItem('pk_fishing_ins_' + key, open ? '1' : '0'); }catch(e){}
+}
+
 function buildInsightsHtml(catches, venues, sessions){
   const caught = catches.filter(c=>c.caught);
   if(caught.length === 0){
     return '<div class="empty">No catches logged yet — your insights will appear here once you start logging.</div>';
   }
+  // A "cast" is every entry logged, fish or blank — the denominator that
+  // turns "4 fish" into "4 fish from 12 casts"
+  const blanks = catches.length - caught.length;
 
-  let html = '';
+  // ---- helpers ----
+  function groupStats(keyFn, opts){
+    opts = opts || {};
+    const groups = {};
+    const ensure = k=>{
+      if(!groups[k]) groups[k] = {count:0, total:0, weight:0, soakTotal:0, soakCount:0, biggest:0};
+      return groups[k];
+    };
+    caught.forEach(c=>{
+      new Set(keyFn(c).filter(Boolean)).forEach(k=>{
+        const g = ensure(k);
+        g.count++;
+        g.weight += (c.weight||0);
+        if(c.timerElapsed > 0){ g.soakTotal += c.timerElapsed; g.soakCount++; }
+        if((c.weight||0) > g.biggest) g.biggest = c.weight||0;
+      });
+    });
+    if(opts.casts){
+      catches.forEach(c=>{
+        new Set(keyFn(c).filter(Boolean)).forEach(k=>{ ensure(k).total++; });
+      });
+    }
+    const rows = Object.keys(groups).map(k=>{
+      const g = groups[k];
+      return {
+        key: k,
+        label: (opts.labels && opts.labels[k]) || k,
+        count: g.count,
+        total: g.total,
+        weight: g.weight,
+        biggest: g.biggest,
+        avgSoak: g.soakCount ? g.soakTotal/g.soakCount : 0
+      };
+    });
+    if(opts.order) rows.sort((a,b)=> opts.order.indexOf(a.key) - opts.order.indexOf(b.key));
+    else rows.sort((a,b)=> b.count - a.count || a.total - b.total);
+    return rows;
+  }
 
-  // With only a handful of catches the patterns below are mostly noise —
-  // say so rather than letting people read too much into them.
+  // One row: name, "X fish from Y casts", a catch-rate bar, and on the right
+  // the total weight plus the average time the rod was in the water
+  function rowHtml(r, extra){
+    const rate = r.total ? Math.round(r.count / r.total * 100) : null;
+    const line = r.total
+      ? `${r.count} fish from ${r.total} cast${r.total===1?'':'s'} (${rate}%)`
+      : `${r.count} fish`;
+    const side = [];
+    if(r.weight) side.push(`<b>${formatWeight(r.weight)}</b>`);
+    if(r.avgSoak) side.push(`<div class="ins-sub">avg ${fmtDuration(r.avgSoak)} in water</div>`);
+    return `<li class="ins-row">
+      <div class="ins-row-top">
+        <div class="ins-main">
+          <b>${escapeHtml(r.label)}</b>
+          <div class="ins-sub">${line}</div>
+          ${r.total ? `<div class="ins-bar"><span style="width:${rate}%"></span></div>` : ''}
+        </div>
+        <div class="ins-side">${side.join('')}</div>
+      </div>${extra || ''}
+    </li>`;
+  }
+
+  // Hidden entirely when there's nothing to show — a page full of "no X
+  // yet" messages for someone still building history reads as broken
+  function statTable(title, rows, note, limit){
+    if(rows.length === 0) return '';
+    limit = limit || 8;
+    let t = `<div class="ins-sec"><p class="sub-heading">${escapeHtml(title)}</p>`;
+    if(note) t += `<p class="ins-sub" style="margin:-4px 0 8px;">${note}</p>`;
+    t += `<ul class="ins-list">` + rows.slice(0, limit).map(r=>rowHtml(r)).join('') + `</ul>`;
+    if(rows.length > limit){
+      t += `<details class="ins-more"><summary>Show ${rows.length - limit} more</summary><ul class="ins-list">` +
+        rows.slice(limit).map(r=>rowHtml(r)).join('') + `</ul></details>`;
+    }
+    return t + '</div>';
+  }
+
+  function group(key, title, hint, inner){
+    if(!inner.trim()) return '';
+    return `<details class="ins-group" data-ins-group="${key}"${insightsGroupOpen(key) ? ' open' : ''}>
+      <summary><span class="ins-group-title">${escapeHtml(title)}</span><span class="ins-group-hint">${escapeHtml(hint)}</span></summary>
+      <div class="ins-group-body">${inner}</div>
+    </details>`;
+  }
+
+  // Which bait was on the hook that actually caught the fish — not
+  // everything that happened to be on the other hooks at the time
+  function catchingBaits(c){
+    const hookMatch = /Hook (\d+)/.exec(c.hook||'');
+    if(!hookMatch) return [];
+    const hookField = c['hook'+hookMatch[1]] || '';
+    return [...new Set(hookField.split(',').map(s=>s.trim()).filter(Boolean))];
+  }
+  function contentItems(v){
+    return [...new Set((v||'').split(',').map(s=>s.trim()).filter(Boolean))];
+  }
+
+  // Rigs are told apart by ID, so two rigs that share a name stay separate
+  // instead of being merged into one row. Catches from before rig IDs
+  // existed only have the name, so they get their own "older catches" row.
+  const rigKey = c=> c.rig ? (c.rigId || 'n:' + c.rig) : '';
+  const rigLabels = {};
+  (function(){
+    const keysByName = {};
+    catches.forEach(c=>{
+      const k = rigKey(c);
+      if(!k) return;
+      if(!keysByName[c.rig]) keysByName[c.rig] = [];
+      if(!keysByName[c.rig].includes(k)) keysByName[c.rig].push(k);
+    });
+    Object.keys(keysByName).forEach(name=>{
+      const keys = keysByName[name];
+      if(keys.length < 2){ rigLabels[keys[0]] = name; return; }
+      const detail = k=>{
+        if(k.indexOf('n:') === 0) return name + ' (older catches)';
+        const feeds = allRigFeedMethodsById[k] || [];
+        return name + ' (' + (feeds.length ? feeds.map(m=>m === FEED_BOM ? 'Bom' : m).join(' + ') : 'no feed method') + ')';
+      };
+      keys.forEach(k=>{
+        const label = detail(k);
+        const twins = keys.filter(x=>detail(x) === label);
+        rigLabels[k] = twins.length > 1 ? label + ' #' + (twins.indexOf(k) + 1) : label;
+      });
+    });
+  })();
+
+  // ===== Overview =====
+  let overview = '';
   if(caught.length < 10){
-    html += `<div class="empty" style="text-align:left;margin-bottom:14px;">
+    overview += `<div class="empty" style="text-align:left;margin-bottom:14px;">
       Only ${caught.length} catch${caught.length===1?'':'es'} logged so far. These numbers will start meaning
       something around 10–20 catches, and get genuinely useful over a full season.
     </div>`;
   }
-
-  // Headline numbers
   const totalWeight = caught.reduce((s,c)=>s+(c.weight||0),0);
   const biggest = caught.reduce((b,c)=> (c.weight||0) > (b?b.weight:0) ? c : b, null);
   const withTimer = caught.filter(c=>c.timerElapsed > 0);
   const avgSoak = withTimer.length ? withTimer.reduce((s,c)=>s+c.timerElapsed,0)/withTimer.length : 0;
-  html += `<div class="profile-summary">
+  overview += `<div class="profile-summary" style="margin-top:4px;">
       <div><b>${caught.length}</b>catches</div>
       <div><b>${formatWeight(totalWeight)}</b>total</div>
       <div><b>${biggest ? formatWeight(biggest.weight) : '—'}</b>biggest</div>
-      <div><b>${fmtDuration(avgSoak)}</b>avg soak</div>
+      <div><b>${fmtDuration(avgSoak)}</b>avg time in water</div>
     </div>`;
+  overview += blanks > 0
+    ? `<p class="ins-sub" style="margin:0 0 4px;">You logged ${catches.length} casts: ${caught.length} caught a fish and ${blanks} came up empty (${Math.round(caught.length/catches.length*100)}% catch rate). Rows below read “X fish from Y casts” wherever blanks are logged too.</p>`
+    : `<p class="ins-sub" style="margin:0 0 4px;">Tip: log blanks with “No catch” as well — each row below will then show how many casts it took, not just how many fish.</p>`;
 
-  // Soak time distribution — the average alone hides the shape. Knowing
-  // most runs come in the first two hours is more useful than one number.
+  // Time in water before a fish — the average alone hides the shape
   if(withTimer.length){
     const buckets = [
       {label:'Under 30 min', max: 30*60000},
@@ -7484,85 +7697,31 @@ function buildInsightsHtml(catches, venues, sessions){
       counts[idx >= 0 ? idx : buckets.length-1]++;
     });
     const maxCount = Math.max(...counts, 1);
-    html += `<p class="sub-heading">Soak time distribution</p>`;
-    html += `<ul class="people-list">` + buckets.map((b,i)=>{
-      if(counts[i] === 0) return '';
-      const pct = Math.round(counts[i]/withTimer.length*100);
-      const barPct = Math.round(counts[i]/maxCount*100);
-      return `<li style="display:block;">
-        <div class="who" style="margin-bottom:4px;"><b>${escapeHtml(b.label)}</b><span class="pill">${counts[i]} (${pct}%)</span></div>
-        <div style="background:var(--line);border-radius:6px;height:8px;overflow:hidden;">
-          <div style="background:var(--dam);height:100%;width:${barPct}%;"></div>
-        </div>
-      </li>`;
-    }).join('') + `</ul>`;
+    overview += `<div class="ins-sec"><p class="sub-heading">How long the rod was in the water before a fish</p><ul class="ins-list">` +
+      buckets.map((b,i)=>{
+        if(counts[i] === 0) return '';
+        const pct = Math.round(counts[i]/withTimer.length*100);
+        const barPct = Math.round(counts[i]/maxCount*100);
+        return `<li class="ins-row">
+          <div class="ins-row-top"><div class="ins-main"><b>${escapeHtml(b.label)}</b></div>
+          <div class="ins-side">${counts[i]} fish (${pct}%)</div></div>
+          <div class="ins-bar"><span style="width:${barPct}%"></span></div>
+        </li>`;
+      }).join('') + `</ul></div>`;
   }
+  overview += statTable('Species', groupStats(c=>[c.type]));
 
-  // Helper: group catches by a key, compute count / total weight / avg soak
-  function groupStats(keyFn){
-    const groups = {};
-    caught.forEach(c=>{
-      const keys = keyFn(c);
-      keys.forEach(k=>{
-        if(!k) return;
-        if(!groups[k]) groups[k] = {count:0, weight:0, soakTotal:0, soakCount:0, biggest:0};
-        groups[k].count++;
-        groups[k].weight += (c.weight||0);
-        if(c.timerElapsed > 0){ groups[k].soakTotal += c.timerElapsed; groups[k].soakCount++; }
-        if((c.weight||0) > groups[k].biggest) groups[k].biggest = c.weight||0;
-      });
-    });
-    return Object.keys(groups).map(k=>({
-      key: k,
-      count: groups[k].count,
-      weight: groups[k].weight,
-      biggest: groups[k].biggest,
-      avgSoak: groups[k].soakCount ? groups[k].soakTotal/groups[k].soakCount : 0
-    })).sort((a,b)=> b.count - a.count);
-  }
+  // ===== What works =====
+  let works = '';
+  works += statTable('Rigs', groupStats(c=>[rigKey(c)], {casts:true, labels:rigLabels}));
 
-  function statTable(title, rows, emptyMsg){
-    // Hide the whole section when there's nothing to show — a page full of
-    // "no X recorded yet" messages for someone still building up their
-    // history reads as broken, not just early. The section reappears on
-    // its own the moment there's real data behind it.
-    if(rows.length === 0) return '';
-    let t = `<p class="sub-heading">${escapeHtml(title)}</p><ul class="people-list">`;
-    rows.forEach(r=>{
-      t += `<li>
-        <div class="who"><b>${escapeHtml(r.key)}</b></div>
-        <div class="actions">
-          <span class="pill">${r.count} fish</span>
-          <span class="pill">${formatWeight(r.weight)}</span>
-          ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
-        </div>
-      </li>`;
-    });
-    return t + '</ul>';
-  }
-
-  // Which bait was on the hook that actually caught the fish — not
-  // everything that happened to be on the other hooks at the time
-  function catchingBaits(c){
-    const hookMatch = /Hook (\d+)/.exec(c.hook||'');
-    if(!hookMatch) return [];
-    const hookField = c['hook'+hookMatch[1]] || '';
-    return [...new Set(hookField.split(',').map(s=>s.trim()).filter(Boolean))];
-  }
-
-  // Which rig performs
-  html += statTable('Which rig lands fish', groupStats(c=>[c.rig]), 'No rigs recorded on your catches yet.');
-
-  // Which hook position produces. Only meaningful once hooks are named —
-  // "Top vs Bottom" tells you something, "Hook 1 vs Hook 2" doesn't. Names
-  // are looked up live, so renaming a hook updates past catches too.
-  html += statTable('Which hook lands fish', groupStats(c=>{
+  // Only meaningful once hooks are named — "Top vs Bottom" tells you
+  // something, "Hook 1 vs Hook 2" doesn't. Names are looked up live, so
+  // renaming a hook updates past catches too.
+  works +=statTable('Hooks', groupStats(c=>{
     const hookMatch = /Hook (\d+)/.exec(c.hook||'');
     if(!hookMatch) return [];
     const n = parseInt(hookMatch[1], 10);
-    // Resolve by rig ID first — unambiguous even if two rigs share a name.
-    // Falls back to the live rig (for whatever's currently in use), then
-    // the name-keyed map, for catches logged before rig_id existed.
     let rigDef = null;
     if(c.rigId && allRigHookLabelsById[c.rigId]){
       rigDef = {hookLabels: allRigHookLabelsById[c.rigId]};
@@ -7573,180 +7732,149 @@ function buildInsightsHtml(catches, venues, sessions){
       }
     }
     const label = hookDisplayName(rigDef, n);
-    // Qualify with the rig, since "Top" on one rig isn't "Top" on another
-    return [c.rig ? `${c.rig} — ${label}` : label];
-  }), 'No hooks recorded on your catches yet.');
+    // "Top" on one rig isn't "Top" on another
+    const rk = rigKey(c);
+    return [rk ? `${rigLabels[rk]} — ${label}` : label];
+  }));
 
-  // Which bait performs
-  html += statTable('Which bait lands fish', groupStats(catchingBaits), 'No baits recorded on your catches yet.');
+  works += statTable('Baits on the hook that caught', groupStats(catchingBaits));
+  works += statTable('Rig + bait pairings', groupStats(c=>{
+    const rk = rigKey(c);
+    if(!rk) return [];
+    return catchingBaits(c).map(b=> rigLabels[rk] + ' + ' + b);
+  }));
 
-  // Which bom performs
-  html += statTable('Which bom lands fish', groupStats(c=>{
-    return [...new Set((c.bom||'').split(',').map(s=>s.trim()).filter(Boolean))];
-  }), 'No boms recorded on your catches yet.');
-
-  // Rig + bait combinations — which pairing actually works, not just which
-  // rig or which bait performs on its own
-  html += statTable('Rig + bait combinations', groupStats(c=>{
-    if(!c.rig) return [];
-    return catchingBaits(c).map(b=> c.rig + ' + ' + b);
-  }), 'Need both a rig and a bait on the same catch to show combinations.');
-
-  // Feed method — Bom, PVA bag, mesh, stringer. Not stored on the catch
-  // itself; resolved from whichever rig was fished, since the delivery
-  // method is fixed by the rig's own design rather than chosen per cast.
-  html += statTable('By feed method', groupStats(c=>{
+  // The delivery method is fixed by the rig's own design, so it's read off
+  // the rig that was fished rather than stored on each catch
+  works += statTable('Feed methods', groupStats(c=>{
     if(c.rigId && allRigFeedMethodsById[c.rigId]) return allRigFeedMethodsById[c.rigId];
     if(!c.rig) return [];
     return allRigFeedMethods[c.rig] || [];
-  }), 'No feed methods recorded yet — set one when building or editing a rig.');
+  }, {casts:true}));
 
-  // Species breakdown
-  html += statTable('By species', groupStats(c=>[c.type]), 'No species recorded yet.');
+  // What was actually loaded into each feed method
+  works += statTable('In the bom', groupStats(c=>contentItems(c.bom), {casts:true}));
+  FEED_CONTENT_FIELDS.forEach(f=>{
+    works += statTable(f.label, groupStats(c=>contentItems(c[f.key]), {casts:true}));
+  });
 
-  // By moon phase — only catches logged since this feature was added will
-  // have this, so it'll fill in gradually rather than showing everything
-  html += statTable('By moon phase', groupStats(c=> c.moonPhase ? [c.moonPhase] : []), 'No moon phase data yet — this fills in as you log new catches.');
+  // ===== When and where =====
+  let where = '';
+  const timeBands = ['Morning (06:00–12:00)', 'Afternoon (12:00–18:00)', 'Evening (18:00–24:00)', 'Night (00:00–06:00)'];
+  // A past catch logged with just a date defaults to noon internally so the
+  // date can't shift across timezones, but that's not a real time and
+  // shouldn't count here.
+  const timeRows = groupStats(c=>{
+    if(!c.hasKnownTime) return [];
+    const h = new Date(c.time).getHours();
+    return [h<6 ? timeBands[3] : h<12 ? timeBands[0] : h<18 ? timeBands[1] : timeBands[2]];
+  }, {casts:true, order:timeBands});
+  const skippedForTime = caught.filter(c=>!c.hasKnownTime).length;
+  where += statTable('Time of day', timeRows,
+    skippedForTime > 0 ? `${skippedForTime} past catch${skippedForTime===1?'':'es'} logged without a time ${skippedForTime===1?'is':'are'} not counted here.` : '');
 
-  // Distance — banded rather than exact, so 42m and 45m group together
-  // instead of each becoming its own meaningless row
-  html += statTable('By distance', groupStats(c=>{
+  // Only catches logged since moon phase was added have this
+  where += statTable('Moon phase', groupStats(c=> c.moonPhase ? [c.moonPhase] : [], {casts:true}));
+
+  // Banded, so 42m and 45m group together
+  const distBands = ['Under 20m', '20–40m', '40–60m', '60–80m', '80m+'];
+  where += statTable('Cast distance', groupStats(c=>{
     if(c.castDistance == null || c.castDistance <= 0) return [];
     const d = c.castDistance;
-    if(d < 20) return ['Under 20m'];
-    if(d < 40) return ['20–40m'];
-    if(d < 60) return ['40–60m'];
-    if(d < 80) return ['60–80m'];
-    return ['80m+'];
-  }), 'No distances recorded yet — add one on a rod when you cast.');
+    return [d < 20 ? distBands[0] : d < 40 ? distBands[1] : d < 60 ? distBands[2] : d < 80 ? distBands[3] : distBands[4]];
+  }, {casts:true, order:distBands}));
 
-  // Best time of day — only catches with a real time count here. A past
-  // catch logged with just a date defaults to noon internally so the date
-  // can't shift across timezones, but that's not a real time and shouldn't
-  // be treated as one.
-  const withKnownTime = caught.filter(c=>c.hasKnownTime);
-  const byHour = {};
-  withKnownTime.forEach(c=>{
-    const h = new Date(c.time).getHours();
-    const band = h<6 ? 'Night (00:00–06:00)' : h<12 ? 'Morning (06:00–12:00)' : h<18 ? 'Afternoon (12:00–18:00)' : 'Evening (18:00–24:00)';
-    if(!byHour[band]) byHour[band] = 0;
-    byHour[band]++;
-  });
-  const timeRows = Object.keys(byHour).map(k=>({key:k, count:byHour[k], weight:0, avgSoak:0}))
-    .sort((a,b)=>b.count-a.count);
-  const skippedForTime = caught.length - withKnownTime.length;
-  html += `<p class="sub-heading">Best time of day</p>`;
-  if(skippedForTime > 0){
-    html += `<p class="pc-line muted">${skippedForTime} past catch${skippedForTime===1?'':'es'} logged without a time ${skippedForTime===1?'is':'are'} not counted here.</p>`;
-  }
-  html += `<ul class="people-list">` +
-    timeRows.map(r=>`<li>
-      <div class="who"><b>${escapeHtml(r.key)}</b></div>
-      <div class="actions"><span class="pill">${r.count} fish</span></div>
-    </li>`).join('') + '</ul>';
-
-  // By venue — private to you, never shown anywhere else in the app
-  const venueMap = {};
-  (venues||[]).forEach(v=>{ venueMap[v.id] = v.name; });
-  const withVenue = caught.filter(c=>c.venueId && venueMap[c.venueId]);
-  if(withVenue.length){
-    const venueRows = groupStats(c=> c.venueId && venueMap[c.venueId] ? [venueMap[c.venueId]] : []);
-    html += `<p class="sub-heading">By venue</p>`;
-    html += `<p class="pc-line muted">Private to you — venues are never shown on the leaderboard or feed.</p>`;
-    html += '<ul class="people-list">';
+  // Venues — private to you, never shown anywhere else in the app
+  const venueNames = {};
+  (venues||[]).forEach(v=>{ venueNames[v.id] = v.name; });
+  const venueRows = groupStats(c=> c.venueId && venueNames[c.venueId] ? [c.venueId] : [], {casts:true, labels:venueNames});
+  if(venueRows.length){
+    where += `<div class="ins-sec"><p class="sub-heading">Venues</p>
+      <p class="ins-sub" style="margin:-4px 0 8px;">Private to you — venues are never shown on the leaderboard or feed.</p><ul class="ins-list">`;
     venueRows.forEach(r=>{
-      // Which rig works best at this particular water
-      const atVenue = withVenue.filter(c=> venueMap[c.venueId] === r.key);
+      const venueObj = (venues||[]).find(v=>v.id === r.key);
       const rigTally = {};
-      atVenue.forEach(c=>{ if(c.rig){ rigTally[c.rig] = (rigTally[c.rig]||0)+1; } });
+      caught.forEach(c=>{
+        if(c.venueId === r.key && c.rig){
+          const name = rigLabels[rigKey(c)] || c.rig;
+          rigTally[name] = (rigTally[name]||0) + 1;
+        }
+      });
       const bestRig = Object.keys(rigTally).sort((a,b)=>rigTally[b]-rigTally[a])[0];
-      const venueObj = (venues||[]).find(v=>v.name === r.key);
-      const knowledge = venueObj && venueObj.local_knowledge
-        ? `<div class="pc-line muted" style="margin-top:6px;white-space:pre-wrap;">📌 ${escapeHtml(venueObj.local_knowledge)}</div>` : '';
-      html += `<li style="display:block;">
-        <div class="who" style="margin-bottom:6px;">
-          <b>${escapeHtml(r.key)}</b>
-          ${bestRig ? `<span class="pill">Best rig: ${escapeHtml(bestRig)}</span>` : ''}
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div style="display:flex;gap:4px;flex-wrap:wrap;">
-            <span class="pill">${r.count} fish</span>
-            <span class="pill">${formatWeight(r.weight)}</span>
-            ${r.avgSoak ? `<span class="pill">${fmtDuration(r.avgSoak)} avg</span>` : ''}
-          </div>
-          ${venueObj ? `<div style="display:flex;gap:6px;">
-            <button type="button" class="mini-btn" data-edit-venue="${venueObj.id}">Edit</button>
-            <button type="button" class="mini-btn danger" data-delete-venue="${venueObj.id}">Remove</button>
-          </div>` : ''}
-        </div>
-        ${knowledge}
-      </li>`;
+      let extra = '';
+      if(bestRig) extra += `<div class="ins-sub" style="margin-top:6px;">Best rig here: <b>${escapeHtml(bestRig)}</b></div>`;
+      if(venueObj && venueObj.local_knowledge){
+        extra += `<div class="ins-sub" style="margin-top:6px;white-space:pre-wrap;color:var(--ink);">📌 ${escapeHtml(venueObj.local_knowledge)}</div>`;
+      }
+      if(venueObj){
+        extra += `<div class="ins-actions">
+          <button type="button" class="mini-btn" data-edit-venue="${venueObj.id}">Edit</button>
+          <button type="button" class="mini-btn danger" data-delete-venue="${venueObj.id}">Remove</button>
+        </div>`;
+      }
+      where += rowHtml(r, extra);
     });
-    html += '</ul>';
+    where += '</ul></div>';
+  }
+  // A private map of your own venues — only waters with real coordinates
+  // (some are name-only if GPS was denied or unavailable)
+  if((venues||[]).some(v=> v.latitude != null && v.longitude != null)){
+    where += `<div id="venue-map" style="height:260px;border-radius:10px;overflow:hidden;margin-top:14px;border:1px solid var(--line);"></div>`;
   }
 
-  // Session history — how each trip actually went
+  // ===== Sessions =====
+  let sessionsHtml = '';
   if(sessions && sessions.length){
     const sessionRows = sessions.map(s=>{
       const sc = caught.filter(c=>c.sessionId === s.id);
-      const weight = sc.reduce((sum,c)=>sum+(c.weight||0),0);
       const started = new Date(s.started_at);
       const ended = s.ended_at ? new Date(s.ended_at) : null;
-      const durationMs = ended ? (ended - started) : (Date.now() - started);
       return {
         id: s.id,
         name: s.venue_name || 'Session',
+        startedMs: started.getTime(),
         when: started.toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
         count: sc.length,
-        weight,
-        duration: durationMs,
-        rods: s.rods,
+        weight: sc.reduce((sum,c)=>sum+(c.weight||0),0),
+        duration: (ended || new Date()) - started,
         ongoing: !s.ended_at,
         log: s.session_log || ''
       };
-    }).sort((a,b)=> b.count - a.count);
+    }).sort((a,b)=> b.startedMs - a.startedMs);
 
-    const totalSessions = sessions.length;
+    const totalSessions = sessionRows.length;
     const withCatches = sessionRows.filter(s=>s.count > 0).length;
-    const avgPerSession = totalSessions ? (caught.length / totalSessions) : 0;
-    html += `<p class="sub-heading">Sessions</p>`;
-    html += `<div class="profile-summary">
+    sessionsHtml += `<div class="profile-summary" style="margin-top:4px;">
         <div><b>${totalSessions}</b>sessions</div>
-        <div><b>${avgPerSession.toFixed(1)}</b>fish/session</div>
-        <div><b>${withCatches}/${totalSessions}</b>with a fish</div>
+        <div><b>${(caught.length / totalSessions).toFixed(1)}</b>fish per session</div>
+        <div><b>${withCatches} of ${totalSessions}</b>caught a fish</div>
       </div>`;
-    html += '<ul class="people-list">';
-    sessionRows.slice(0, 10).forEach(s=>{
-      html += `<li style="display:block;">
-        <div class="who" style="margin-bottom:6px;">
-          <b>${escapeHtml(s.name)}</b>
-          <span class="pill">${escapeHtml(s.when)}</span>
-          ${s.ongoing ? '<span class="pill">Ongoing</span>' : ''}
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div style="display:flex;gap:4px;flex-wrap:wrap;">
-            <span class="pill">${s.count} fish</span>
-            ${s.weight ? `<span class="pill">${formatWeight(s.weight)}</span>` : ''}
-            <span class="pill">${fmtDuration(s.duration)}</span>
+    const sessionLi = s=>`<li class="ins-row">
+        <div class="ins-row-top">
+          <div class="ins-main">
+            <b>${escapeHtml(s.name)}</b>${s.ongoing ? ' <span class="ins-tag">Ongoing</span>' : ''}
+            <div class="ins-sub">${escapeHtml(s.when)} · ${fmtDuration(s.duration)}</div>
           </div>
-          <div style="display:flex;gap:6px;">
-            <button type="button" class="mini-btn" data-edit-session="${s.id}">Edit</button>
-            <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Remove</button>
-          </div>
+          <div class="ins-side"><b>${s.count} fish</b>${s.weight ? `<div class="ins-sub">${formatWeight(s.weight)}</div>` : ''}</div>
         </div>
-        ${s.log ? `<div class="pc-line muted" style="margin-top:6px;white-space:pre-wrap;">📝 ${escapeHtml(s.log)}</div>` : ''}
+        ${s.log ? `<div class="ins-sub" style="margin-top:6px;white-space:pre-wrap;color:var(--ink);">📝 ${escapeHtml(s.log)}</div>` : ''}
+        <div class="ins-actions">
+          <button type="button" class="mini-btn" data-edit-session="${s.id}">Edit</button>
+          <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Remove</button>
+        </div>
       </li>`;
-    });
-    html += '</ul>';
-    // A private map of your own venues — only shows waters with real
-    // coordinates (some may be name-only if GPS was denied or unavailable)
-    const mappable = (venues||[]).filter(v=> v.latitude != null && v.longitude != null);
-    if(mappable.length){
-      html += `<div id="venue-map" style="height:260px;border-radius:10px;overflow:hidden;margin-top:6px;border:1px solid var(--line);"></div>`;
+    sessionsHtml += `<p class="ins-sub" style="margin:0 0 4px;">Newest first.</p><ul class="ins-list">` +
+      sessionRows.slice(0, 10).map(sessionLi).join('') + `</ul>`;
+    if(sessionRows.length > 10){
+      sessionsHtml += `<details class="ins-more"><summary>Show ${sessionRows.length - 10} older session${sessionRows.length - 10===1?'':'s'}</summary><ul class="ins-list">` +
+        sessionRows.slice(10).map(sessionLi).join('') + `</ul></details>`;
     }
   }
 
-  return html;
+  return group('overview', 'Overview', 'Your totals, species and time in the water', overview)
+    + group('works', 'What works', 'Rigs, hooks, baits and feed', works)
+    + group('where', 'When and where', 'Time of day, moon, distance and venues', where)
+    + group('sessions', 'Sessions', 'How each trip went', sessionsHtml);
 }
 
 // ---------- Badges ----------
@@ -8055,8 +8183,25 @@ async function openInsights(){
   // otherwise a catch on a rig you've since un-ticked would lose its names
   await loadAllRigHookLabels();
   const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
-  body.innerHTML = buildInsightsHtml(rec && rec.catches ? rec.catches : [], venues, sessions);
-  renderVenueMap(venues, rec && rec.catches ? rec.catches : []);
+  const myCatches = rec && rec.catches ? rec.catches : [];
+  body.innerHTML = buildInsightsHtml(myCatches, venues, sessions);
+
+  // Remember which groups are open. The map can only size itself while its
+  // group is visible, so it's built the first time "When and where" opens.
+  let mapBuilt = false;
+  const buildMapOnce = ()=>{
+    if(mapBuilt) return;
+    mapBuilt = true;
+    renderVenueMap(venues, myCatches);
+  };
+  body.querySelectorAll('details[data-ins-group]').forEach(d=>{
+    d.addEventListener('toggle', ()=>{
+      saveInsightsGroupOpen(d.dataset.insGroup, d.open);
+      if(d.open && d.dataset.insGroup === 'where') buildMapOnce();
+    });
+  });
+  const whereGroup = body.querySelector('details[data-ins-group="where"]');
+  if(whereGroup && whereGroup.open) buildMapOnce();
 
   body.querySelectorAll('[data-edit-session]').forEach(btn=>{
     btn.addEventListener('click', ()=> openSessionEdit(btn.dataset.editSession));
@@ -10264,6 +10409,7 @@ document.getElementById('notif-clear-all').addEventListener('click', async ()=>{
   if(!window.confirm('Clear all notifications?\n\nThis cannot be undone.')) return;
   try{
     await sbDelete('notifications', 'recipient_user_id=eq.'+session.user.id);
+    saveAppUpdateNotice('dismissed');
     refreshNotifBadge();
     renderNotifPanel();
   }catch(e){
@@ -10276,6 +10422,7 @@ document.getElementById('notif-mark-all-read').addEventListener('click', async (
   if(!isSignedIn()) return;
   try{
     await sbPatch('notifications', 'recipient_user_id=eq.'+session.user.id+'&read=eq.false', {read:true});
+    saveAppUpdateNotice('seen');
     refreshNotifBadge();
     renderNotifPanel();
   }catch(e){ console.error(e); }
@@ -10538,6 +10685,14 @@ function feedRodLabel(it){
 // Newest first. Add an entry here when shipping something people would
 // notice — not every fix, just what's worth knowing about.
 const CHANGELOG = [
+  {version:'1.7', date:'30 September 2026', changes:[
+    'Insights is reorganised into four collapsible groups — Overview, What works, When and where, and Sessions — and every row now reads "4 fish from 12 casts" so you can see how often something works, not just how often it caught',
+    'Insights also breaks down what you put in the bom, PVA bag, PVA mesh / stick, stringer and bait boat, and keeps two rigs that share a name separate',
+    'Timers: choose a feed method on each rig (Bom, PVA bag, PVA mesh / stick, stringer, bait boat) and record what went in it; dips now show in those pickers',
+    'Snooze the "rod\'s been out too long" alert from the rod\'s card, follow anglers from an invite link, and see friends\' new badges in your feed',
+    'Rebait button, and baits now have categories',
+    'New versions of the app show up here in the notification bell'
+  ]},
   {version:'1.6', date:'24 September 2026', changes:[
     'Timers now shows a running feed of everything logged this session, across every rod, so you can see what\'s happened at a glance',
     'Past sessions get the same recap — see what happened in one place from Insights → Edit session',
@@ -10591,6 +10746,8 @@ const CHANGELOG = [
 function renderWhatsNew(){
   const el = document.getElementById('whatsnew-body');
   if(!el) return;
+  // Reading the changelog counts as seeing the update
+  if(isSignedIn()){ saveAppUpdateNotice('seen'); refreshNotifBadge(); }
   el.innerHTML = CHANGELOG.map(v=>`
     <section class="card">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
