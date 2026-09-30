@@ -2006,6 +2006,15 @@ const FEED_METHODS = [
   'Bait boat'
 ];
 const FEED_BOM = 'Bom (method feeder)';
+// Some early rigs stored the method as plain "Bom"
+function normalizeFeedMethods(list){
+  const out = [];
+  (Array.isArray(list) ? list : []).forEach(m=>{
+    const name = m === 'Bom' ? FEED_BOM : m;
+    if(!out.includes(name)) out.push(name);
+  });
+  return out;
+}
 // Every feed method except Bom holds bait ("what's in the bag"). Each one a rig
 // has gets its own field on the Timers rod card; `key` is the note/catch field.
 const FEED_CONTENT_FIELDS = [
@@ -2357,7 +2366,7 @@ async function loadMyRigUseIds(){
 
 async function loadKnownRigs(){
   try{
-    const rows = await sbGet('rigs?select=id,name,uses_bom,feed_methods,hook_count,hook_labels&order=name.asc');
+    const rows = await sbGet('rigs?select=id,name,created_at,uses_bom,feed_methods,hook_count,hook_labels&order=name.asc,created_at.asc');
     // The Timers dropdown only shows rigs you've ticked as "in use"
     const inUse = await loadMyRigUseIds();
     knownRigsFull = rows
@@ -2366,10 +2375,10 @@ async function loadKnownRigs(){
         let hookLabels = [];
         try{ hookLabels = r.hook_labels ? JSON.parse(r.hook_labels) : []; }catch(e){}
         let feedMethods = [];
-        try{ feedMethods = r.feed_methods ? JSON.parse(r.feed_methods) : []; }catch(e){}
+        try{ feedMethods = normalizeFeedMethods(r.feed_methods ? JSON.parse(r.feed_methods) : []); }catch(e){}
         // Rigs from before feed methods existed just had a bom yes/no
         if(!feedMethods.length && r.uses_bom) feedMethods = [FEED_BOM];
-        return {id:r.id, name:r.name, usesBom:feedMethods.includes(FEED_BOM), feedMethods, hookCount:r.hook_count||0, hookLabels};
+        return {id:r.id, name:r.name, createdAt:r.created_at||'', usesBom:feedMethods.includes(FEED_BOM), feedMethods, hookCount:r.hook_count||0, hookLabels};
       });
     clearDbError();
   }catch(e){
@@ -2402,7 +2411,7 @@ async function loadAllRigHookLabels(){
       if(r.hook_labels){ try{ labels = JSON.parse(r.hook_labels); }catch(e){} }
       let feeds = null;
       if(r.feed_methods){
-        try{ feeds = JSON.parse(r.feed_methods); }catch(e){}
+        try{ feeds = normalizeFeedMethods(JSON.parse(r.feed_methods)); }catch(e){}
       }else if(r.uses_bom){
         // Rigs from before feed methods existed just had a bom yes/no
         feeds = ['Bom (method feeder)'];
@@ -2417,14 +2426,32 @@ async function loadAllRigHookLabels(){
   }catch(e){ console.error('loadAllRigHookLabels failed', e); }
 }
 
-function findRigDef(name){
+// Two rigs can share a name, so prefer the rig's ID when we have it
+function findRigDef(name, id){
+  if(id){
+    const byId = knownRigsFull.find(r=>r.id === id && r.name === name);
+    if(byId) return byId;
+  }
   return knownRigsFull.find(r=>r.name === name) || null;
+}
+function selectedRigId(sel){
+  const opt = sel && sel.options[sel.selectedIndex];
+  return opt ? (opt.dataset.rigId || null) : null;
+}
+// Extra detail for rigs that share a name, so the dropdown can tell them apart
+function rigOptionLabel(r){
+  if(knownRigsFull.filter(x=>x.name === r.name).length < 2) return r.name;
+  const bits = [r.hookCount + (r.hookCount === 1 ? ' hook' : ' hooks')];
+  if(r.feedMethods.length) bits.push(r.feedMethods.map(m=>m === FEED_BOM ? 'Bom' : m).join(' + '));
+  const d = r.createdAt ? new Date(r.createdAt) : null;
+  if(d && !isNaN(d)) bits.push('added ' + d.toLocaleDateString('en-ZA', {day:'numeric', month:'short'}));
+  return r.name + ' (' + bits.join(', ') + ')';
 }
 
 // Bom and hook lines on a saved catch: show only what the rig has (or anything
 // actually recorded). Unknown rig (deleted, or someone else's) -> recorded values only.
 function catchRigLines(c){
-  const rigDef = c.rig ? findRigDef(c.rig) : null;
+  const rigDef = c.rig ? findRigDef(c.rig, c.rigId) : null;
   const lines = [];
   if(c.bom || (rigDef && rigDef.usesBom)) lines.push('Bom: ' + escapeHtml(c.bom||'—'));
   FEED_CONTENT_FIELDS.forEach(f=>{
@@ -2449,7 +2476,7 @@ function buildRigOptionsHtml(){
     return '<option value="">No rigs yet — tick "Use" on the Tackle Box tab</option>';
   }
   let html = '<option value="">None</option>';
-  knownRigsFull.forEach(r=>{ html += `<option value="${escapeHtml(r.name)}" data-rig-id="${escapeHtml(r.id)}">${escapeHtml(r.name)}</option>`; });
+  knownRigsFull.forEach(r=>{ html += `<option value="${escapeHtml(r.name)}" data-rig-id="${escapeHtml(r.id)}">${escapeHtml(rigOptionLabel(r))}</option>`; });
   return html;
 }
 
@@ -2513,7 +2540,7 @@ function lastSessionBaitEntry(rod, keys){
 
 function rigBaitKeys(rod){
   const rigName = getRodFieldValue(rod, 'rig');
-  const rigDef = rigName ? findRigDef(rigName) : null;
+  const rigDef = rigName ? findRigDef(rigName, currentPerson && currentPerson.notes[rod].rigId) : null;
   if(!rigDef) return [];
   const keys = [];
   if(rigDef.usesBom) keys.push('bom');
@@ -2728,7 +2755,7 @@ function renderComboHookFields(){
   const container = document.getElementById('combo-hook-fields');
   if(!sel || !container) return;
   const rigName = sel.value;
-  const rigDef = rigName ? findRigDef(rigName) : null;
+  const rigDef = rigName ? findRigDef(rigName, selectedRigId(sel)) : null;
   comboDraft.hooks = {};
   if(!rigDef || rigDef.hookCount <= 0){ container.innerHTML = ''; return; }
   let html = '<div class="hooks-row">';
@@ -2752,7 +2779,7 @@ document.getElementById('combo-create-btn').addEventListener('click', async ()=>
   if(!name){ st.textContent = 'Enter a name.'; return; }
   if(!rigSel.value){ st.textContent = 'Select a rig.'; return; }
   if(!isSignedIn()){ st.textContent = 'You need to be signed in.'; return; }
-  const rigDef = findRigDef(rigSel.value);
+  const rigDef = findRigDef(rigSel.value, selectedRigId(rigSel));
   const hookBaits = {};
   if(rigDef){
     for(let n=1; n<=rigDef.hookCount; n++){
@@ -2798,7 +2825,7 @@ async function loadBaitCombinations(){
 let myBaitCombinations = [];
 
 function comboSummaryText(combo){
-  const rigDef = combo.rigName ? findRigDef(combo.rigName) : null;
+  const rigDef = combo.rigName ? findRigDef(combo.rigName, combo.rigId) : null;
   const parts = Object.keys(combo.hookBaits).sort().map(key=>{
     const n = parseInt(key.replace('hook',''), 10) || 0;
     const label = rigDef ? hookDisplayName(rigDef, n) : ('Hook ' + n);
@@ -2859,11 +2886,12 @@ document.addEventListener('click', async (e)=>{
   if(!combo) return;
 
   const rigSel = document.querySelector('.rod-select[data-rod="'+rod+'"][data-key="rig"]');
-  const rigDef = combo.rigName ? findRigDef(combo.rigName) : null;
+  const rigDef = combo.rigName ? findRigDef(combo.rigName, combo.rigId) : null;
   if(rigSel && rigDef){
     const otherInput = document.querySelector('.rod-select-other[data-rod="'+rod+'"][data-key="rig"]');
     if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
-    rigSel.value = combo.rigName;
+    const comboOpt = Array.from(rigSel.options).find(o=>o.dataset.rigId === rigDef.id);
+    if(comboOpt) rigSel.selectedIndex = comboOpt.index;
     currentPerson.notes[rod].rig = combo.rigName;
     currentPerson.notes[rod].rigId = rigDef.id;
   }
@@ -2887,7 +2915,7 @@ function renderRigFields(rod){
   const container = document.getElementById('rig-fields-'+rod);
   if(!container || !currentPerson) return;
   const rigName = getRodFieldValue(rod, 'rig');
-  const rigDef = rigName ? findRigDef(rigName) : null;
+  const rigDef = rigName ? findRigDef(rigName, currentPerson.notes[rod].rigId) : null;
 
   // The "which hook caught it" selector only makes sense once a rig is
   // picked — without one there's no real hook count or names to offer,
@@ -5040,8 +5068,8 @@ async function loadRigsFull(){
 // Shows the actual feed methods rather than a bare Bom yes/no
 function feedMethodPills(r){
   let methods = [];
-  try{ methods = r.feed_methods ? JSON.parse(r.feed_methods) : []; }catch(e){}
-  if(!methods.length && r.uses_bom) methods = ['Bom (method feeder)'];
+  try{ methods = normalizeFeedMethods(r.feed_methods ? JSON.parse(r.feed_methods) : []); }catch(e){}
+  if(!methods.length && r.uses_bom) methods = [FEED_BOM];
   if(!methods.length) return '';
   return methods.map(m=>`<span class="pill">${escapeHtml(m)}</span>`).join('');
 }
@@ -5211,9 +5239,9 @@ async function renderRigsList(){
       let labels = [];
       try{ labels = rig && rig.hook_labels ? JSON.parse(rig.hook_labels) : []; }catch(e){ labels = []; }
       let currentFeed = [];
-      try{ currentFeed = rig && rig.feed_methods ? JSON.parse(rig.feed_methods) : []; }catch(e){ currentFeed = []; }
+      try{ currentFeed = normalizeFeedMethods(rig && rig.feed_methods ? JSON.parse(rig.feed_methods) : []); }catch(e){ currentFeed = []; }
       // Rigs created before feed methods existed just had a bom yes/no
-      if(!currentFeed.length && rig && rig.uses_bom) currentFeed = ['Bom (method feeder)'];
+      if(!currentFeed.length && rig && rig.uses_bom) currentFeed = [FEED_BOM];
 
       function hookLabelFields(count){
         let out = '';
@@ -6271,8 +6299,7 @@ function attachRodCardHandlers(){
         // Capture the rig's real ID too, not just its display name — this
         // is what makes later lookups (hook labels, feed method) unambiguous
         // even if two rigs happen to share a name
-        const opt = sel.options[sel.selectedIndex];
-        currentPerson.notes[rod].rigId = opt ? (opt.dataset.rigId || null) : null;
+        currentPerson.notes[rod].rigId = selectedRigId(sel);
       }
       await saveRodState(currentPersonId, rod);
       if(key === 'rig') renderRigFields(rod);
@@ -10035,6 +10062,10 @@ function renderNotes(){
     const rigOther = document.querySelector('.rod-select-other[data-rod="'+r+'"][data-key="rig"]');
     if(rigSel){
       setSelectOrOther(rigSel, rigOther, currentPerson ? (currentPerson.notes[r].rig || '') : '');
+      // With two rigs sharing a name, pick the one this rod was actually saved with
+      const savedRigId = currentPerson ? currentPerson.notes[r].rigId : null;
+      const savedOpt = savedRigId ? Array.from(rigSel.options).find(o=>o.dataset.rigId === savedRigId) : null;
+      if(savedOpt) rigSel.selectedIndex = savedOpt.index;
     }
     renderRigFields(r);
 
