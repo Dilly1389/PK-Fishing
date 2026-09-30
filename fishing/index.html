@@ -576,7 +576,7 @@
   dialog#session-edit-modal, dialog#recast-confirm-modal, dialog#pin-drop-modal, dialog#badge-bookcase-modal,
   dialog#badge-detail-modal, dialog#follow-list-modal, dialog#profile-modal, dialog#notif-modal,
   dialog#onboarding-modal, dialog#reset-password-modal, dialog#timers-help-modal, dialog#profile-help-modal,
-  dialog#tackle-help-modal, dialog#photo-modal, dialog#edit-catch-modal{
+  dialog#tackle-help-modal, dialog#photo-modal, dialog#edit-catch-modal, dialog#competition-detail-modal{
     border:none;padding:0;background:transparent;margin:auto;
     max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);
   }
@@ -591,9 +591,26 @@
   dialog#follow-list-modal::backdrop, dialog#profile-modal::backdrop, dialog#notif-modal::backdrop,
   dialog#onboarding-modal::backdrop, dialog#reset-password-modal::backdrop, dialog#timers-help-modal::backdrop,
   dialog#profile-help-modal::backdrop, dialog#tackle-help-modal::backdrop, dialog#photo-modal::backdrop,
-  dialog#edit-catch-modal::backdrop{
+  dialog#edit-catch-modal::backdrop, dialog#competition-detail-modal::backdrop{
     background:rgba(0,0,0,0.55);
   }
+  dialog#competition-detail-modal .modal-card{max-width:min(92vw,560px);max-height:88vh;}
+  .comp-name-btn{
+    background:none;border:none;padding:0;margin:0;font:inherit;color:inherit;text-align:left;
+    cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:4px;
+  }
+  .comp-name-btn:hover, .comp-name-btn:focus-visible{text-decoration-color:currentColor;}
+  .comp-angler-row{
+    display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;
+    border-bottom:1px solid var(--line);padding:10px 0;cursor:pointer;font:inherit;color:var(--ink);
+  }
+  .ver-ok{color:#3a9d4f;font-weight:700;}
+  .ver-bad{color:var(--rust);font-weight:700;}
+  .ver-warn{color:var(--rust);font-size:12.5px;margin:2px 0;}
+  .comp-catch-photos{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;}
+  .comp-catch-photos figure{margin:0;text-align:center;}
+  .comp-catch-photos figcaption{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .comp-catch-photos img.pc-photo{width:96px;height:96px;object-fit:cover;margin-top:0;}
   .modal-card{
     background:var(--card-bg);border-radius:16px;padding:24px 22px;max-width:320px;width:100%;
     text-align:center;border:1px solid var(--line);
@@ -1212,6 +1229,9 @@
         </div>
         <div id="competition-angler-search-results"></div>
         <div id="competition-selected-anglers" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
+        <p class="sub-heading">Proof for each catch</p>
+        <label class="check-row"><input type="checkbox" id="competition-require-fish" checked> Photo of the fish is compulsory</label>
+        <label class="check-row"><input type="checkbox" id="competition-require-scale"> Photo of the scale is compulsory</label>
         <label class="check-row"><input type="checkbox" id="competition-creator-fishing" checked> I'm fishing this one too</label>
         <button class="primary-btn" id="competition-create-btn" style="margin-top:10px;">Create competition</button>
         <div class="status" id="competition-create-status"></div>
@@ -1759,6 +1779,14 @@
   </div>
 </dialog>
 
+<dialog id="competition-detail-modal" closedby="any" aria-label="Competition details">
+  <div class="modal-card wide" style="position:relative;">
+    <button type="button" id="competition-detail-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <div id="competition-detail-body"></div>
+    <button class="primary-btn" id="competition-detail-close">Close</button>
+  </div>
+</dialog>
+
 <dialog id="notif-modal" closedby="any" aria-label="Notifications">
   <div class="modal-card">
     <h3 style="margin-top:0;">Notifications</h3>
@@ -1789,7 +1817,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">4. Log your catches</div>
-      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time, and the weather and moon phase at the time, are all recorded automatically. The timer resets afterwards, but the rig, distance and note stay on the rod, so you only need to pick new baits before the next cast.</div>
+      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time, and the weather and moon phase at the time, are all recorded automatically. The timer resets afterwards, but the rig, distance and note stay on the rod, so you only need to pick new baits before the next cast. In a competition you can also enter the weight of your net, and the organiser may need a fish photo and a scale photo with every catch.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">5. See what's working</div>
@@ -1849,7 +1877,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Logging a catch</div>
-      <div class="pc-line muted">Tap "Caught a fish" for the full form, or "No catch" to log a blank instantly. Your soak time is recorded automatically from the timer.</div>
+      <div class="pc-line muted">Tap "Caught a fish" for the full form, or "No catch" to log a blank instantly. Your soak time is recorded automatically from the timer. When the session is tagged to a competition, the form also asks for the weight of your net, and any photo the organiser has made compulsory is marked "required" — the catch won't save without it. The organiser compares your scale photo with your fish weight plus the net.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">This session's feed</div>
@@ -3680,6 +3708,7 @@ function buildCatchPayload(personId, entry){
   // Only sent when there is a value, so catches without them never depend on these columns
   if(entry.weather && entry.weather.precipitation != null) payload.weather_precipitation = entry.weather.precipitation;
   if(entry.weather && entry.weather.pressureChange != null) payload.weather_pressure_change = entry.weather.pressureChange;
+  if(entry.netWeight > 0) payload.net_weight = entry.netWeight;
   for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = entry['hook'+i] || ''; }
   return payload;
 }
@@ -6055,7 +6084,9 @@ function mapCatchRow(c){
     // fine, every reader treats a missing/short-of-photos labels array as
     // "no label for this one" rather than an error.
     photoLabels: c.photo_labels ? (typeof c.photo_labels === 'string' ? JSON.parse(c.photo_labels) : c.photo_labels) : [],
-    likes: c.likes || 0
+    likes: c.likes || 0,
+    netWeight: c.net_weight ?? null,
+    verificationStatus: c.verification_status || 'pending'
   };
   if(c.weather_temp != null || c.weather_wind_speed != null || c.weather_pressure != null || c.weather_precipitation != null || c.weather_pressure_change != null){
     entry.weather = {
@@ -6312,8 +6343,13 @@ function rodCardHtml(r){
           <label>Weight</label>
           <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4" autocomplete="pk-x11" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
+        <div class="field catch-net-field" data-rod="${r}" style="display:none;">
+          <label>Weight of the net (optional)</label>
+          <input type="number" step="0.01" min="0" max="500" class="catch-net-weight" data-rod="${r}" placeholder="e.g. 0.8" autocomplete="pk-x12" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <p class="pc-line muted" style="margin-top:4px;">The organiser checks the scale photo against the fish weight plus the net.</p>
+        </div>
         <div class="field photo-slot-group">
-          <label>Fish photo (optional)</label>
+          <label class="photo-slot-label" data-rod="${r}" data-slot="fish">Fish photo (optional)</label>
           <div class="catch-photo-preview" data-rod="${r}" data-slot="fish" style="display:none;"></div>
           <div class="photo-slot-buttons" data-rod="${r}" data-slot="fish" style="display:flex;gap:8px;">
             <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}" data-slot="fish"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
@@ -6322,7 +6358,7 @@ function rodCardHtml(r){
           <input type="file" accept="image/*" class="catch-photo" data-rod="${r}" data-slot="fish" style="display:none;">
         </div>
         <div class="field photo-slot-group">
-          <label>Scale photo (optional)</label>
+          <label class="photo-slot-label" data-rod="${r}" data-slot="scale">Scale photo (optional)</label>
           <div class="catch-photo-preview" data-rod="${r}" data-slot="scale" style="display:none;"></div>
           <div class="photo-slot-buttons" data-rod="${r}" data-slot="scale" style="display:flex;gap:8px;">
             <button type="button" class="mini-btn photo-camera-btn" data-target-rod="${r}" data-slot="scale"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
@@ -6436,8 +6472,38 @@ document.getElementById('recast-confirm-cancel').addEventListener('click', ()=>{
   document.getElementById('recast-confirm-modal').close();
 });
 
+// What proof the competition behind the running session asks for. Cached per
+// competition; a failed lookup (offline, or the columns not there yet) is not
+// cached and simply means "nothing compulsory".
+const competitionRulesCache = {};
+async function getCompetitionRules(compId){
+  if(!compId) return null;
+  if(competitionRulesCache[compId]) return competitionRulesCache[compId];
+  try{
+    const rows = await sbGet('competitions?select=id,require_fish_photo,require_scale_photo&id=eq.'+encodeURIComponent(compId));
+    if(rows[0]){
+      competitionRulesCache[compId] = {fish: !!rows[0].require_fish_photo, scale: !!rows[0].require_scale_photo};
+      return competitionRulesCache[compId];
+    }
+  }catch(e){ console.error('competition rules lookup failed', e); }
+  return null;
+}
+
+// Net weight only makes sense for a competition catch, and the photo labels
+// say which photos the organiser has made compulsory
+async function applyCompetitionCatchRules(rod){
+  const compId = activeSession && activeSession.competition_id;
+  const netField = document.querySelector('.catch-net-field[data-rod="'+rod+'"]');
+  if(netField) netField.style.display = compId ? 'block' : 'none';
+  const rules = (compId && await getCompetitionRules(compId)) || {};
+  [['fish','Fish photo'], ['scale','Scale photo']].forEach(([slot, text])=>{
+    const label = document.querySelector('.photo-slot-label[data-rod="'+rod+'"][data-slot="'+slot+'"]');
+    if(label) label.textContent = text + (rules[slot] ? ' (required)' : ' (optional)');
+  });
+}
+
 function attachRodCardHandlers(){
-  document.querySelectorAll('.catch-weight').forEach(setupWeightUnitInput);
+  document.querySelectorAll('.catch-weight, .catch-net-weight').forEach(setupWeightUnitInput);
   document.querySelectorAll('[data-action]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       if(!currentPerson) return;
@@ -6595,6 +6661,7 @@ function attachRodCardHandlers(){
       if(logBtn) logBtn.style.display = yes ? 'block' : 'none';
       const cancelBtn = document.querySelector('.cancel-catch-btn[data-rod="'+rod+'"]');
       if(cancelBtn) cancelBtn.style.display = yes ? 'inline-block' : 'none';
+      if(yes) applyCompetitionCatchRules(rod);
       if(!yes){
         // No catch needs no extra detail — go straight to confirmation
         showConfirmation(buildCatchEntry(rod));
@@ -6622,6 +6689,8 @@ function attachRodCardHandlers(){
       if(typeOtherEl){ typeOtherEl.value = ''; typeOtherEl.style.display = 'none'; }
       renderCatchTypeButtons(rod);
       if(weightEl) weightEl.value = '';
+      const netEl = document.querySelector('.catch-net-weight[data-rod="'+rod+'"]');
+      if(netEl) netEl.value = '';
       document.querySelectorAll('.catch-photo[data-rod="'+rod+'"]').forEach(el=> el.value = '');
       if(dateEl) dateEl.value = '';
       pendingPhotos[rod] = [];
@@ -7426,6 +7495,7 @@ function buildCatchEntry(rod){
     ? (typeEl.value === 'Other' ? (typeOtherEl ? typeOtherEl.value : '') : typeEl.value)
     : '';
   const weightEl = document.querySelector('.catch-weight[data-rod="'+rod+'"]');
+  const netEl = document.querySelector('.catch-net-weight[data-rod="'+rod+'"]');
   const notes = currentPerson.notes[rod];
   const bomVal = notes.bom || '';
   const rigVal = getRodFieldValue(rod, 'rig');
@@ -7450,6 +7520,7 @@ function buildCatchEntry(rod){
     rodIdentifier: rodIdentifier,
     castDistance: notes.castDistance ? parseFloat(notes.castDistance) : null,
     rodNote: notes.rodNote || '',
+    netWeight: (caught && netEl && activeSession && activeSession.competition_id) ? (parseFloat(netEl.value) || 0) : 0,
     photos: caught ? (pendingPhotos[rod] || []).slice() : [],
     photoLabels: caught ? (pendingPhotoLabels[rod] || []).slice() : []
   };
@@ -7470,6 +7541,7 @@ function showConfirmation(entry){
   html += `<p><b>${RID_LABEL[entry.rod]}</b>${entry.caught ? ' · '+escapeHtml(entry.hook) : ''}${entry.rodIdentifier ? ' · '+escapeHtml(entry.rodIdentifier) : ''}</p>`;
   if(entry.caught){
     html += `<p>${escapeHtml(entry.type||'Fish')} — <b>${formatWeight(entry.weight)}</b></p>`;
+    if(entry.netWeight > 0) html += `<p>Net: <b>${formatWeight(entry.netWeight)}</b> · scale should read ${formatWeight(entry.weight + entry.netWeight)}</p>`;
   }
   // Make it obvious when a catch has been backdated rather than logged now
   const entryDate = new Date(entry.time);
@@ -7502,9 +7574,17 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
 
   // Once a catch counts toward a competition standing, "just trust me" isn't
   // enough — require a photo, same principle as dedicated tournament tools
-  if(entry.caught && entry.competitionId && (!entry.photos || !entry.photos.length)){
-    alert('Add a photo before saving — catches tagged to a competition need one, so the standings stay honest.');
-    return;
+  const sessionCompId = entry.caught && activeSession ? activeSession.competition_id : null;
+  if(sessionCompId){
+    const rules = (await getCompetitionRules(sessionCompId)) || {};
+    const labels = entry.photoLabels || [];
+    const missing = [];
+    if(rules.fish && !labels.includes('fish')) missing.push('a photo of the fish');
+    if(rules.scale && !labels.includes('scale')) missing.push('a photo of the scale');
+    if(missing.length){
+      alert('The organiser of this competition needs ' + missing.join(' and ') + ' with every catch. Cancel this, add it, and log the catch again.');
+      return;
+    }
   }
 
   const rod = entry.rod;
@@ -7537,6 +7617,8 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   if(typeEl) typeEl.value='';
   if(typeOtherEl){ typeOtherEl.value=''; typeOtherEl.style.display='none'; }
   if(weightEl) weightEl.value='';
+  const netWeightEl = document.querySelector('.catch-net-weight[data-rod="'+rod+'"]');
+  if(netWeightEl) netWeightEl.value='';
   document.querySelectorAll('.catch-photo[data-rod="'+rod+'"]').forEach(el=> el.value = '');
   if(dateEl) dateEl.value='';
   pendingPhotos[rod] = [];
@@ -10905,6 +10987,9 @@ function feedRodLabel(it){
 const CHANGELOG = [
   {version:'1.7', date:'30 September 2026', changes:[
     '6 new weather related badges in Fins of Fame',
+    'Competitions: tap a competition\'s name to see the full leaderboard, then tap an angler to see what they caught, with their photos. The anglers list is gone from the front card',
+    'Competitions: organisers can now confirm or reject each catch after checking the scale photo against the fish weight plus net weight. Rejected catches stop counting',
+    'Competitions: organisers can make a fish photo and/or a scale photo compulsory (two separate tick boxes), and anglers can log the weight of their net when they catch a fish',
     'Home: tap a catch from your mates to open their profile, or a badge to see every time they earned it. You can now see the details of friends\' badges too',
     'Timers: note your peg or stand number when you start a session, change it any time, and see it on your session cards and in Insights',
     'Maps now have a view switcher (top right): Street, Satellite, Satellite + names and Terrain. The one you pick is remembered, and it applies to the venue map in Insights and to the pin-drop map when you set a venue location',
@@ -11701,8 +11786,10 @@ async function loadCompetitions(){
 async function computeCompetitionLeaderboard(comp, participantIds){
   let rows = [];
   try{
-    rows = await sbGet('catches?select=fisherman_id,weight,fish_type&caught=eq.true&competition_id=eq.'+comp.id);
+    rows = await sbGet('catches?select=fisherman_id,weight,fish_type,verification_status&caught=eq.true&competition_id=eq.'+comp.id);
   }catch(e){ console.error(e); return []; }
+  // A catch the organiser rejected after checking it doesn't count
+  rows = rows.filter(c=> c.verification_status !== 'rejected');
   if(comp.fish_type_filter) rows = rows.filter(c=>c.fish_type===comp.fish_type_filter);
   const byFisherman = {};
   rows.forEach(c=>{
@@ -11841,6 +11928,9 @@ function renderCompetitionEditForm(comp, containerEl){
         </select>
       </div>
     </div>
+    <p class="sub-heading">Proof for each catch</p>
+    <label class="check-row"><input type="checkbox" class="comp-edit-require-fish" ${comp.require_fish_photo ? 'checked' : ''}> Photo of the fish is compulsory</label>
+    <label class="check-row"><input type="checkbox" class="comp-edit-require-scale" ${comp.require_scale_photo ? 'checked' : ''}> Photo of the scale is compulsory</label>
     <button class="primary-btn comp-edit-save">Save changes</button>
     <div class="status comp-edit-status"></div>
   `;
@@ -11861,8 +11951,11 @@ function renderCompetitionEditForm(comp, containerEl){
         start_time: containerEl.querySelector('.comp-edit-start-time').value || '00:00',
         end_time: containerEl.querySelector('.comp-edit-end-time').value || '23:59',
         metric: containerEl.querySelector('.comp-edit-metric').value,
-        fish_type_filter: containerEl.querySelector('.comp-edit-fishtype').value || null
+        fish_type_filter: containerEl.querySelector('.comp-edit-fishtype').value || null,
+        require_fish_photo: containerEl.querySelector('.comp-edit-require-fish').checked,
+        require_scale_photo: containerEl.querySelector('.comp-edit-require-scale').checked
       });
+      delete competitionRulesCache[comp.id];
       st.textContent = 'Saved.';
       setTimeout(()=>{ renderCompetitions(); }, 700);
     }catch(e){
@@ -11898,10 +11991,6 @@ async function renderCompetitions(){
   const parts = [];
   for(const c of comps){
     const participantIds = await loadCompetitionParticipants(c.id);
-    const names = participantIds.map(pid=>{
-      const p = people.find(x=>x.id===pid);
-      return p ? p.name : null;
-    }).filter(Boolean);
     const canDelete = isSuperUser() || (isSignedIn() && session.user.id === c.creator_user_id);
     const canManage = isSuperUser();
 
@@ -11917,7 +12006,7 @@ async function renderCompetitions(){
       metaHtml = `<p class="pc-line muted">${startStr} → ${endStr}${c.fish_type_filter ? ' · '+escapeHtml(c.fish_type_filter) : ''} · ranked by ${metricLabel}</p>`;
       standingsHtml = stats.length
         ? stats.slice(0,10).map((s,i)=>`
-            <div class="lb-item" style="padding:8px 0;">
+            <div class="lb-item comp-standing-row" data-competition-open="${c.id}" data-angler="${s.id}" role="button" tabindex="0" style="padding:8px 0;cursor:pointer;">
               <div class="lb-rank">${i+1}</div>
               <div style="flex:1;"><b style="font-size:14px;">${escapeHtml(s.name)}</b></div>
               <div class="lb-stats"><b>${c.metric==='catch_count' ? s[metricKey] : s[metricKey].toFixed(2)+'kg'}</b></div>
@@ -11926,12 +12015,9 @@ async function renderCompetitions(){
     }
 
     parts.push(`<section class="card">
-        <h2>${escapeHtml(c.name)}</h2>
+        <h2><button type="button" class="comp-name-btn" data-competition-open="${c.id}" aria-label="Open ${escapeHtml(c.name)} leaderboard">${escapeHtml(c.name)} <i class="ti ti-chevron-right" style="font-size:16px;vertical-align:-2px;" aria-hidden="true"></i></button></h2>
         <p class="pc-line muted">${escapeHtml(c.dam||'No venue set')}</p>
         ${metaHtml}
-        <div class="who" style="flex-wrap:wrap;">
-          ${names.length ? names.map(n=>`<span class="pill">${escapeHtml(n)}</span>`).join('') : '<span class="pc-line muted">No anglers added yet.</span>'}
-        </div>
         ${standingsHtml}
         ${canManage ? `
           <div class="field" style="margin-top:10px;">
@@ -11950,6 +12036,14 @@ async function renderCompetitions(){
       </section>`);
   }
   el.innerHTML = parts.join('');
+  el.querySelectorAll('[data-competition-open]').forEach(node=>{
+    const open = ()=>{
+      const comp = comps.find(x=>x.id===node.dataset.competitionOpen);
+      if(comp) openCompetitionDetail(comp, node.dataset.angler || null);
+    };
+    node.addEventListener('click', open);
+    node.addEventListener('keydown', e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } });
+  });
   el.querySelectorAll('[data-competition-edit]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id = btn.dataset.competitionEdit;
@@ -12067,6 +12161,127 @@ async function renderCompetitions(){
       });
     });
   });
+}
+
+// ---------- Competition detail: leaderboard, then one angler's catches ----------
+document.getElementById('competition-detail-x').addEventListener('click', ()=> document.getElementById('competition-detail-modal').close());
+document.getElementById('competition-detail-close').addEventListener('click', ()=> document.getElementById('competition-detail-modal').close());
+
+async function openCompetitionDetail(comp, anglerId){
+  const modal = document.getElementById('competition-detail-modal');
+  const body = document.getElementById('competition-detail-body');
+  const canVerify = isSuperUser() || (isSignedIn() && session.user.id === comp.creator_user_id);
+  const metricKey = comp.metric==='catch_count' ? 'count' : (comp.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
+  const metricLabel = comp.metric==='catch_count' ? 'most catches' : (comp.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
+  const nameOf = id => { const p = people.find(x=>x.id===id); return p ? p.name : 'Unknown'; };
+
+  const headerHtml = `
+    <h3 style="text-align:left;margin-right:34px;">${escapeHtml(comp.name)}</h3>
+    <p class="pc-line muted" style="text-align:left;">${escapeHtml(comp.dam || 'No venue set')}${comp.start_date ? ' · ' + escapeHtml(comp.start_date) + ' → ' + escapeHtml(comp.end_date) : ''}</p>
+    <p class="pc-line muted" style="text-align:left;">Ranked by ${metricLabel}${comp.fish_type_filter ? ' · ' + escapeHtml(comp.fish_type_filter) + ' only' : ''}</p>
+    ${(comp.require_fish_photo || comp.require_scale_photo) ? `<p class="pc-line muted" style="text-align:left;">Every catch needs: ${[comp.require_fish_photo ? 'a fish photo' : '', comp.require_scale_photo ? 'a scale photo' : ''].filter(Boolean).join(' and ')}</p>` : ''}`;
+
+  async function showBoard(){
+    body.innerHTML = headerHtml + '<div class="empty">Loading...</div>';
+    const participantIds = await loadCompetitionParticipants(comp.id);
+    const stats = await computeCompetitionLeaderboard(comp, participantIds);
+    const scoredIds = new Set(stats.map(s=>s.id));
+    const quiet = participantIds.filter(id=> !scoredIds.has(id));
+    const rows = stats.map((s,i)=>`
+      <button type="button" class="comp-angler-row" data-angler="${s.id}">
+        <div class="lb-rank">${i+1}</div>
+        <div style="flex:1;min-width:0;">
+          <b style="font-size:14px;">${escapeHtml(s.name)}</b>
+          <div class="pc-line muted">${s.count} fish · ${formatWeight(s.totalWeight)} total · biggest ${formatWeight(s.biggest)}</div>
+        </div>
+        <div><b>${comp.metric==='catch_count' ? s.count : formatWeight(s[metricKey])}</b></div>
+        <i class="ti ti-chevron-right" aria-hidden="true"></i>
+      </button>`).join('');
+    const quietRows = quiet.map(id=>`
+      <div class="pc-line muted" style="padding:8px 0;border-bottom:1px solid var(--line);text-align:left;">${escapeHtml(nameOf(id))} · no catches yet</div>`).join('');
+    body.innerHTML = headerHtml +
+      '<p class="sub-heading" style="text-align:left;margin-top:12px;">Leaderboard</p>' +
+      (rows || '<div class="empty">No catches counted yet.</div>') +
+      (quietRows ? '<p class="sub-heading" style="text-align:left;margin-top:12px;">Also fishing</p>' + quietRows : '') +
+      (stats.length ? '<p class="pc-line muted" style="text-align:left;margin-top:8px;">Tap an angler to see what they caught.</p>' : '');
+    body.querySelectorAll('[data-angler]').forEach(btn=> btn.addEventListener('click', ()=> showAngler(btn.dataset.angler)));
+  }
+
+  async function showAngler(fid){
+    body.innerHTML = headerHtml + '<div class="empty">Loading...</div>';
+    let catches = [];
+    try{
+      const rows = await sbGet('catches?select=*&caught=eq.true&competition_id=eq.'+encodeURIComponent(comp.id)+'&fisherman_id=eq.'+encodeURIComponent(fid)+'&order=time.asc');
+      catches = rows.map(mapCatchRow);
+    }catch(e){
+      console.error(e);
+      body.innerHTML = headerHtml + '<div class="empty">Could not load the catches — try again.</div>';
+      return;
+    }
+    if(comp.fish_type_filter) catches = catches.filter(c=> c.type === comp.fish_type_filter);
+
+    const draw = ()=>{
+      const counted = catches.filter(c=> c.verificationStatus !== 'rejected');
+      const total = counted.reduce((s,c)=> s + (c.weight||0), 0);
+      const biggest = counted.reduce((b,c)=> Math.max(b, c.weight||0), 0);
+      const list = catches.map(c=>{
+        photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || [];
+        const labels = c.photoLabels || [];
+        const hasFish = labels.includes('fish'), hasScale = labels.includes('scale');
+        const status = c.verificationStatus;
+        const badge = status === 'confirmed' ? '<span class="ver-ok"> ✓ Confirmed</span>'
+          : status === 'rejected' ? '<span class="ver-bad"> ✗ Rejected</span>' : '';
+        const when = new Date(c.time).toLocaleString(dateLocale(), {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+        const netLine = c.netWeight > 0
+          ? `<p class="pc-line" style="text-align:left;">Net ${formatWeight(c.netWeight)} · scale should read <b>${formatWeight((c.weight||0) + c.netWeight)}</b></p>`
+          : (canVerify ? '<p class="pc-line muted" style="text-align:left;">No net weight entered</p>' : '');
+        const warnings = canVerify ? [
+          comp.require_fish_photo && !hasFish ? 'No fish photo' : '',
+          comp.require_scale_photo && !hasScale ? 'No scale photo' : ''
+        ].filter(Boolean).map(w=>`<p class="ver-warn" style="text-align:left;">⚠ ${w}</p>`).join('') : '';
+        const photos = (c.photos||[]).length ? `<div class="comp-catch-photos">${c.photos.map((src,i)=>`
+            <figure><img class="pc-photo" src="${src}" alt="${labels[i]==='scale' ? 'Scale photo' : 'Catch photo'}" data-catch-id="${c.id}" data-photo-index="${i}" loading="lazy" decoding="async">
+            <figcaption>${labels[i]==='scale' ? 'Scale' : (labels[i]==='fish' ? 'Fish' : 'Photo')}</figcaption></figure>`).join('')}</div>` : '';
+        const buttons = canVerify ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+            ${status !== 'confirmed' ? `<button type="button" class="mini-btn" data-verify="confirmed" data-catch="${c.id}">Confirm</button>` : ''}
+            ${status !== 'rejected' ? `<button type="button" class="mini-btn danger" data-verify="rejected" data-catch="${c.id}">Reject</button>` : ''}
+            ${status !== 'pending' ? `<button type="button" class="mini-btn" data-verify="pending" data-catch="${c.id}">Undo</button>` : ''}
+          </div>` : '';
+        return `<div class="profile-catch" style="text-align:left;">
+            <div class="pc-head" style="${status==='rejected' ? 'text-decoration:line-through;' : ''}">${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}${badge}</div>
+            <p class="pc-line muted">${escapeHtml(when)}</p>
+            ${netLine}${warnings}${photos}${buttons}
+          </div>`;
+      }).join('');
+      body.innerHTML = headerHtml +
+        `<button type="button" class="mini-btn" id="comp-detail-back" style="margin-top:10px;">‹ Leaderboard</button>
+         <p class="sub-heading" style="text-align:left;margin-top:12px;">${escapeHtml(nameOf(fid))}</p>
+         <p class="pc-line muted" style="text-align:left;margin-bottom:10px;">${counted.length} counted · ${formatWeight(total)} total · biggest ${formatWeight(biggest)}</p>` +
+        (list || '<div class="empty">No catches in this competition.</div>');
+      document.getElementById('comp-detail-back').addEventListener('click', showBoard);
+      body.querySelectorAll('[data-verify]').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const status = btn.dataset.verify;
+          if(status === 'rejected' && !confirm('Reject this catch? It will stop counting toward the standings.')) return;
+          btn.disabled = true;
+          try{
+            await sbRpc('set_catch_verification', {p_catch_id: btn.dataset.catch, p_status: status});
+            const c = catches.find(x=> x.id === btn.dataset.catch);
+            if(c) c.verificationStatus = status;
+            draw();
+          }catch(e){
+            console.error(e);
+            alert('Could not save that — ' + (e.message || 'try again') );
+            btn.disabled = false;
+          }
+        });
+      });
+    };
+    draw();
+  }
+
+  if(!modal.open) modal.showModal();
+  if(anglerId) await showAngler(anglerId); else await showBoard();
 }
 
 // ---------- Admin tab ----------
@@ -12430,6 +12645,8 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
       start_date: startEl.value, end_date: endEl.value,
       start_time: startTimeEl.value || '00:00', end_time: endTimeEl.value || '23:59',
       metric: metricEl.value, fish_type_filter: fishtypeEl.value || null,
+      require_fish_photo: document.getElementById('competition-require-fish').checked,
+      require_scale_photo: document.getElementById('competition-require-scale').checked,
       creator_user_id: session.user.id
     });
     const myId = getMyFishermanId();
