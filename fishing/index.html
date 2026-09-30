@@ -2194,6 +2194,20 @@ const BADGE_DEFS = [
    count: s=> s.stormCatchCount}
 ];
 
+// Shelf order in the Fins of Fame cabinet: catches, then variety, then
+// sessions, then weather. Any badge missing from this list goes on the end.
+const BADGE_CABINET_ORDER = [
+  'first_catch','catch_10','catch_50','catch_100','ten_kg','beat_your_best',
+  'five_species','grand_slam','rare_catch',
+  'first_blank','ten_sessions','three_venues',
+  'night_owl','competitor',
+  'windmaster','pressure_shift','rainmaker','heatwave','frosty','stormchaser','full_moon'
+];
+function cabinetOrderedBadgeDefs(){
+  const rank = k=>{ const i = BADGE_CABINET_ORDER.indexOf(k); return i === -1 ? BADGE_CABINET_ORDER.length : i; };
+  return BADGE_DEFS.slice().sort((a,b)=> rank(a.key) - rank(b.key));
+}
+
 // Where each weather badge kicks in. Change a number here and the badges
 // follow; they are judged when the badge check runs, so old catches are
 // re-judged too (as long as they have the weather saved).
@@ -9313,7 +9327,7 @@ async function openBadgeBookcase(personId){
     compByKey[a.badge_key].count++;
   });
 
-  renderCabinet(el, BADGE_DEFS, byKey, 'Fins of Fame', personId, false);
+  renderCabinet(el, cabinetOrderedBadgeDefs(), byKey, 'Fins of Fame', personId, false);
   renderCabinet(elComp, COMPETITION_BADGE_DEFS, compByKey, 'Trophy Case', personId, true);
   renderBookcaseDots();
 }
@@ -10873,6 +10887,7 @@ function feedRodLabel(it){
 // notice — not every fix, just what's worth knowing about.
 const CHANGELOG = [
   {version:'1.7', date:'30 September 2026', changes:[
+    '6 new weather related badges in Fins of Fame',
     'Timers: note your peg or stand number when you start a session, change it any time, and see it on your session cards and in Insights',
     'Maps now have a view switcher (top right): Street, Satellite, Satellite + names and Terrain. The one you pick is remembered, and it applies to the venue map in Insights and to the pin-drop map when you set a venue location',
     'Insights is reorganised into four collapsible groups — Overview, What works, When and where, and Sessions — and every row now reads "4 fish from 12 casts" so you can see how often something works, not just how often it caught',
