@@ -2002,8 +2002,36 @@ const FEED_METHODS = [
   'Bom (method feeder)',
   'Solid PVA bag',
   'PVA mesh / stick',
-  'Stringer'
+  'Stringer',
+  'Bait boat'
 ];
+const FEED_BOM = 'Bom (method feeder)';
+// Every feed method except Bom holds bait ("what's in the bag"). Each one a rig
+// has gets its own field on the Timers rod card; `key` is the note/catch field.
+const FEED_CONTENT_FIELDS = [
+  {method:'Solid PVA bag', key:'feedPva', label:'In the PVA bag', short:'PVA bag'},
+  {method:'PVA mesh / stick', key:'feedMesh', label:'In the PVA mesh / stick', short:'PVA mesh / stick'},
+  {method:'Stringer', key:'feedStringer', label:'On the stringer', short:'Stringer'},
+  {method:'Bait boat', key:'feedBoat', label:'In the bait boat', short:'Bait boat'}
+];
+const FEED_CONTENT_KEYS = FEED_CONTENT_FIELDS.map(f=>f.key);
+// Stored in one text column (feed_contents) as JSON, so a new feed method
+// never needs a new database column.
+function packFeedContents(obj){
+  const out = {};
+  FEED_CONTENT_KEYS.forEach(k=>{ if(obj && obj[k]) out[k] = obj[k]; });
+  return Object.keys(out).length ? JSON.stringify(out) : '';
+}
+function unpackFeedContents(str, into){
+  let o = {};
+  try{ o = str ? JSON.parse(str) : {}; }catch(e){}
+  FEED_CONTENT_KEYS.forEach(k=>{ into[k] = (o && typeof o[k] === 'string') ? o[k] : ''; });
+  return into;
+}
+function rigFeedContentFields(rigDef){
+  if(!rigDef) return [];
+  return FEED_CONTENT_FIELDS.filter(f=>rigDef.feedMethods.includes(f.method));
+}
 
 // ---------- Weight units ----------
 // Weight is always stored in kg — this is purely a display/input preference,
@@ -2329,7 +2357,7 @@ async function loadMyRigUseIds(){
 
 async function loadKnownRigs(){
   try{
-    const rows = await sbGet('rigs?select=id,name,uses_bom,hook_count,hook_labels&order=name.asc');
+    const rows = await sbGet('rigs?select=id,name,uses_bom,feed_methods,hook_count,hook_labels&order=name.asc');
     // The Timers dropdown only shows rigs you've ticked as "in use"
     const inUse = await loadMyRigUseIds();
     knownRigsFull = rows
@@ -2337,7 +2365,11 @@ async function loadKnownRigs(){
       .map(r=>{
         let hookLabels = [];
         try{ hookLabels = r.hook_labels ? JSON.parse(r.hook_labels) : []; }catch(e){}
-        return {id:r.id, name:r.name, usesBom:!!r.uses_bom, hookCount:r.hook_count||0, hookLabels};
+        let feedMethods = [];
+        try{ feedMethods = r.feed_methods ? JSON.parse(r.feed_methods) : []; }catch(e){}
+        // Rigs from before feed methods existed just had a bom yes/no
+        if(!feedMethods.length && r.uses_bom) feedMethods = [FEED_BOM];
+        return {id:r.id, name:r.name, usesBom:feedMethods.includes(FEED_BOM), feedMethods, hookCount:r.hook_count||0, hookLabels};
       });
     clearDbError();
   }catch(e){
@@ -2387,6 +2419,23 @@ async function loadAllRigHookLabels(){
 
 function findRigDef(name){
   return knownRigsFull.find(r=>r.name === name) || null;
+}
+
+// Bom and hook lines on a saved catch: show only what the rig has (or anything
+// actually recorded). Unknown rig (deleted, or someone else's) -> recorded values only.
+function catchRigLines(c){
+  const rigDef = c.rig ? findRigDef(c.rig) : null;
+  const lines = [];
+  if(c.bom || (rigDef && rigDef.usesBom)) lines.push('Bom: ' + escapeHtml(c.bom||'—'));
+  FEED_CONTENT_FIELDS.forEach(f=>{
+    const val = c[f.key];
+    if(val || (rigDef && rigDef.feedMethods.includes(f.method))) lines.push(f.short + ': ' + escapeHtml(val||'—'));
+  });
+  for(let n=1; n<=MAX_HOOKS; n++){
+    const val = c['hook'+n];
+    if(val || (rigDef && n<=rigDef.hookCount)) lines.push('Hook '+n+': '+escapeHtml(val||'—'));
+  }
+  return lines;
 }
 
 function buildRodOptionsHtml(options){
@@ -2443,7 +2492,9 @@ function multiPickerFieldHtml(rod, key, label){
 }
 
 function multiPickerSourceList(key){
-  return key === 'bom' ? knownDipNames : knownBaitNames;
+  if(key === 'bom') return knownDipNames.concat(knownBaitNames.filter(b=>b.type === 'Groundbait'));
+  if(FEED_CONTENT_KEYS.includes(key)) return knownBaitNames.concat(knownDipNames);
+  return knownBaitNames;
 }
 
 // A rod's rig and hook baits are cleared after every logged catch or blank,
@@ -2466,6 +2517,7 @@ function rigBaitKeys(rod){
   if(!rigDef) return [];
   const keys = [];
   if(rigDef.usesBom) keys.push('bom');
+  rigFeedContentFields(rigDef).forEach(f=> keys.push(f.key));
   for(let n=1; n<=rigDef.hookCount; n++) keys.push('hook'+n);
   return keys;
 }
@@ -2862,6 +2914,8 @@ function renderRigFields(rod){
   if(rigDef.usesBom){
     html += multiPickerFieldHtml(rod, 'bom', 'Bom');
   }
+  const feedFields = rigFeedContentFields(rigDef);
+  feedFields.forEach(f=>{ html += multiPickerFieldHtml(rod, f.key, f.label); });
   if(rigDef.hookCount > 0){
     html += '<div class="hooks-row">';
     for(let n=1; n<=rigDef.hookCount; n++){
@@ -2877,6 +2931,10 @@ function renderRigFields(rod){
     renderMultiPickerPills(rod, 'bom');
     renderMultiPickerResults(rod, 'bom');
   }
+  feedFields.forEach(f=>{
+    renderMultiPickerPills(rod, f.key);
+    renderMultiPickerResults(rod, f.key);
+  });
   for(let n=1; n<=rigDef.hookCount; n++){
     renderMultiPickerPills(rod, 'hook'+n);
     renderMultiPickerResults(rod, 'hook'+n);
@@ -3431,6 +3489,7 @@ function buildCatchPayload(personId, entry){
     caught: entry.caught, fish_type: entry.type, weight: entry.weight,
     time: new Date(entry.time).toISOString(), timer_elapsed_ms: entry.timerElapsed,
     bom: entry.bom,
+    feed_contents: packFeedContents(entry),
     rig: entry.rig || '',
     rig_id: entry.rigId || null,
     rod_identifier: entry.rodIdentifier || '',
@@ -5781,6 +5840,7 @@ function mapCatchRow(c){
   for(let n=1; n<=MAX_HOOKS; n++){
     entry['hook'+n] = c['hook'+n+'_note'] || '';
   }
+  unpackFeedContents(c.feed_contents, entry);
   return entry;
 }
 
@@ -5821,6 +5881,7 @@ async function loadPerson(id){
       for(let n=1; n<=MAX_HOOKS; n++){
         noteObj['hook'+n] = row ? (row['hook'+n+'_note']||'') : '';
       }
+      unpackFeedContents(row ? row.feed_contents : '', noteObj);
       notes[r] = noteObj;
     });
     const catches = catchRows.map(mapCatchRow);
@@ -5849,6 +5910,7 @@ async function saveRodState(personId, rod){
     fisherman_id: personId, rod,
     running: t.running, start_ts: t.startTs, accumulated_ms: t.accumulatedMs,
     bom: n.bom,
+    feed_contents: packFeedContents(n),
     identifier: n.identifier, dot_color: n.dotColor, rig: n.rig, rig_id: n.rigId || null, hook_count: n.hookCount,
     rod_item_id: n.rodItemId || null, reel_item_id: n.reelItemId || null,
     cast_distance: n.castDistance ? parseFloat(n.castDistance) : null,
@@ -7121,6 +7183,7 @@ function buildCatchEntry(rod){
   for(let n=1; n<=MAX_HOOKS; n++){
     entry['hook'+n] = notes['hook'+n] || '';
   }
+  FEED_CONTENT_KEYS.forEach(k=>{ entry[k] = notes[k] || ''; });
   return entry;
 }
 
@@ -7147,13 +7210,10 @@ function showConfirmation(entry){
   if(entry.rig){
     html += `<p style="font-size:12px;">Rig: ${escapeHtml(entry.rig)}</p>`;
   }
-  html += `<p style="font-size:12px;">Bom: ${escapeHtml(entry.bom||'—')}</p>`;
-  const hookParts = [];
-  for(let n=1; n<=MAX_HOOKS; n++){
-    const val = entry['hook'+n];
-    if(val || n<=2) hookParts.push('Hook '+n+': '+escapeHtml(val||'—'));
+  const rigLines = catchRigLines(entry);
+  if(rigLines.length){
+    html += `<p style="font-size:12px;">${rigLines.join(' &middot; ')}</p>`;
   }
-  html += `<p style="font-size:12px;">${hookParts.join(' &middot; ')}</p>`;
   if(entry.photos && entry.photos.length){
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
       entry.photos.map(p=>`<img class="pc-photo" src="${p}" alt="Catch photo" loading="lazy" decoding="async" style="width:90px;height:90px;object-fit:cover;margin-top:0;">`).join('') +
@@ -7318,13 +7378,9 @@ function catchDetailHtml(c, editable, removable){
   if(c.rig){
     html += `<div class="pc-line muted">Rig: ${escapeHtml(c.rig)}</div>`;
   }
-  html += `<div class="pc-line muted">Bom: ${escapeHtml(c.bom||'—')}</div>`;
-  for(let n=1; n<=MAX_HOOKS; n++){
-    const val = c['hook'+n];
-    if(val || n<=2){
-      html += `<div class="pc-line muted">Hook ${n}: ${escapeHtml(val||'—')}</div>`;
-    }
-  }
+  catchRigLines(c).forEach(line=>{
+    html += `<div class="pc-line muted">${line}</div>`;
+  });
   if(c.photos && c.photos.length){
     photoGalleryCache[c.id] = c.photos;
     photoLabelsCache[c.id] = c.photoLabels || [];
