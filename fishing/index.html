@@ -2581,9 +2581,7 @@ function lastSessionBaitEntry(rod, keys){
   return sameRod || anyRod;
 }
 
-function rigBaitKeys(rod){
-  const rigName = getRodFieldValue(rod, 'rig');
-  const rigDef = rigName ? findRigDef(rigName, currentPerson && currentPerson.notes[rod].rigId) : null;
+function rigBaitKeysFor(rigDef){
   if(!rigDef) return [];
   const keys = [];
   if(rigDef.usesBom) keys.push('bom');
@@ -2592,13 +2590,35 @@ function rigBaitKeys(rod){
   return keys;
 }
 
+// Most recent entry this session that had a rig, preferring this rod's own.
+function lastSessionRigEntry(rod){
+  if(!activeSession || !currentPerson) return null;
+  let sameRod = null, anyRod = null;
+  currentPerson.catches.forEach(c=>{
+    if(c.sessionId !== activeSession.id || !c.rig) return;
+    if(!anyRod || c.time > anyRod.time) anyRod = c;
+    if(c.rod === rod && (!sameRod || c.time > sameRod.time)) sameRod = c;
+  });
+  return sameRod || anyRod;
+}
+
 function renderRebaitButton(rod){
   const el = document.querySelector('.rebait-slot[data-rod="'+rod+'"]');
   if(!el || !currentPerson || !currentPerson.notes[rod]) return;
-  const keys = rigBaitKeys(rod);
-  const last = keys.length ? lastSessionBaitEntry(rod, keys) : null;
+  const rigName = getRodFieldValue(rod, 'rig');
+  const currentDef = rigName ? findRigDef(rigName, currentPerson.notes[rod].rigId) : null;
+  // With no rig chosen (it's cleared after every log), offer the last rig too
+  let restoreRig = null, last = null, keys = [];
+  if(currentDef){
+    keys = rigBaitKeysFor(currentDef);
+    last = keys.length ? lastSessionBaitEntry(rod, keys) : null;
+  }else if(!rigName){
+    const e = lastSessionRigEntry(rod);
+    const def = e ? findRigDef(e.rig, e.rigId) : null;
+    if(def){ restoreRig = def; keys = rigBaitKeysFor(def); last = e; }
+  }
   const toAdd = {};
-  const shown = [];
+  const shown = restoreRig ? [restoreRig.name] : [];
   if(last){
     keys.forEach(key=>{
       const have = parseMultiValue(currentPerson.notes[rod][key]);
@@ -2612,6 +2632,17 @@ function renderRebaitButton(rod){
   if(!shown.length){ el.innerHTML = ''; return; }
   el.innerHTML = `<button type="button" class="mini-btn rebait-btn" style="margin-bottom:10px;max-width:100%;white-space:normal;text-align:left;">↺ Rebait with last: ${escapeHtml(shown.join(' · '))}</button>`;
   el.querySelector('.rebait-btn').addEventListener('click', async ()=>{
+    if(restoreRig){
+      // Same direct-mutate-then-save-once approach as applying a bait combination
+      const rigSel = document.querySelector('.rod-select[data-rod="'+rod+'"][data-key="rig"]');
+      const otherInput = document.querySelector('.rod-select-other[data-rod="'+rod+'"][data-key="rig"]');
+      if(otherInput){ otherInput.style.display = 'none'; otherInput.value = ''; }
+      const opt = rigSel ? Array.from(rigSel.options).find(o=>o.dataset.rigId === restoreRig.id) : null;
+      if(opt) rigSel.selectedIndex = opt.index;
+      currentPerson.notes[rod].rig = restoreRig.name;
+      currentPerson.notes[rod].rigId = restoreRig.id;
+      renderRigFields(rod);
+    }
     Object.keys(toAdd).forEach(key=>{
       const arr = parseMultiValue(currentPerson.notes[rod][key]);
       toAdd[key].forEach(v=>{ if(!arr.includes(v)) arr.push(v); });
@@ -10754,7 +10785,7 @@ const CHANGELOG = [
     'Insights also breaks down what you put in the bom, PVA bag, PVA mesh / stick, stringer and bait boat, and keeps two rigs that share a name separate',
     'Timers: choose a feed method on each rig (Bom, PVA bag, PVA mesh / stick, stringer, bait boat) and record what went in it; dips now show in those pickers',
     'Snooze the "rod\'s been out too long" alert from the rod\'s card, follow anglers from an invite link, and see friends\' new badges in your feed',
-    'Rebait button, and baits now have categories',
+    'Rebait button puts back your last rig as well as its baits, and baits now have categories',
     'New versions of the app show up here in the notification bell'
   ]},
   {version:'1.6', date:'24 September 2026', changes:[
