@@ -2178,8 +2178,46 @@ const BADGE_DEFS = [
   {key:'rare_catch',     emoji:'🦄', name:'Rare Catch',        desc:'Landed one of the uncommon ones — Eel, Koi or a Largemouth Yellowfish',
    count: s=> s.rareCatchCount},
   {key:'beat_your_best', emoji:'📈', name:'Personal Best',     desc:'Beat your own record for a species',
-   count: s=> s.beatenOwnPbCount}
+   count: s=> s.beatenOwnPbCount},
+  // Weather badges: judged from the weather saved with each catch.
+  {key:'windmaster',     emoji:'💨', name:'Windmaster',        desc:'Caught a fish in a wind of 20 km/h or more',
+   count: s=> s.windCatchCount},
+  {key:'pressure_shift', emoji:'📉', name:'Pressure Shift',    desc:'Caught a fish while the pressure was rising or falling fast (2 hPa or more in the last few hours)',
+   count: s=> s.pressureShiftCatchCount},
+  {key:'rainmaker',      emoji:'☔', name:'Rainmaker',         desc:'Caught a fish while it was raining',
+   count: s=> s.rainCatchCount},
+  {key:'heatwave',       emoji:'🔥', name:'Heatwave',          desc:'Caught a fish when it was 35°C or hotter',
+   count: s=> s.heatCatchCount},
+  {key:'frosty',         emoji:'❄️', name:'Frosty',            desc:'Caught a fish when it was 2°C or colder',
+   count: s=> s.frostCatchCount},
+  {key:'stormchaser',    emoji:'⛈️', name:'Stormchaser',       desc:'Caught a fish in a storm: wind of 20 km/h or more, rain and low pressure (under 1000 hPa), all at once',
+   count: s=> s.stormCatchCount}
 ];
+
+// Where each weather badge kicks in. Change a number here and the badges
+// follow; they are judged when the badge check runs, so old catches are
+// re-judged too (as long as they have the weather saved).
+const WEATHER_BADGE_LIMITS = {
+  windKmh: 20,
+  rainMm: 0.1,
+  pressureShiftHpa: 2,
+  heatC: 35,
+  frostC: 2,
+  stormPressureHpa: 1000
+};
+function weatherBadgeFlags(w){
+  const L = WEATHER_BADGE_LIMITS;
+  const flags = {wind:false, rain:false, pressureShift:false, heat:false, frost:false, storm:false};
+  if(!w) return flags;
+  const has = v => v !== null && v !== undefined && isFinite(v);
+  flags.wind = has(w.windSpeed) && w.windSpeed >= L.windKmh;
+  flags.rain = has(w.precipitation) && w.precipitation >= L.rainMm;
+  flags.pressureShift = has(w.pressureChange) && Math.abs(w.pressureChange) >= L.pressureShiftHpa;
+  flags.heat = has(w.temp) && w.temp >= L.heatC;
+  flags.frost = has(w.temp) && w.temp <= L.frostC;
+  flags.storm = flags.wind && flags.rain && has(w.pressure) && w.pressure < L.stormPressureHpa;
+  return flags;
+}
 
 // Competition badges are a different shape to the ones above: awarded by
 // where you finished against other people when a competition ends, not by
@@ -3611,6 +3649,9 @@ function buildCatchPayload(personId, entry){
     weather_pressure: entry.weather ? entry.weather.pressure : null,
     moon_phase: entry.moonPhase || null
   };
+  // Only sent when there is a value, so catches without them never depend on these columns
+  if(entry.weather && entry.weather.precipitation != null) payload.weather_precipitation = entry.weather.precipitation;
+  if(entry.weather && entry.weather.pressureChange != null) payload.weather_pressure_change = entry.weather.pressureChange;
   for(let i=1; i<=MAX_HOOKS; i++){ payload['hook'+i+'_note'] = entry['hook'+i] || ''; }
   return payload;
 }
@@ -5988,6 +6029,13 @@ function mapCatchRow(c){
     photoLabels: c.photo_labels ? (typeof c.photo_labels === 'string' ? JSON.parse(c.photo_labels) : c.photo_labels) : [],
     likes: c.likes || 0
   };
+  if(c.weather_temp != null || c.weather_wind_speed != null || c.weather_pressure != null || c.weather_precipitation != null || c.weather_pressure_change != null){
+    entry.weather = {
+      temp: c.weather_temp ?? null, windSpeed: c.weather_wind_speed ?? null, windDir: c.weather_wind_dir ?? null,
+      cloudCover: c.weather_cloud_cover ?? null, pressure: c.weather_pressure ?? null,
+      precipitation: c.weather_precipitation ?? null, pressureChange: c.weather_pressure_change ?? null
+    };
+  }
   for(let n=1; n<=MAX_HOOKS; n++){
     entry['hook'+n] = c['hook'+n+'_note'] || '';
   }
@@ -6631,18 +6679,24 @@ async function fetchForecast(lat, lng){
 
 async function fetchWeather(lat, lng){
   try{
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl,precipitation&hourly=pressure_msl&past_hours=3&forecast_hours=1`;
     const res = await fetch(url);
     if(!res.ok) return null;
     const data = await res.json();
     const c = data.current;
     if(!c) return null;
+    // Pressure trend: now compared with the earliest of the last few hourly readings
+    const hp = data.hourly && data.hourly.pressure_msl;
+    const earliest = Array.isArray(hp) && hp.length > 1 ? hp[0] : null;
+    const pressureChange = (earliest != null && c.pressure_msl != null) ? Math.round((c.pressure_msl - earliest) * 10) / 10 : null;
     return {
       temp: c.temperature_2m,
       windSpeed: c.wind_speed_10m,
       windDir: c.wind_direction_10m,
       cloudCover: c.cloud_cover,
-      pressure: c.pressure_msl
+      pressure: c.pressure_msl,
+      precipitation: c.precipitation ?? null,
+      pressureChange
     };
   }catch(e){ console.error('fetchWeather failed', e); return null; }
 }
@@ -6862,6 +6916,22 @@ async function renderSessionUi(){
 
 // Cached per session, so switching tabs or re-rendering doesn't refetch
 let weatherCache = {sessionId: null, weather: null, moon: null};
+
+// A long session would otherwise stamp every catch with the weather from when
+// it started. Top it up when the saved reading is over half an hour old; if
+// the fetch is slow or fails, the catch just keeps the older reading.
+const WEATHER_STALE_MS = 30 * 60 * 1000;
+async function refreshStaleWeather(){
+  try{
+    if(!activeSession || weatherCache.sessionId !== activeSession.id || !weatherCache.coords || !navigator.onLine) return;
+    if(weatherCache.weather && weatherCache.fetchedAt && Date.now() - weatherCache.fetchedAt < WEATHER_STALE_MS) return;
+    const w = await Promise.race([
+      fetchWeather(weatherCache.coords.lat, weatherCache.coords.lng),
+      new Promise(r=> setTimeout(()=> r(null), 3000))
+    ]);
+    if(w && weatherCache.sessionId === activeSession.id) weatherCache = Object.assign({}, weatherCache, {weather: w, fetchedAt: Date.now()});
+  }catch(e){ console.error('refreshStaleWeather failed', e); }
+}
 async function renderSessionWeather(){
   const el = document.getElementById('session-weather-bar');
   if(!el || !activeSession) return;
@@ -6879,7 +6949,7 @@ async function renderSessionWeather(){
     }
     if(!coords) coords = await capturePosition();
     const weather = coords ? await fetchWeather(coords.lat, coords.lng) : null;
-    weatherCache = {sessionId: activeSession.id, weather, moon: moonPhase(), coords};
+    weatherCache = {sessionId: activeSession.id, weather, moon: moonPhase(), coords, fetchedAt: Date.now()};
   }
 
   const {weather, moon} = weatherCache;
@@ -7473,6 +7543,7 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
     if(activeSession){
       // Reuse whatever we already fetched for the session bar — no need
       // for a second weather API call just to log the catch
+      await refreshStaleWeather();
       if(weatherCache.sessionId === activeSession.id){
         entry.weather = weatherCache.weather;
         entry.moonPhase = weatherCache.moon ? weatherCache.moon.label : null;
@@ -7983,8 +8054,19 @@ async function computeBadgeStats(fishermanId){
     rareCatchCount: caught.filter(c=> RARE_SPECIES.includes(c.type)).length,
     recordSpeciesTotal: 0,
     recordSpeciesCaught: 0,
-    beatenOwnPbCount: 0
+    beatenOwnPbCount: 0,
+    windCatchCount: 0, pressureShiftCatchCount: 0, rainCatchCount: 0,
+    heatCatchCount: 0, frostCatchCount: 0, stormCatchCount: 0
   };
+  caught.forEach(c=>{
+    const f = weatherBadgeFlags(c.weather);
+    if(f.wind) stats.windCatchCount++;
+    if(f.pressureShift) stats.pressureShiftCatchCount++;
+    if(f.rain) stats.rainCatchCount++;
+    if(f.heat) stats.heatCatchCount++;
+    if(f.frost) stats.frostCatchCount++;
+    if(f.storm) stats.stormCatchCount++;
+  });
 
   // Grand Slam — every species this angler has chosen for Reel Records
   const person = people.find(x=>x.id===fishermanId);
@@ -8058,6 +8140,11 @@ async function computeBadgeEvents(fishermanId){
     if(c.hasKnownTime !== false && new Date(c.time).getHours() < 6) add('night_owl', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
     if(c.moonPhase === 'Full Moon') add('full_moon', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
     if(RARE_SPECIES.includes(c.type)) add('rare_catch', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
+    const wf = weatherBadgeFlags(c.weather);
+    const weatherEvents = {windmaster:wf.wind, pressure_shift:wf.pressureShift, rainmaker:wf.rain, heatwave:wf.heat, frosty:wf.frost, stormchaser:wf.storm};
+    Object.keys(weatherEvents).forEach(k=>{
+      if(weatherEvents[k]) add(k, c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)});
+    });
   });
 
   // Mixed Bag — the catch that brought distinct species to 5
@@ -10779,6 +10866,7 @@ function feedRodLabel(it){
 // notice — not every fix, just what's worth knowing about.
 const CHANGELOG = [
   {version:'1.7', date:'30 September 2026', changes:[
+    'Six new weather badges on your profile: Windmaster (wind of 20 km/h or more), Pressure Shift (pressure rising or falling fast), Rainmaker (raining), Heatwave (35°C or hotter), Frosty (2°C or colder) and Stormchaser (wind, rain and low pressure all at once). Weather is now refreshed when you log a catch on a long session',
     'Timers: note your peg or stand number when you start a session, change it any time, and see it on your session cards and in Insights',
     'Maps now have a view switcher (top right): Street, Satellite, Satellite + names and Terrain. The one you pick is remembered, and it applies to the venue map in Insights and to the pin-drop map when you set a venue location',
     'Insights is reorganised into four collapsible groups — Overview, What works, When and where, and Sessions — and every row now reads "4 fish from 12 casts" so you can see how often something works, not just how often it caught',
@@ -11154,7 +11242,7 @@ async function renderHomeWeather(){
     // Same forecast view as the session weather bar — the coordinates are
     // stashed so openForecast has something to work with
     el.onclick = ()=>{
-      weatherCache = {sessionId: weatherCache.sessionId, weather: w, moon: m, coords};
+      weatherCache = {sessionId: weatherCache.sessionId, weather: w, moon: m, coords, fetchedAt: Date.now()};
       openForecast();
     };
   }catch(e){ console.error('home weather failed', e); el.style.display = 'none'; }
