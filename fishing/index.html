@@ -8286,6 +8286,31 @@ async function openInsights(){
 }
 
 let venueMapInstance = null;
+
+// Street, satellite, satellite with place names, and terrain. The pick is
+// remembered, and both the venue map and the pin-drop map use it.
+function addMapLayers(map){
+  const osmAttr = '&copy; OpenStreetMap contributors';
+  const esriAttr = 'Tiles &copy; Esri, Maxar, Earthstar Geographics';
+  const satUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: osmAttr, maxZoom: 19});
+  const satellite = L.tileLayer(satUrl, {attribution: esriAttr, maxZoom: 19});
+  const hybrid = L.layerGroup([
+    L.tileLayer(satUrl, {attribution: esriAttr, maxZoom: 19}),
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {maxZoom: 19})
+  ]);
+  const terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    attribution: osmAttr + ', SRTM | Style &copy; OpenTopoMap (CC-BY-SA)', maxNativeZoom: 17, maxZoom: 19
+  });
+  const bases = {'Street': street, 'Satellite': satellite, 'Satellite + names': hybrid, 'Terrain': terrain};
+  let saved = '';
+  try{ saved = localStorage.getItem('pk_fishing_map_view') || ''; }catch(e){}
+  (bases[saved] || street).addTo(map);
+  L.control.layers(bases, null, {position: 'topright'}).addTo(map);
+  map.on('baselayerchange', (e)=>{
+    try{ localStorage.setItem('pk_fishing_map_view', e.name); }catch(err){}
+  });
+}
 // Full catch list for one venue, opened from a map pin
 function openVenueCatches(venue, venueCatches){
   if(!venue) return;
@@ -8316,10 +8341,7 @@ function renderVenueMap(venues, allCatches){
   if(venueMapInstance){ venueMapInstance.remove(); venueMapInstance = null; }
 
   venueMapInstance = L.map('venue-map', {scrollWheelZoom: false});
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 18
-  }).addTo(venueMapInstance);
+  addMapLayers(venueMapInstance);
 
   const catches = allCatches || [];
 
@@ -8611,9 +8633,7 @@ async function openPinDrop(startCoords, onConfirm){
   if(startCoords){ startAt = [startCoords.lat, startCoords.lng]; startZoom = 14; }
 
   pinDropMap = L.map('pin-drop-map').setView(startAt, startZoom);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
-  }).addTo(pinDropMap);
+  addMapLayers(pinDropMap);
 
   // Show where it currently sits, if it already has a location
   if(startCoords){
@@ -10685,6 +10705,9 @@ function feedRodLabel(it){
 // Newest first. Add an entry here when shipping something people would
 // notice — not every fix, just what's worth knowing about.
 const CHANGELOG = [
+  {version:'1.8', date:'30 September 2026', changes:[
+    'Maps now have a view switcher (top right): Street, Satellite, Satellite + names and Terrain. The one you pick is remembered, and it applies to the venue map in Insights and to the pin-drop map when you set a venue location'
+  ]},
   {version:'1.7', date:'30 September 2026', changes:[
     'Insights is reorganised into four collapsible groups — Overview, What works, When and where, and Sessions — and every row now reads "4 fish from 12 casts" so you can see how often something works, not just how often it caught',
     'Insights also breaks down what you put in the bom, PVA bag, PVA mesh / stick, stringer and bait boat, and keeps two rigs that share a name separate',
