@@ -755,6 +755,10 @@
             <label>How many rods?</label>
             <select id="session-rods"></select>
           </div>
+          <div class="field">
+            <label for="session-peg">Peg or stand number (optional)</label>
+            <input type="text" maxlength="20" id="session-peg" placeholder="e.g. 14 or Stand B" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>
           <button class="primary-btn" id="session-start-btn">Start session</button>
           <div class="status" id="session-status"></div>
         </section>
@@ -764,7 +768,9 @@
             <div style="font-size:14px;font-weight:700;" id="session-active-venue"></div>
             <div class="pc-line muted" id="session-active-meta"></div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <label for="session-active-peg" style="font-size:12px;color:var(--muted);">Peg</label>
+            <input type="text" maxlength="20" id="session-active-peg" placeholder="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="width:72px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;background:var(--paper);color:var(--ink);">
             <label style="font-size:12px;color:var(--muted);">Rods</label>
             <select id="session-active-rods" class="mini-btn" style="padding:6px 8px;"></select>
             <button class="mini-btn danger" id="session-end-btn">End session</button>
@@ -1651,6 +1657,10 @@
     <div id="session-edit-feed-wrap" style="margin-bottom:14px;">
       <h2 style="font-size:14px;font-weight:600;color:var(--muted);margin:0 0 5px;">What happened</h2>
       <div id="session-edit-feed"></div>
+    </div>
+    <div class="field">
+      <label for="session-edit-peg">Peg or stand number</label>
+      <input type="text" maxlength="20" id="session-edit-peg" placeholder="e.g. 14 or Stand B" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     </div>
     <div class="field">
       <label>Session Log</label>
@@ -6785,6 +6795,8 @@ async function renderSessionUi(){
     const started = new Date(activeSession.started_at);
     document.getElementById('session-active-meta').textContent =
       `started ${started.toLocaleString(dateLocale(), {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}`;
+    const activePegEl = document.getElementById('session-active-peg');
+    if(activePegEl && document.activeElement !== activePegEl) activePegEl.value = activeSession.peg || '';
     const activeRodsSel = document.getElementById('session-active-rods');
     if(activeRodsSel){
       const rods = normalizeRodsCount(activeSession.rods);
@@ -6949,6 +6961,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
   const venueName = document.getElementById('session-venue').value.trim();
   const competitionId = document.getElementById('session-competition').value || null;
   const rods = normalizeRodsCount(document.getElementById('session-rods').value);
+  const peg = document.getElementById('session-peg').value.trim();
   const myId = getMyFishermanId();
   if(!myId){ st.textContent = 'Could not find your angler profile.'; return; }
   if(!venueName){ st.textContent = 'Enter a venue.'; return; }
@@ -6982,6 +6995,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
       venue_id: venueId, venue_name: venueName, competition_id: competitionId,
       rods, started_at: new Date().toISOString(), ended_at: null
     };
+    if(peg) sessionRecord.peg = peg;
     if(navigator.onLine){
       try{ await sbPost('sessions', sessionRecord); }
       catch(e){ console.error(e); await offlinePut(OFFLINE_SESSION_STORE, {id: sessionId, record: sessionRecord}); }
@@ -7001,6 +7015,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
     venueEl.setAttribute('readonly', ''); // re-arm the anti-autofill trick for next time
     venueEl.style.opacity = '1';
     document.getElementById('session-competition').value = '';
+    document.getElementById('session-peg').value = '';
     st.textContent = '';
     activeSession = sessionRecord;
     pkTrack('session_started', {rods, hasCompetition: !!competitionId});
@@ -7039,6 +7054,26 @@ document.getElementById('session-active-rods').addEventListener('change', async 
     await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
     updateOfflineBanner();
   }
+});
+
+// Change the peg or stand number partway through a session
+document.getElementById('session-active-peg').addEventListener('change', async (e)=>{
+  if(!activeSession) return;
+  const peg = e.target.value.trim();
+  activeSession.peg = peg || null;
+  try{
+    if(navigator.onLine){
+      await sbPatch('sessions', 'id=eq.'+activeSession.id, {peg: peg || null});
+    }else{
+      await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
+      updateOfflineBanner();
+    }
+  }catch(e2){
+    console.error(e2);
+    await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
+    updateOfflineBanner();
+  }
+  renderHome();
 });
 
 // Wipe every rod back to a blank slate — timers stopped, rig/bait/hook
@@ -7838,7 +7873,8 @@ function buildInsightsHtml(catches, venues, sessions){
         weight: sc.reduce((sum,c)=>sum+(c.weight||0),0),
         duration: (ended || new Date()) - started,
         ongoing: !s.ended_at,
-        log: s.session_log || ''
+        log: s.session_log || '',
+        peg: s.peg || ''
       };
     }).sort((a,b)=> b.startedMs - a.startedMs);
 
@@ -7853,7 +7889,7 @@ function buildInsightsHtml(catches, venues, sessions){
         <div class="ins-row-top">
           <div class="ins-main">
             <b>${escapeHtml(s.name)}</b>${s.ongoing ? ' <span class="ins-tag">Ongoing</span>' : ''}
-            <div class="ins-sub">${escapeHtml(s.when)} · ${fmtDuration(s.duration)}</div>
+            <div class="ins-sub">${escapeHtml(s.when)} · ${fmtDuration(s.duration)}${s.peg ? ' · Peg ' + escapeHtml(s.peg) : ''}</div>
           </div>
           <div class="ins-side"><b>${s.count} fish</b>${s.weight ? `<div class="ins-sub">${formatWeight(s.weight)}</div>` : ''}</div>
         </div>
@@ -8783,6 +8819,7 @@ async function openSessionEdit(sessionId){
 
   document.getElementById('session-edit-venue').value = s.venue_name || '';
   document.getElementById('session-edit-log').value = s.session_log || '';
+  document.getElementById('session-edit-peg').value = s.peg || '';
   document.getElementById('session-edit-results').innerHTML = '';
   document.getElementById('session-edit-status').textContent = '';
   updateSessionEditCoordsLabel();
@@ -8874,10 +8911,14 @@ document.getElementById('session-edit-save').addEventListener('click', async ()=
       });
     }
 
-    await sbPatch('sessions', 'id=eq.'+editingSession.id, {
+    const newPeg = document.getElementById('session-edit-peg').value.trim() || null;
+    const sessionPatch = {
       venue_name: newName, venue_id: venueId,
       session_log: document.getElementById('session-edit-log').value || null
-    });
+    };
+    // Only send peg when it changed, so saving other edits never depends on it
+    if(newPeg !== (editingSession.peg || null)) sessionPatch.peg = newPeg;
+    await sbPatch('sessions', 'id=eq.'+editingSession.id, sessionPatch);
     // Keep catches from this session pointing at the right venue too
     await sbPatch('catches', 'session_id=eq.'+editingSession.id, {venue_id: venueId});
 
@@ -8885,6 +8926,7 @@ document.getElementById('session-edit-save').addEventListener('click', async ()=
     if(activeSession && activeSession.id === editingSession.id){
       activeSession.venue_name = newName;
       activeSession.venue_id = venueId;
+      activeSession.peg = newPeg;
       await renderSessionUi();
     }
 
@@ -10705,10 +10747,9 @@ function feedRodLabel(it){
 // Newest first. Add an entry here when shipping something people would
 // notice — not every fix, just what's worth knowing about.
 const CHANGELOG = [
-  {version:'1.8', date:'30 September 2026', changes:[
-    'Maps now have a view switcher (top right): Street, Satellite, Satellite + names and Terrain. The one you pick is remembered, and it applies to the venue map in Insights and to the pin-drop map when you set a venue location'
-  ]},
   {version:'1.7', date:'30 September 2026', changes:[
+    'Timers: note your peg or stand number when you start a session, change it any time, and see it on your session cards and in Insights',
+    'Maps now have a view switcher (top right): Street, Satellite, Satellite + names and Terrain. The one you pick is remembered, and it applies to the venue map in Insights and to the pin-drop map when you set a venue location',
     'Insights is reorganised into four collapsible groups — Overview, What works, When and where, and Sessions — and every row now reads "4 fish from 12 casts" so you can see how often something works, not just how often it caught',
     'Insights also breaks down what you put in the bom, PVA bag, PVA mesh / stick, stringer and bait boat, and keeps two rigs that share a name separate',
     'Timers: choose a feed method on each rig (Bom, PVA bag, PVA mesh / stick, stringer, bait boat) and record what went in it; dips now show in those pickers',
@@ -10984,7 +11025,7 @@ async function renderHome(){
       <div style="background:var(--dam);color:#fff;border-radius:12px;padding:14px;margin-bottom:14px;">
         <div style="font-size:13px;font-weight:500;opacity:.85;">Session running</div>
         <div style="font-size:18px;font-weight:700;margin:4px 0;">${escapeHtml(activeSession.venue_name || 'Session')}</div>
-        <div style="font-size:13px;opacity:.9;">${fmtDuration(elapsed)} · ${normalizeRodsCount(activeSession.rods)} rod${normalizeRodsCount(activeSession.rods)===1?'':'s'}</div>
+        <div style="font-size:13px;opacity:.9;">${fmtDuration(elapsed)} · ${normalizeRodsCount(activeSession.rods)} rod${normalizeRodsCount(activeSession.rods)===1?'':'s'}${activeSession.peg ? ' · Peg ' + escapeHtml(activeSession.peg) : ''}</div>
         <button type="button" class="mini-btn" id="home-goto-timers" style="margin-top:10px;background:#fff;">Go to Timers</button>
       </div>`;
     const gotoBtn = document.getElementById('home-goto-timers');
