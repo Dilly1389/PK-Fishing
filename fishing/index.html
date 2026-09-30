@@ -2440,12 +2440,17 @@ function selectedRigId(sel){
 }
 // Extra detail for rigs that share a name, so the dropdown can tell them apart
 function rigOptionLabel(r){
-  if(knownRigsFull.filter(x=>x.name === r.name).length < 2) return r.name;
-  const bits = [r.hookCount + (r.hookCount === 1 ? ' hook' : ' hooks')];
-  if(r.feedMethods.length) bits.push(r.feedMethods.map(m=>m === FEED_BOM ? 'Bom' : m).join(' + '));
-  const d = r.createdAt ? new Date(r.createdAt) : null;
-  if(d && !isNaN(d)) bits.push('added ' + d.toLocaleDateString('en-ZA', {day:'numeric', month:'short'}));
-  return r.name + ' (' + bits.join(', ') + ')';
+  const same = knownRigsFull.filter(x=>x.name === r.name);
+  if(same.length < 2) return r.name;
+  const detail = x=>{
+    const bits = [x.hookCount + (x.hookCount === 1 ? ' hook' : ' hooks')];
+    if(x.feedMethods.length) bits.push(x.feedMethods.map(m=>m === FEED_BOM ? 'Bom' : m).join(' + '));
+    return x.name + ' (' + bits.join(', ') + ')';
+  };
+  const label = detail(r);
+  // Still identical (same hooks and feed method): number them in list order
+  const twins = same.filter(x=>detail(x) === label);
+  return twins.length > 1 ? label + ' #' + (twins.indexOf(r) + 1) : label;
 }
 
 // Bom and hook lines on a saved catch: show only what the rig has (or anything
@@ -2504,9 +2509,11 @@ function joinMultiValue(arr){
 
 function multiPickerFieldHtml(rod, key, label){
   // Hooks get a bait-type filter; bom (dips) has no sub-types so it doesn't
+  const isFeedKey = FEED_CONTENT_KEYS.includes(key);
   const typeFilter = key === 'bom' ? '' : `
     <select class="multi-picker-type" data-rod="${rod}" data-key="${key}" style="margin-bottom:6px;">
-      <option value="">All bait types</option>
+      <option value="">${isFeedKey ? 'Baits and dips' : 'All bait types'}</option>
+      ${isFeedKey ? '<option value="Dips">Dips</option>' : ''}
       ${ALL_BAIT_TYPES.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}
     </select>`;
   return `<div class="field">
@@ -2520,7 +2527,8 @@ function multiPickerFieldHtml(rod, key, label){
 
 function multiPickerSourceList(key){
   if(key === 'bom') return knownDipNames.concat(knownBaitNames.filter(b=>b.type === 'Groundbait'));
-  if(FEED_CONTENT_KEYS.includes(key)) return knownBaitNames.concat(knownDipNames);
+  // Dips first: the list is capped, so dips behind a long bait list never showed
+  if(FEED_CONTENT_KEYS.includes(key)) return knownDipNames.map(d=>({...d, type:'Dips'})).concat(knownBaitNames);
   return knownBaitNames;
 }
 
