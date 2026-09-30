@@ -8277,7 +8277,7 @@ async function checkAndAwardBadges(){
         if(target <= 0){
           // The catches behind this badge are gone — drop it rather than
           // leaving a badge with nothing supporting it
-          if(current){
+          if(current && !isSuperUser()){
             await sbDelete('badges_earned', 'fisherman_id=eq.'+myId+'&badge_key=eq.'+badge.key);
             changed++;
           }
@@ -9526,6 +9526,13 @@ async function openProfile(personId){
   // recent between first-earned and last-re-earned, so a badge someone
   // just earned again bubbles back up even if they got it ages ago too.
   const earnedBadges = await loadBadgesFor(p.id);
+  if(!earnedBadges.length){
+    html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin:4px 0 8px;">
+      <p class="sub-heading" style="margin:0;">Fins of Fame</p>
+      <button type="button" class="badge-bookcase-open" data-person-id="${p.id}" style="background:none;border:none;color:var(--dam);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;padding:0;">View all ›</button>
+    </div>
+    <p class="pc-line muted" style="margin:0 0 10px;">No badges earned yet.</p>`;
+  }
   if(earnedBadges.length){
     const earnedKeys = new Set(earnedBadges.map(b=>b.badge_key));
     const recentBadges = earnedBadges.slice().sort((a,b)=>
