@@ -596,6 +596,11 @@
        the bottom of the screen with no way to reach it */
     max-height:85vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
   }
+  /* The badge pop-up scales with the screen: wider card, and the badge itself
+     sized from the screen height so it stays big on a tall phone and still
+     leaves room for the text on a short landscape one */
+  dialog#badge-detail-modal .modal-card{max-width:min(92vw,460px);}
+  #badge-detail-img{width:auto;max-width:100%;height:clamp(150px,44vh,400px);object-fit:contain;}
   .modal-card h3{margin:0 0 10px;font-size:18px;color:var(--ink);}
   .modal-card p{margin:4px 0;font-size:14px;color:var(--muted);}
   .modal-card p b{color:var(--ink);}
@@ -1724,7 +1729,7 @@
 
 <dialog id="badge-detail-modal" closedby="any" aria-label="Badge details">
   <div class="modal-card" style="text-align:center;max-height:82vh;overflow-y:auto;">
-    <img id="badge-detail-img" src="" alt="" loading="lazy" decoding="async" style="width:110px;height:110px;margin:0 auto 10px;display:block;">
+    <img id="badge-detail-img" src="" alt="" loading="lazy" decoding="async" style="margin:0 auto 12px;display:block;">
     <h3 id="badge-detail-title" style="margin:0 0 6px;"></h3>
     <p class="pc-line muted" id="badge-detail-desc" style="margin-bottom:4px;"></p>
     <p class="pc-line muted" id="badge-detail-when"></p>
