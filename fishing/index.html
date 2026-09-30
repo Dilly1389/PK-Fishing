@@ -576,13 +576,14 @@
   dialog#session-edit-modal, dialog#recast-confirm-modal, dialog#pin-drop-modal, dialog#badge-bookcase-modal,
   dialog#badge-detail-modal, dialog#follow-list-modal, dialog#profile-modal, dialog#notif-modal,
   dialog#onboarding-modal, dialog#reset-password-modal, dialog#timers-help-modal, dialog#profile-help-modal,
-  dialog#tackle-help-modal, dialog#photo-modal, dialog#edit-catch-modal, dialog#competition-detail-modal{
+  dialog#tackle-help-modal, dialog#insights-help-modal, dialog#competitions-help-modal, dialog#photo-modal, dialog#edit-catch-modal, dialog#competition-detail-modal{
     border:none;padding:0;background:transparent;margin:auto;
     max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);
   }
   /* The "How it works" walkthroughs are long reads, so they use more of a wide screen */
   dialog#onboarding-modal .modal-card, dialog#timers-help-modal .modal-card,
-  dialog#profile-help-modal .modal-card, dialog#tackle-help-modal .modal-card{
+  dialog#profile-help-modal .modal-card, dialog#tackle-help-modal .modal-card,
+  dialog#insights-help-modal .modal-card, dialog#competitions-help-modal .modal-card{
     max-width:min(92vw,560px);max-height:88vh;
   }
   dialog#confirm-modal::backdrop, dialog#forecast-modal::backdrop, dialog#venue-catches-modal::backdrop,
@@ -590,7 +591,8 @@
   dialog#pin-drop-modal::backdrop, dialog#badge-bookcase-modal::backdrop, dialog#badge-detail-modal::backdrop,
   dialog#follow-list-modal::backdrop, dialog#profile-modal::backdrop, dialog#notif-modal::backdrop,
   dialog#onboarding-modal::backdrop, dialog#reset-password-modal::backdrop, dialog#timers-help-modal::backdrop,
-  dialog#profile-help-modal::backdrop, dialog#tackle-help-modal::backdrop, dialog#photo-modal::backdrop,
+  dialog#profile-help-modal::backdrop, dialog#tackle-help-modal::backdrop, dialog#insights-help-modal::backdrop,
+  dialog#competitions-help-modal::backdrop, dialog#photo-modal::backdrop,
   dialog#edit-catch-modal::backdrop, dialog#competition-detail-modal::backdrop{
     background:rgba(0,0,0,0.55);
   }
@@ -752,6 +754,7 @@
 
     <!-- INSIGHTS -->
     <div class="panel" id="panel-insights">
+      <button type="button" class="mini-btn" id="insights-help-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How Insights works</button>
       <div id="insights-body"><div class="empty">Loading...</div></div>
     </div>
 
@@ -1172,6 +1175,7 @@
 
     <!-- COMPETITIONS -->
     <div class="panel" id="panel-competitions">
+      <button type="button" class="mini-btn" id="competitions-help-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How Competitions work</button>
       <section class="card" id="competition-signin-required">
         <h2>Competitions</h2>
         <p class="pc-line muted">Sign in from the Profile tab to create a competition.</p>
@@ -1978,6 +1982,84 @@
       <div class="pc-line muted">Whoever you share an item or your whole box with is notified — and gets a push notification too, if they've turned that on under Profile → Notifications.</div>
     </div>
     <button class="primary-btn" id="tackle-help-close" style="margin-top:14px;">Got it</button>
+  </div>
+</dialog>
+
+<dialog id="insights-help-modal" closedby="any" aria-label="How Insights works">
+  <div class="modal-card">
+    <h3 style="margin-top:0;"><i class="ti ti-chart-bar" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How Insights works</h3>
+    <div class="profile-catch">
+      <div class="pc-head">Built from your own catches</div>
+      <div class="pc-line muted">Everything here is worked out from the catches and sessions you've logged. Nothing is generic advice, and nobody else can see it. The more you log, the more it means: with fewer than 10 catches the numbers are only a hint, and they start to get useful from around 10–20.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Fish from casts</div>
+      <div class="pc-line muted">Rows read like "4 fish from 12 casts", so you see how often something works, not just how often it caught. That only works if you log blanks too, so tap "No catch" when a rod comes in empty.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Overview</div>
+      <div class="pc-line muted">Your totals (catches, total weight, biggest fish, average time in the water), your catch rate, how long the rod was in the water before a fish, and a breakdown by species.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">What works</div>
+      <div class="pc-line muted">Your rigs, your hooks (by the names you gave them), the baits on the hook that actually caught, rig and bait pairings, your feed methods, and what went into the bom, PVA bag, PVA mesh / stick, stringer or bait boat. Two rigs with the same name stay separate rows, and catches logged before rigs had IDs are grouped as "older catches".</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">When and where</div>
+      <div class="pc-line muted">Time of day, moon phase, cast distance and your venues. Past catches logged without a time are left out of Time of day, and moon phase only covers catches logged since it was added. Each venue shows the rig that caught most there and any local knowledge you've saved, and venues with coordinates appear on a private map. Venues are only ever visible to you.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Sessions</div>
+      <div class="pc-line muted">Every trip, newest first: where, when, how long, your peg, how many fish and the weight, plus anything you wrote in the Session Log. Tap Edit for the full recap of that session, or Remove to delete it. If it has catches you choose whether they go too, and the default is to keep them.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Open and close</div>
+      <div class="pc-line muted">Tap a group's title to open or close it. The app remembers which ones you leave open.</div>
+    </div>
+    <button class="primary-btn" id="insights-help-close" style="margin-top:14px;">Got it</button>
+  </div>
+</dialog>
+
+<dialog id="competitions-help-modal" closedby="any" aria-label="How Competitions work">
+  <div class="modal-card">
+    <h3 style="margin-top:0;"><i class="ti ti-trophy" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How Competitions work</h3>
+    <div class="profile-catch">
+      <div class="pc-head">Create one</div>
+      <div class="pc-line muted">Sign in, then give it a name, venue, start and end date and time, and pick how it's ranked: biggest bag, most catches or biggest single fish. Choose a species if it's for one fish only, add the anglers taking part, and tick "I'm fishing this one too" if you're in it yourself. You can change all of it later with Edit.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Proof for each catch</div>
+      <div class="pc-line muted">The organiser can make a photo of the fish and a photo of the scale compulsory, each with its own tick box. Anglers see those photos marked "required" on the catch form and can't save the catch without them.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Fishing a competition</div>
+      <div class="pc-line muted">If you're taking part in one that's running today, a banner on Timers lets you fish it. That locks in the venue and tags every catch to the competition. Its catch form also asks for the weight of your net (optional). The scale should read your fish plus the net, so the organiser can check it against your photo.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Standings and the leaderboard</div>
+      <div class="pc-line muted">Standings are worked out live from real logged catches inside the competition's dates. Each card shows the top ten. Tap the competition's name for the full leaderboard, including anglers with no catches yet, and tap an angler to see exactly what they caught.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Organiser checks</div>
+      <div class="pc-line muted">When the organiser opens an angler's catches they can look at the fish and scale photos against the weight entered, then Confirm or Reject each catch. A rejected catch drops out of the standings, while pending and confirmed ones count. If the weight, net weight or photos of a confirmed catch are changed afterwards, it goes back to pending so it has to be checked again. Everyone can see the Confirmed and Rejected tags.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Invite people</div>
+      <div class="pc-line muted">"Invite to join" shares a link. Whoever opens it asks to join, and the organiser approves or declines under "Wants to join" on the competition's card, so a link passed around a group chat can't quietly add strangers. People can ask to join right up until the competition ends.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Share live standings</div>
+      <div class="pc-line muted">Gives you a read-only link for following the standings live, handy for people who aren't in the competition.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Badges</div>
+      <div class="pc-line muted">Once a competition has ended, the top three in its ranking earn a placement badge. They go in your Trophy Case in Fins of Fame on your Profile.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Edit and delete</div>
+      <div class="pc-line muted">Only the organiser can edit or delete a competition. Deleting it can't be undone.</div>
+    </div>
+    <button class="primary-btn" id="competitions-help-close" style="margin-top:14px;">Got it</button>
   </div>
 </dialog>
 
@@ -8845,6 +8927,18 @@ document.getElementById('timers-help-btn').addEventListener('click', ()=>{
 document.getElementById('timers-help-close').addEventListener('click', ()=>{
   document.getElementById('timers-help-modal').close();
 });
+document.getElementById('insights-help-btn').addEventListener('click', ()=>{
+  document.getElementById('insights-help-modal').showModal();
+});
+document.getElementById('insights-help-close').addEventListener('click', ()=>{
+  document.getElementById('insights-help-modal').close();
+});
+document.getElementById('competitions-help-btn').addEventListener('click', ()=>{
+  document.getElementById('competitions-help-modal').showModal();
+});
+document.getElementById('competitions-help-close').addEventListener('click', ()=>{
+  document.getElementById('competitions-help-modal').close();
+});
 
 // ---------- Log a past catch ----------
 // A stripped-down catch form for fish landed before the app existed —
@@ -10986,6 +11080,7 @@ function feedRodLabel(it){
 // notice — not every fix, just what's worth knowing about.
 const CHANGELOG = [
   {version:'1.7', date:'30 September 2026', changes:[
+    'New "How Insights works" and "How Competitions work" guides, at the top of the Insights and Competitions tabs',
     '6 new weather related badges in Fins of Fame',
     'Competitions: tap a competition\'s name to see the full leaderboard, then tap an angler to see what they caught, with their photos. The anglers list is gone from the front card',
     'Competitions: organisers can now confirm or reject each catch after checking the scale photo against the fish weight plus net weight. Rejected catches stop counting',
