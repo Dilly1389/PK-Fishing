@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PK Fishing</title>
 <meta name="description" content="A private fishing logbook for South African anglers — session timers, tackle sharing, competitions and catch insights.">
 <meta property="og:title" content="PK Fishing">
@@ -15,6 +15,8 @@
 <meta name="twitter:description" content="A private fishing logbook for South African anglers — session timers, tackle sharing, competitions and catch insights.">
 <meta name="twitter:image" content="https://pksport.co.za/fishing/icon-512.png">
 <meta name="theme-color" content="#B3121F">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" as="image" href="logo-small.webp" type="image/webp" fetchpriority="high">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -26,7 +28,7 @@
      No email, name, GPS or catch weight/species is ever sent - see pkTrack()
      and pkIdentify() below for what does and doesn't get captured. -->
 <script>
-    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],Object.defineProperty(u,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e}}),Object.defineProperty(u.people,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(){return u.toString(1)+".people (stub)"}}),o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]);var pkLoad=function(){setTimeout(function(){r.parentNode.insertBefore(p,r)},6000)};"complete"===t.readyState?pkLoad():window.addEventListener("load",pkLoad);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],Object.defineProperty(u,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e}}),Object.defineProperty(u.people,"toString",{configurable:!0,enumerable:!0,writable:!0,value:function(){return u.toString(1)+".people (stub)"}}),o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
     posthog.init('phc_AkoHcXum7GzqdmJB2q2rZbofhxu9avuArZnzWK3q2x6k', {
         api_host: 'https://eu.i.posthog.com',
         defaults: '2026-05-30',
@@ -360,6 +362,24 @@
   .auth-header{text-align:center;margin-bottom:18px;}
   .auth-header .auth-icon{font-size:38px;line-height:1;}
   .auth-header .auth-icon img{height:120px;width:auto;}
+  img[src="logo-small.webp"]{width:auto;}
+  /* Until the app script has decided signed-in or signed-out, the page body is not
+     painted, so it cannot jump when the sign-in card replaces the app shell. The
+     animation reveals it after 4s even if the script never gets that far. */
+  body:not(.pk-ready) nav.tabs, body:not(.pk-ready) main, body:not(.pk-ready) .app-footer{
+    visibility:hidden;animation:pkReveal 0s linear 4s forwards;
+  }
+  @keyframes pkReveal{to{visibility:visible;}}
+  /* Floats over the page instead of pushing it down when it appears */
+  #install-banner{
+    position:fixed;left:10px;right:10px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:1400;
+    max-width:620px;margin:0 auto;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,0.35);
+  }
+  body.signed-out-view #install-banner{bottom:calc(14px + env(safe-area-inset-bottom));}
+  @media (min-width: 800px){ #install-banner{bottom:16px;} }
+  @media (pointer:coarse){
+    :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select, textarea){font-size:16px;}
+  }
   .auth-header h2{color:var(--dam);font-size:22px;}
   .field .auth-input{background:var(--paper);border-color:var(--line);}
   .field textarea,.field input,.field select{
@@ -562,7 +582,7 @@
     0%{transform:scale(0.5);} 18%{transform:scale(1.12);} 32%{transform:scale(1);} 100%{transform:scale(1);}
   }
   .primary-btn{
-    width:100%;padding:12px;background:var(--rust);color:#fff;border:none;border-radius:9px;
+    width:100%;padding:12px;background:#D93240;color:#fff;border:none;border-radius:9px;
     font-weight:700;font-size:14.5px;cursor:pointer;font-family:inherit;
   }
   .status{font-size:12px;color:var(--muted);margin-top:8px;min-height:14px;}
@@ -653,13 +673,12 @@
     .bobber-controls{justify-content:stretch;}
   }
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.48.0/dist/tabler-icons.min.css">
 </head>
 <body>
 <div class="app">
   <header class="top" id="app-header">
-    <h1><img src="logo_v3_outlined.png" alt="PK Fishing" fetchpriority="high" style="height:1.7em;vertical-align:middle;margin-right:6px;"> PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
+    <h1><img src="logo-small.webp" width="203" height="300" alt="PK Fishing" fetchpriority="high" style="height:1.7em;vertical-align:middle;margin-right:6px;"> PK Fishing <span class="status-dot" id="conn-dot" title="Checking connection..."></span></h1>
     <button id="notif-bell" aria-label="Notifications" style="display:none;">
       🔔<span id="notif-badge" style="display:none;"></span>
     </button>
@@ -837,7 +856,7 @@
         <div id="auth-forms">
           <div id="signup-form" style="display:none;">
             <div class="auth-header">
-              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" loading="lazy" decoding="async"></div>
+              <div class="auth-icon"><img src="logo-small.webp" width="203" height="300" alt="PK Fishing" loading="lazy" decoding="async"></div>
               <h2 style="margin:6px 0 2px;">PK Fishing</h2>
               <p class="pc-line muted" style="margin:0;">Create your account</p>
             </div>
@@ -867,7 +886,7 @@
 
           <div id="signin-form">
             <div class="auth-header">
-              <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" fetchpriority="high"></div>
+              <div class="auth-icon"><img src="logo-small.webp" width="203" height="300" alt="PK Fishing" fetchpriority="high"></div>
               <h2 style="margin:6px 0 2px;">PK Fishing</h2>
               <p class="pc-line muted" style="margin:0;">Sign in to your account</p>
             </div>
@@ -1805,7 +1824,7 @@
 
 <dialog id="onboarding-modal" closedby="any" aria-label="Welcome to PK Fishing">
   <div class="modal-card">
-    <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;"><img src="logo_v3_outlined.png" alt="" loading="lazy" decoding="async" style="height:1.6em;"> Welcome to PK Fishing</h3>
+    <h3 style="margin-top:0;display:flex;align-items:center;gap:8px;"><img src="logo-small.webp" width="203" height="300" alt="" loading="lazy" decoding="async" style="height:1.6em;"> Welcome to PK Fishing</h3>
     <p class="pc-line">Here's how it works:</p>
     <div class="profile-catch">
       <div class="pc-head">1. Build your rigs</div>
@@ -1838,7 +1857,7 @@
 <dialog id="reset-password-modal" closedby="any" aria-label="Set a new password">
   <div class="modal-card">
     <div class="auth-header">
-      <div class="auth-icon"><img src="logo_v3_outlined.png" alt="PK Fishing" loading="lazy" decoding="async"></div>
+      <div class="auth-icon"><img src="logo-small.webp" width="203" height="300" alt="PK Fishing" loading="lazy" decoding="async"></div>
       <h3 style="margin:6px 0 2px;">Set a new password</h3>
     </div>
     <div class="field">
@@ -2139,7 +2158,32 @@
   </div>
 </dialog>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// The map library is only needed on the venue map and the pin-drop screen, so
+// it is fetched the first time one of them opens instead of on every page load.
+let leafletPromise = null;
+function ensureLeaflet(){
+  if(window.L) return Promise.resolve();
+  if(leafletPromise) return leafletPromise;
+  leafletPromise = new Promise((resolve, reject)=>{
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    const js = document.createElement('script');
+    js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    let cssDone = false, jsDone = false;
+    const check = ()=>{ if(cssDone && jsDone) resolve(); };
+    const fail = ()=>{ leafletPromise = null; reject(new Error('Map library failed to load')); };
+    css.onload = ()=>{ cssDone = true; check(); };
+    js.onload = ()=>{ jsDone = true; check(); };
+    css.onerror = fail;
+    js.onerror = fail;
+    document.head.appendChild(css);
+    document.head.appendChild(js);
+  });
+  return leafletPromise;
+}
+</script>
 <script>
 const SUPABASE_URL = 'https://quptwbxzstepwfeffljq.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_nnO3ZffPD-r08e4E1rjcPQ_47mGq7Xu';
@@ -4185,6 +4229,7 @@ function renderAccountArea(){
   // overriding the hamburger menu's own CSS toggle at mobile widths, since
   // inline styles beat media-query rules regardless of the .open class.
   document.body.classList.toggle('signed-out-view', isSignedOutNormalView);
+  document.body.classList.add('pk-ready');
   if(appearanceCard) appearanceCard.style.display = isSignedOutNormalView ? 'none' : 'block';
   if(profileHelpBtn) profileHelpBtn.style.display = isSignedOutNormalView ? 'none' : 'inline-block';
   // With the nav hidden, a signed-out visitor can't leave whatever panel is open, and the
@@ -8680,11 +8725,13 @@ function openVenueCatches(venue, venueCatches){
   document.getElementById('venue-catches-modal').showModal();
 }
 
-function renderVenueMap(venues, allCatches){
+async function renderVenueMap(venues, allCatches){
   const container = document.getElementById('venue-map');
-  if(!container || typeof L === 'undefined') return;
+  if(!container) return;
   const mappable = (venues||[]).filter(v=> v.latitude != null && v.longitude != null);
   if(!mappable.length) return;
+  try{ await ensureLeaflet(); }catch(e){ console.error(e); return; }
+  if(!document.getElementById('venue-map')) return;
 
   // Tear down any previous map — this modal can reopen multiple times
   if(venueMapInstance){ venueMapInstance.remove(); venueMapInstance = null; }
@@ -8981,7 +9028,11 @@ async function openPinDrop(startCoords, onConfirm){
   document.getElementById('pin-drop-confirm').disabled = true;
   pinDropChoice = null;
 
-  if(typeof L === 'undefined') return;
+  try{ await ensureLeaflet(); }catch(e){
+    console.error(e);
+    document.getElementById('pin-drop-readout').textContent = 'The map could not load. Check your connection and try again.';
+    return;
+  }
   if(pinDropMap){ pinDropMap.remove(); pinDropMap = null; pinDropMarker = null; }
 
   // Start somewhere sensible — the venue's existing spot, another venue,

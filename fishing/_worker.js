@@ -140,6 +140,12 @@ export default {
         return fetch(upstream.toString());
       }
 
+      if (url.pathname === '/robots.txt') {
+        return new Response('User-agent: *\nAllow: /\n', {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
+        });
+      }
+
       return new Response(UNDER_CONSTRUCTION, {
         status: 200,
         headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' },
