@@ -10891,15 +10891,19 @@ function renderCatchList(rod){
 // Shared row renderer for both the live session feed (Timers) and the
 // read-only "What happened" list on a past session (Insights -> What
 // happened) - same cross-rod view either way. The live feed shows newest
-// first; the past-session recap reads oldest first, in the order it happened.
-function sessionFeedRowsHtml(entries, emptyMessage, oldestFirst){
+// first; the past-session recap reads oldest first, in the order it happened,
+// and puts a short date above each time.
+function sessionFeedRowsHtml(entries, emptyMessage, recap){
   if(entries.length===0){
     return `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
   }
-  return entries.slice().sort((a,b)=> oldestFirst ? a.time - b.time : b.time - a.time).map(c=>{
+  return entries.slice().sort((a,b)=> recap ? a.time - b.time : b.time - a.time).map(c=>{
     const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}` : `No catch`;
-    const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
+    const timeOnly = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
+    const time = recap
+      ? new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short'}) + '<br>' + timeOnly
+      : timeOnly;
     const photoCount = (c.photos && c.photos.length) || 0;
     if(photoCount){ photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || []; }
     const thumb = photoCount
