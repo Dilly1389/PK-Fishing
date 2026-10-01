@@ -2357,7 +2357,7 @@ const BADGE_DEFS = [
   // Weather badges: judged from the weather saved with each catch.
   {key:'windmaster',     emoji:'💨', name:'Windmaster',        desc:'Caught a fish in a wind of 20 km/h or more',
    count: s=> s.windCatchCount},
-  {key:'pressure_shift', emoji:'📉', name:'Pressure Shift',    desc:'Caught a fish while the pressure was rising or falling fast (2 hPa or more in the last few hours)',
+  {key:'pressure_shift', emoji:'📉', name:'Pressure Shift',    desc:'Caught a fish while the pressure was rising or falling fast (3.5 hPa or more in the last few hours)',
    count: s=> s.pressureShiftCatchCount},
   {key:'rainmaker',      emoji:'☔', name:'Rainmaker',         desc:'Caught a fish while it was raining',
    count: s=> s.rainCatchCount},
@@ -2389,7 +2389,7 @@ function cabinetOrderedBadgeDefs(){
 const WEATHER_BADGE_LIMITS = {
   windKmh: 20,
   rainMm: 0.1,
-  pressureShiftHpa: 2,
+  pressureShiftHpa: 3.5,
   heatC: 35,
   frostC: 2,
   stormPressureHpa: 1000
@@ -3524,6 +3524,7 @@ document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
       openProfile(currentProfileId);
     }
     clearDbError();
+    checkAndAwardBadges();
   }catch(e){
     console.error(e);
     st.textContent = 'Could not save: ' + (e.message || 'unknown error');
@@ -6351,7 +6352,7 @@ async function insertCatch(personId, entry){
   }
 }
 async function removeCatch(catchId){
-  try{ await sbDelete('catches', 'id=eq.'+catchId); clearDbError(); }
+  try{ await sbDelete('catches', 'id=eq.'+catchId); clearDbError(); checkAndAwardBadges(); }
   catch(e){ console.error(e); showDbError('Could not delete from Supabase.'); }
 }
 
@@ -9981,6 +9982,7 @@ async function openProfile(personId){
         try{
           await sbDelete('catches', 'id=eq.'+btn.dataset.catchId);
           openProfile(personId);
+          checkAndAwardBadges();
         }catch(e){
           console.error(e);
           alert('Could not remove: ' + (e.message || 'unknown error'));
