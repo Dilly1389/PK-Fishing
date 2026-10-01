@@ -479,7 +479,6 @@
     display:flex;align-items:center;gap:8px;margin-top:6px;
   }
   .fill-level-slider{
-    -webkit-appearance:slider-vertical;
     writing-mode:vertical-lr;
     direction:rtl;
     width:22px;height:70px;padding:0;
@@ -2159,6 +2158,13 @@
 </dialog>
 
 <script>
+// Older iPhone Safari only draws the tub-level sliders upright with this keyword. Chrome flags it
+// as deprecated even inside an unused CSS rule, so it is added from here and only for Safari.
+if(/safari/i.test(navigator.userAgent) && !/chrome|chromium|android/i.test(navigator.userAgent)){
+  var legacySliderCss = document.createElement('style');
+  legacySliderCss.textContent = '.fill-level-slider{-webkit-appearance:slider-vertical;}';
+  document.head.appendChild(legacySliderCss);
+}
 // The map library is only needed on the venue map and the pin-drop screen, so
 // it is fetched the first time one of them opens instead of on every page load.
 let leafletPromise = null;
