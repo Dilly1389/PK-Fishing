@@ -7977,7 +7977,7 @@ function catchDetailHtml(c, editable, removable, showDate){
   const dateStr = new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
   let html = `<div class="profile-catch">
     <div class="pc-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <span>${showDate ? `<b class="pc-date">${escapeHtml(dateStr)}</b> · ` : ''}${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</span>
+      <span>${showDate ? `<b class="pc-date">${escapeHtml(dateStr)}</b> · ${c.hasKnownTime === false ? '' : escapeHtml(new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'})) + ' · '}` : ''}${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</span>
       <span style="display:flex;gap:6px;">
         ${editable ? `<button type="button" class="mini-btn profile-edit-catch" data-catch-id="${c.id}" style="text-transform:none;letter-spacing:normal;">Edit</button>` : ''}
         ${removable ? `<button type="button" class="mini-btn danger profile-remove-catch" data-catch-id="${c.id}" style="text-transform:none;letter-spacing:normal;">Remove</button>` : ''}
@@ -7986,7 +7986,7 @@ function catchDetailHtml(c, editable, removable, showDate){
   if(c.caught){
     html += `<div class="pc-line">${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}</div>`;
   }
-  html += `<div class="pc-line muted">${showDate ? '' : escapeHtml(dateStr) + ' &middot; '}Time of day: ${timeStr} &middot; Rod timer: ${timerStr}</div>`;
+  html += `<div class="pc-line muted">${showDate ? '' : escapeHtml(dateStr) + ' &middot; Time of day: ' + timeStr + ' &middot; '}Rod timer: ${timerStr}</div>`;
   if(c.rig){
     html += `<div class="pc-line muted">Rig: ${escapeHtml(c.rig)}</div>`;
   }
@@ -10107,7 +10107,7 @@ async function openProfile(personId){
     }
 
     container.innerHTML = filtered.length
-      ? filtered.map(c=>catchDetailHtml(c, canEditCatches && !c.sessionId, canEditCatches)).join('')
+      ? filtered.map(c=>catchDetailHtml(c, canEditCatches && !c.sessionId, canEditCatches, true)).join('')
       : (catches.length ? '<div class="empty">Nothing matches that search.</div>' : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>');
 
     container.querySelectorAll('.profile-edit-catch').forEach(btn=>{
@@ -10174,7 +10174,7 @@ async function openProfile(personId){
       }
       const c = caughtOnly.find(x=>x.id===catchId);
       if(!c) return;
-      detailArea.innerHTML = catchDetailHtml(c);
+      detailArea.innerHTML = catchDetailHtml(c, false, false, true);
       detailArea.dataset.currentId = catchId;
     });
   });
