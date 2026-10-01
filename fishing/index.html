@@ -2318,7 +2318,7 @@ const ALL_BAIT_TYPES = [
 // Bump this whenever a badge image file is replaced with the same filename —
 // otherwise browsers (and CDN caches) can keep serving the old cached version
 // indefinitely, since nothing about the URL itself changes.
-const BADGE_ASSET_VERSION = 14;
+const BADGE_ASSET_VERSION = 15;
 
 const BADGE_DEFS = [
   // One-off badges: `test` returns true once the condition is met.
@@ -9497,7 +9497,7 @@ function badgeImageSrc(key, speciesHint){
     }
     if(species === 'barbel') return 'badge-ten_kg-barbel.png';
     if(species.includes('yellowfish')) return 'badge-ten_kg-yellowfish.png';
-    return 'badge-ten_kg-carp.png';
+    if(species === 'carp' || species === 'mirror carp' || species === 'grass carp') return 'badge-ten_kg-carp.png';
   }
   return 'badge-'+key+'.png';
 }
