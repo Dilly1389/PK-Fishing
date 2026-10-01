@@ -11468,7 +11468,7 @@ async function renderHome(){
       loadFeedItems(ids),
       loadFeedBadgeItems([...followedIds])
     ]);
-    const recent = items.filter(it=>it.caught).concat(badgeItems).sort((a,b)=> b.time - a.time).slice(0, 5);
+    const recent = items.concat(badgeItems).sort((a,b)=> b.time - a.time).slice(0, 5);
     feedWrap.innerHTML = recent.length
       ? recent.map((it, idx)=> it.kind === 'badge' ? `
         <div class="profile-catch home-feed-item" data-feed-index="${idx}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;cursor:pointer;">
