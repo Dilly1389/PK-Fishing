@@ -474,6 +474,19 @@
     vertical-align:middle;
   }
   .people-list .actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .fc-day{border-bottom:1px solid var(--line);}
+  .fc-day:last-child{border-bottom:none;}
+  .fc-day > summary{
+    list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+    gap:8px;flex-wrap:wrap;padding:10px 0;
+  }
+  .fc-day > summary::-webkit-details-marker{display:none;}
+  .fc-day > summary::after{content:'›';font-size:20px;line-height:1;color:var(--muted);margin-left:auto;transition:transform .15s;}
+  .fc-day[open] > summary::after{transform:rotate(90deg);}
+  .fc-day > summary:focus-visible{outline:2px solid var(--dam);outline-offset:2px;border-radius:6px;}
+  .fc-day-hours{padding:0 0 8px 10px;}
+  .fc-day-hours li{padding:6px 0;}
+  @media (prefers-reduced-motion: reduce){ .fc-day > summary::after{transition:none;} }
   .tackle-thumb{display:none;width:44px;height:44px;border-radius:6px;object-fit:cover;margin-right:8px;vertical-align:middle;border:1px solid var(--line);cursor:pointer;}
   /* Vertical "how full is the tub" slider for baits and dips */
   .fill-level-wrap{
@@ -6968,7 +6981,7 @@ async function fetchForecast(lat, lng){
       // the absolute number changes.
       + `&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl,precipitation_probability`
       + `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max`
-      + `&forecast_days=4&timezone=auto`;
+      + `&forecast_days=7&timezone=auto`;
     const res = await fetch(url);
     if(!res.ok) return null;
     return await res.json();
@@ -7331,19 +7344,48 @@ async function openForecast(){
   }
 
   if(data.daily && data.daily.time){
-    html += `<p class="sub-heading">Next few days</p><ul class="people-list">`;
+    html += `<p class="sub-heading">Next ${data.daily.time.length} days</p><p class="pc-line muted" style="margin:-4px 0 6px;">Tap a day to see it every 3 hours.</p><div>`;
     data.daily.time.forEach((d, i)=>{
-      const day = new Date(d).toLocaleDateString(dateLocale(), {weekday:'short', day:'numeric', month:'short'});
-      html += `<li>
-        <div class="who"><b>${escapeHtml(day)}</b></div>
-        <div class="actions">
-          <span class="pill">${tempValue(data.daily.temperature_2m_min[i])}–${fmtTemp(data.daily.temperature_2m_max[i])}</span>
-          <span class="pill">💨 ${fmtWind(data.daily.wind_speed_10m_max[i])}</span>
-          <span class="pill">🌧️ ${Math.round(data.daily.precipitation_probability_max[i])}%</span>
-        </div>
-      </li>`;
+      const day = new Date(d + 'T12:00').toLocaleDateString(dateLocale(), {weekday:'short', day:'numeric', month:'short'});
+      // This day's hourly readings, every 3 hours. Today skips the hours already gone.
+      const slots = [];
+      times.forEach((t, k)=>{
+        if(t.slice(0, 10) !== d || parseInt(t.slice(11, 13), 10) % 3 !== 0) return;
+        if(new Date(t) < now - 3600000) return;
+        slots.push({
+          time: new Date(t), temp: data.hourly.temperature_2m?.[k], wind: data.hourly.wind_speed_10m?.[k],
+          windDir: data.hourly.wind_direction_10m?.[k], pressure: data.hourly.pressure_msl?.[k],
+          rain: data.hourly.precipitation_probability?.[k]
+        });
+      });
+      const dayPressure = times.map((t, k)=> t.slice(0, 10) === d ? data.hourly.pressure_msl?.[k] : null).filter(v=> v != null);
+      let pressureNote = '';
+      if(dayPressure.length > 3){
+        const change = dayPressure[dayPressure.length - 1] - dayPressure[0];
+        const word = Math.abs(change) < 1 ? 'holding steady' : (change > 0 ? 'rising' : 'falling');
+        pressureNote = `<p class="pc-line muted" style="margin:4px 0 0 10px;">Pressure ${word} through the day (${fmtPressureChange(change)}).</p>`;
+      }
+      html += `<details class="fc-day">
+        <summary>
+          <div class="who"><b>${escapeHtml(day)}</b></div>
+          <div class="actions">
+            <span class="pill">${tempValue(data.daily.temperature_2m_min[i])}–${fmtTemp(data.daily.temperature_2m_max[i])}</span>
+            <span class="pill">💨 ${fmtWind(data.daily.wind_speed_10m_max[i])}</span>
+            <span class="pill">🌧️ ${Math.round(data.daily.precipitation_probability_max[i])}%</span>
+          </div>
+        </summary>
+        <ul class="people-list fc-day-hours">${slots.map(h=>`<li>
+          <div class="who"><b>${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
+          <div class="actions">
+            <span class="pill">${h.temp != null ? fmtTemp(h.temp) : '—'}</span>
+            <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}</span>
+            ${h.rain != null ? `<span class="pill">🌧️ ${Math.round(h.rain)}%</span>` : ''}
+            ${h.pressure != null ? `<span class="pill">${fmtPressure(h.pressure)}</span>` : ''}
+          </div>
+        </li>`).join('')}</ul>${pressureNote}
+      </details>`;
     });
-    html += '</ul>';
+    html += '</div>';
   }
 
   const m = moonPhase();
