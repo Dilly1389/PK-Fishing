@@ -1123,6 +1123,36 @@
             </select>
           </div>
           <div class="field">
+            <label>Temperature</label>
+            <select id="temp-unit-select">
+              <option value="c">Celsius (°C)</option>
+              <option value="f">Fahrenheit (°F)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Wind speed</label>
+            <select id="wind-unit-select">
+              <option value="kmh">Kilometres per hour (km/h)</option>
+              <option value="mph">Miles per hour (mph)</option>
+              <option value="kn">Knots (kn)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Air pressure</label>
+            <select id="pressure-unit-select">
+              <option value="hpa">Hectopascals (hPa)</option>
+              <option value="inhg">Inches of mercury (inHg)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Weather on the Home screen</label>
+            <select id="home-weather-select">
+              <option value="summary">One line</option>
+              <option value="full">Full card</option>
+              <option value="off">Hide it</option>
+            </select>
+          </div>
+          <div class="field">
             <label>Date format</label>
             <select id="date-format-select">
               <option value="dmy">Day first (17 Sept 2026)</option>
@@ -2266,6 +2296,34 @@ function getWeightUnit(){
 }
 function setWeightUnit(unit){
   try{ localStorage.setItem('pk_fishing_weight_unit', unit); }catch(e){}
+}
+// Weather is always fetched and saved in °C, km/h and hPa. These preferences only change how it is shown.
+function getPref(key, allowed, fallback){
+  try{ const v = localStorage.getItem(key); return allowed.includes(v) ? v : fallback; }catch(e){ return fallback; }
+}
+function getTempUnit(){ return getPref('pk_fishing_temp_unit', ['c','f'], 'c'); }
+function getWindUnit(){ return getPref('pk_fishing_wind_unit', ['kmh','mph','kn'], 'kmh'); }
+function getPressureUnit(){ return getPref('pk_fishing_pressure_unit', ['hpa','inhg'], 'hpa'); }
+function getHomeWeatherMode(){ return getPref('pk_fishing_home_weather', ['summary','full','off'], 'summary'); }
+function tempValue(c){ return getTempUnit() === 'f' ? Math.round(c * 9 / 5 + 32) : Math.round(c); }
+function fmtTemp(c){
+  if(c == null) return '';
+  return tempValue(c) + (getTempUnit() === 'f' ? '°F' : '°C');
+}
+function fmtWind(kmh){
+  if(kmh == null) return '';
+  const u = getWindUnit();
+  if(u === 'mph') return Math.round(kmh * 0.621371) + 'mph';
+  if(u === 'kn') return Math.round(kmh * 0.539957) + 'kn';
+  return Math.round(kmh) + 'km/h';
+}
+function fmtPressure(hpa){
+  if(hpa == null) return '';
+  return getPressureUnit() === 'inhg' ? (hpa * 0.02953).toFixed(2) + 'inHg' : Math.round(hpa) + 'hPa';
+}
+function fmtPressureChange(hpa){
+  const sign = hpa > 0 ? '+' : '';
+  return getPressureUnit() === 'inhg' ? sign + (hpa * 0.02953).toFixed(2) + 'inHg' : sign + hpa.toFixed(1) + 'hPa';
 }
 function kgToLbOz(kg){
   const totalOz = (kg || 0) * 35.27396195;
@@ -7197,10 +7255,10 @@ async function renderSessionWeather(){
 
   const parts = [];
   if(weather){
-    if(weather.temp != null) parts.push(`${Math.round(weather.temp)}°C`);
-    if(weather.windSpeed != null) parts.push(`💨 ${Math.round(weather.windSpeed)}km/h ${windDirLabel(weather.windDir)}`);
+    if(weather.temp != null) parts.push(fmtTemp(weather.temp));
+    if(weather.windSpeed != null) parts.push(`💨 ${fmtWind(weather.windSpeed)} ${windDirLabel(weather.windDir)}`);
     if(weather.cloudCover != null) parts.push(`☁️ ${Math.round(weather.cloudCover)}%`);
-    if(weather.pressure != null) parts.push(`${Math.round(weather.pressure)}hPa`);
+    if(weather.pressure != null) parts.push(fmtPressure(weather.pressure));
   }
   if(moon) parts.push(`${moon.emoji} ${moon.label}`);
 
@@ -7255,10 +7313,10 @@ async function openForecast(){
     html += `<li>
       <div class="who"><b>${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
       <div class="actions">
-        <span class="pill">${h.temp != null ? Math.round(h.temp)+'°C' : '—'}</span>
-        <span class="pill">💨 ${h.wind != null ? Math.round(h.wind)+'km/h '+windDirLabel(h.windDir) : '—'}</span>
+        <span class="pill">${h.temp != null ? fmtTemp(h.temp) : '—'}</span>
+        <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}</span>
         ${h.rain != null ? `<span class="pill">🌧️ ${Math.round(h.rain)}%</span>` : ''}
-        ${h.pressure != null ? `<span class="pill">${Math.round(h.pressure)}hPa</span>` : ''}
+        ${h.pressure != null ? `<span class="pill">${fmtPressure(h.pressure)}</span>` : ''}
       </div>
     </li>`;
   });
@@ -7269,7 +7327,7 @@ async function openForecast(){
     const change = hours[hours.length-1].pressure - hours[0].pressure;
     const trend = Math.abs(change) < 1 ? 'holding steady'
       : (change > 0 ? 'rising' : 'falling');
-    html += `<p class="pc-line muted" style="margin-bottom:14px;">Pressure is ${trend} over the next 12 hours (${change > 0 ? '+' : ''}${change.toFixed(1)}hPa).</p>`;
+    html += `<p class="pc-line muted" style="margin-bottom:14px;">Pressure is ${trend} over the next 12 hours (${fmtPressureChange(change)}).</p>`;
   }
 
   if(data.daily && data.daily.time){
@@ -7279,8 +7337,8 @@ async function openForecast(){
       html += `<li>
         <div class="who"><b>${escapeHtml(day)}</b></div>
         <div class="actions">
-          <span class="pill">${Math.round(data.daily.temperature_2m_min[i])}–${Math.round(data.daily.temperature_2m_max[i])}°C</span>
-          <span class="pill">💨 ${Math.round(data.daily.wind_speed_10m_max[i])}km/h</span>
+          <span class="pill">${tempValue(data.daily.temperature_2m_min[i])}–${fmtTemp(data.daily.temperature_2m_max[i])}</span>
+          <span class="pill">💨 ${fmtWind(data.daily.wind_speed_10m_max[i])}</span>
           <span class="pill">🌧️ ${Math.round(data.daily.precipitation_probability_max[i])}%</span>
         </div>
       </li>`;
@@ -8958,6 +9016,14 @@ document.getElementById('weight-unit-select').addEventListener('change', (e)=>{
   // Anything already rendered showing a weight (Insights, profile, feed)
   // needs to re-render to pick up the new format
   if(currentPerson) renderAll();
+});
+[['temp-unit-select','pk_fishing_temp_unit'], ['wind-unit-select','pk_fishing_wind_unit'],
+ ['pressure-unit-select','pk_fishing_pressure_unit'], ['home-weather-select','pk_fishing_home_weather']].forEach(([id, key])=>{
+  document.getElementById(id).addEventListener('change', (e)=>{
+    try{ localStorage.setItem(key, e.target.value); }catch(err){}
+    renderHomeWeather();
+    if(typeof activeSession !== 'undefined' && activeSession) renderSessionWeather();
+  });
 });
 document.getElementById('date-format-select').addEventListener('change', (e)=>{
   localStorage.setItem('pk_fishing_date_format', e.target.value);
@@ -11581,7 +11647,8 @@ async function renderHome(){
 
 async function renderHomeWeather(){
   const el = document.getElementById('home-weather');
-  if(!el || !navigator.onLine){ el.style.display = 'none'; return; }
+  if(!el) return;
+  if(!navigator.onLine || getHomeWeatherMode() === 'off'){ el.style.display = 'none'; return; }
   try{
     const coords = lastKnownPosition || await capturePosition();
     if(!coords){ el.style.display = 'none'; return; }
@@ -11593,16 +11660,29 @@ async function renderHomeWeather(){
     el.style.display = 'block';
     el.style.cursor = 'pointer';
     el.setAttribute('aria-label', 'Weather where you are. Open the forecast');
-    el.innerHTML = `
+    if(getHomeWeatherMode() === 'full'){
+      const tile = (big, small)=> `<div class="home-stat"><b style="font-size:16px;">${escapeHtml(big)}</b><span>${escapeHtml(small)}</span></div>`;
+      const tiles = [];
+      if(w.temp != null) tiles.push(tile(fmtTemp(w.temp), 'temperature'));
+      if(w.windSpeed != null) tiles.push(tile(fmtWind(w.windSpeed), 'wind ' + windDirLabel(w.windDir)));
+      if(w.pressure != null) tiles.push(tile(fmtPressure(w.pressure), trend ? trend.trim() : 'pressure'));
+      if(w.cloudCover != null) tiles.push(tile(Math.round(w.cloudCover) + '%', 'cloud'));
+      tiles.push(tile(m.emoji, m.label));
+      el.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;">${tiles.join('')}</div>
+        <div style="font-size:12px;color:var(--muted);text-align:right;margin-top:8px;">Forecast ›</div>`;
+    }else{
+      el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div style="font-size:13.5px;color:var(--ink);">
-          ${w.temp != null ? Math.round(w.temp)+'°C' : ''}
-          ${w.windSpeed != null ? ' · 💨 '+Math.round(w.windSpeed)+'km/h '+windDirLabel(w.windDir) : ''}
-          ${w.pressure != null ? ' · '+Math.round(w.pressure)+'hPa'+trend : ''}
+          ${w.temp != null ? fmtTemp(w.temp) : ''}
+          ${w.windSpeed != null ? ' · 💨 '+fmtWind(w.windSpeed)+' '+windDirLabel(w.windDir) : ''}
+          ${w.pressure != null ? ' · '+fmtPressure(w.pressure)+trend : ''}
           · <span title="${escapeHtml(m.label)}" aria-label="${escapeHtml(m.label)}">${m.emoji}</span>
         </div>
         <div style="font-size:12px;color:var(--muted);white-space:nowrap;">Forecast ›</div>
       </div>`;
+    }
     // Same forecast view as the session weather bar — the coordinates are
     // stashed so openForecast has something to work with
     el.onclick = ()=>{
@@ -13091,6 +13171,9 @@ await loadTackleCategoryOptions();
     if(themeSel) themeSel.value = localStorage.getItem('pk_fishing_theme') || 'system';
     const unitSel = document.getElementById('weight-unit-select');
     if(unitSel) unitSel.value = getWeightUnit();
+    [['temp-unit-select', getTempUnit], ['wind-unit-select', getWindUnit], ['pressure-unit-select', getPressureUnit], ['home-weather-select', getHomeWeatherMode]].forEach(([id, get])=>{
+      const s = document.getElementById(id); if(s) s.value = get();
+    });
     const dateSel = document.getElementById('date-format-select');
     if(dateSel) dateSel.value = localStorage.getItem('pk_fishing_date_format') || 'dmy';
   }catch(e){}
