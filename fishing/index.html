@@ -1149,6 +1149,7 @@
             <select id="home-weather-select">
               <option value="summary">One line</option>
               <option value="full">Full card</option>
+              <option value="visual">Picture card (wind compass, pressure graph)</option>
               <option value="off">Hide it</option>
             </select>
           </div>
@@ -2304,7 +2305,7 @@ function getPref(key, allowed, fallback){
 function getTempUnit(){ return getPref('pk_fishing_temp_unit', ['c','f'], 'c'); }
 function getWindUnit(){ return getPref('pk_fishing_wind_unit', ['kmh','mph','kn'], 'kmh'); }
 function getPressureUnit(){ return getPref('pk_fishing_pressure_unit', ['hpa','inhg'], 'hpa'); }
-function getHomeWeatherMode(){ return getPref('pk_fishing_home_weather', ['summary','full','off'], 'summary'); }
+function getHomeWeatherMode(){ return getPref('pk_fishing_home_weather', ['summary','full','visual','off'], 'summary'); }
 function tempValue(c){ return getTempUnit() === 'f' ? Math.round(c * 9 / 5 + 32) : Math.round(c); }
 function fmtTemp(c){
   if(c == null) return '';
@@ -11645,6 +11646,34 @@ async function renderHome(){
   }
 }
 
+function skyLook(w){
+  const h = new Date().getHours(), night = h < 6 || h >= 19;
+  if(w.precipitation > 0) return {icon:'🌧️', label:'Rain'};
+  if(w.cloudCover == null) return {icon: night ? '🌙' : '☀️', label: night ? 'Night' : 'Day'};
+  if(w.cloudCover >= 80) return {icon:'☁️', label:'Overcast'};
+  if(w.cloudCover >= 40) return {icon: night ? '☁️' : '⛅', label:'Partly cloudy'};
+  return {icon: night ? '🌙' : '☀️', label: night ? 'Clear night' : 'Sunny'};
+}
+// Wind compass: the arrow points the way the wind is blowing towards
+function windCompassSvg(deg){
+  if(deg == null) return '';
+  return `<svg width="46" height="46" viewBox="0 0 46 46" aria-hidden="true">
+    <circle cx="23" cy="23" r="21" fill="none" stroke="var(--line)" stroke-width="2"/>
+    <text x="23" y="10" text-anchor="middle" font-size="8" font-weight="700" fill="var(--muted)">N</text>
+    <g transform="rotate(${Math.round((deg + 180) % 360)} 23 23)"><path d="M23 12 L28 31 L23 27 L18 31 Z" fill="var(--rust)"/></g>
+  </svg>`;
+}
+// Pressure line for the next 12 hours, starting now
+function pressureGraphSvg(values){
+  if(!values || values.length < 3) return '';
+  const lo = Math.min(...values), hi = Math.max(...values), span = Math.max(hi - lo, 3), mid = (hi + lo) / 2;
+  const pts = values.map((v, i)=> (4 + i * 92 / (values.length - 1)).toFixed(1) + ',' + (16 - (v - mid) / span * 24).toFixed(1));
+  return `<svg width="100%" height="32" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="${pts.join(' ')}" fill="none" stroke="var(--rust)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <circle cx="${pts[0].split(',')[0]}" cy="${pts[0].split(',')[1]}" r="2.5" fill="var(--rust)"/>
+  </svg>`;
+}
+
 async function renderHomeWeather(){
   const el = document.getElementById('home-weather');
   if(!el) return;
@@ -11657,10 +11686,35 @@ async function renderHomeWeather(){
     const m = moonPhase();
     const trend = w.pressureChange == null ? ''
       : (w.pressureChange >= 1 ? ' ↑ rising' : (w.pressureChange <= -1 ? ' ↓ falling' : ' → steady'));
+    let pressureNext = null;
+    if(getHomeWeatherMode() === 'visual'){
+      const fc = await fetchForecast(coords.lat, coords.lng);
+      const times = (fc && fc.hourly && fc.hourly.time) || [];
+      let start = times.findIndex(t=> new Date(t) >= new Date());
+      if(start < 0) start = 0;
+      const series = fc && fc.hourly && fc.hourly.pressure_msl;
+      if(Array.isArray(series)) pressureNext = series.slice(start, start + 12).filter(v=> v != null);
+    }
     el.style.display = 'block';
     el.style.cursor = 'pointer';
     el.setAttribute('aria-label', 'Weather where you are. Open the forecast');
-    if(getHomeWeatherMode() === 'full'){
+    if(getHomeWeatherMode() === 'visual'){
+      const sky = skyLook(w);
+      const box = (inner)=> `<div class="home-stat" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">${inner}</div>`;
+      const wind = w.windSpeed != null ? box(`${windCompassSvg(w.windDir)}<b style="font-size:14px;">${escapeHtml(fmtWind(w.windSpeed))}</b><span>${w.windDir != null ? 'from ' + escapeHtml(windDirLabel(w.windDir)) : 'wind'}</span>`) : '';
+      const press = w.pressure != null ? box(`<div style="width:100%;min-height:32px;">${pressureGraphSvg(pressureNext)}</div><b style="font-size:14px;">${escapeHtml(fmtPressure(w.pressure))}</b><span>${escapeHtml(trend ? trend.trim() : 'pressure')}</span>`) : '';
+      const moon = box(`<span style="font-size:32px;line-height:46px;" aria-hidden="true">${m.emoji}</span><b style="font-size:14px;">Moon</b><span>${escapeHtml(m.label)}</span>`);
+      el.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:40px;line-height:1;" aria-hidden="true">${sky.icon}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:26px;font-weight:700;color:var(--ink);line-height:1.1;">${w.temp != null ? escapeHtml(fmtTemp(w.temp)) : ''}</div>
+            <div style="font-size:12.5px;color:var(--muted);">${escapeHtml(sky.label)}${w.cloudCover != null ? ' · ' + Math.round(w.cloudCover) + '% cloud' : ''}</div>
+          </div>
+          <div style="font-size:12px;color:var(--muted);white-space:nowrap;align-self:flex-start;">Forecast ›</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">${wind}${press}${moon}</div>`;
+    }else if(getHomeWeatherMode() === 'full'){
       const tile = (big, small)=> `<div class="home-stat"><b style="font-size:16px;">${escapeHtml(big)}</b><span>${escapeHtml(small)}</span></div>`;
       const tiles = [];
       if(w.temp != null) tiles.push(tile(fmtTemp(w.temp), 'temperature'));
