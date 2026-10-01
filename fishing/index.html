@@ -606,7 +606,7 @@
      for modals that open on top of another modal) and (via closedby) click-outside-to-close
      for free — see the Safari fallback script near the end for browsers without closedby support. */
   dialog#confirm-modal, dialog#forecast-modal, dialog#venue-catches-modal, dialog#venue-edit-modal,
-  dialog#session-edit-modal, dialog#recast-confirm-modal, dialog#pin-drop-modal, dialog#badge-bookcase-modal,
+  dialog#session-edit-modal, dialog#session-recap-modal, dialog#recast-confirm-modal, dialog#pin-drop-modal, dialog#badge-bookcase-modal,
   dialog#badge-detail-modal, dialog#follow-list-modal, dialog#profile-modal, dialog#notif-modal,
   dialog#onboarding-modal, dialog#reset-password-modal, dialog#timers-help-modal, dialog#profile-help-modal,
   dialog#tackle-help-modal, dialog#insights-help-modal, dialog#competitions-help-modal, dialog#photo-modal, dialog#edit-catch-modal, dialog#competition-detail-modal{
@@ -620,7 +620,7 @@
     max-width:min(92vw,560px);max-height:88vh;
   }
   dialog#confirm-modal::backdrop, dialog#forecast-modal::backdrop, dialog#venue-catches-modal::backdrop,
-  dialog#venue-edit-modal::backdrop, dialog#session-edit-modal::backdrop, dialog#recast-confirm-modal::backdrop,
+  dialog#venue-edit-modal::backdrop, dialog#session-edit-modal::backdrop, dialog#session-recap-modal::backdrop, dialog#recast-confirm-modal::backdrop,
   dialog#pin-drop-modal::backdrop, dialog#badge-bookcase-modal::backdrop, dialog#badge-detail-modal::backdrop,
   dialog#follow-list-modal::backdrop, dialog#profile-modal::backdrop, dialog#notif-modal::backdrop,
   dialog#onboarding-modal::backdrop, dialog#reset-password-modal::backdrop, dialog#timers-help-modal::backdrop,
@@ -1757,10 +1757,6 @@
       <button type="button" class="mini-btn" id="session-edit-pin"><i class="ti ti-map-pin" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Drop a pin</button>
     </div>
     <div id="session-edit-results" style="margin-bottom:10px;"></div>
-    <div id="session-edit-feed-wrap" style="margin-bottom:14px;">
-      <h2 style="font-size:14px;font-weight:600;color:var(--muted);margin:0 0 5px;">What happened</h2>
-      <div id="session-edit-feed"></div>
-    </div>
     <div class="field">
       <label for="session-edit-peg">Peg or stand number</label>
       <input type="text" maxlength="20" id="session-edit-peg" placeholder="e.g. 14 or Stand B" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
@@ -1771,6 +1767,15 @@
     </div>
     <button class="primary-btn" id="session-edit-save">Save changes</button>
     <div class="status" id="session-edit-status"></div>
+  </div>
+</dialog>
+
+<dialog id="session-recap-modal" closedby="any" aria-label="What happened">
+  <div class="modal-card" style="position:relative;">
+    <button type="button" id="session-recap-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <h3 style="margin-top:0;">What happened</h3>
+    <p class="pc-line muted" id="session-recap-sub" style="margin-top:0;"></p>
+    <div id="session-recap-feed"></div>
   </div>
 </dialog>
 
@@ -1954,7 +1959,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">This session's feed</div>
-      <div class="pc-line muted">A running list of everything logged this session, across every rod, so you can see at a glance what's happened. Past sessions get the same recap from Insights → Edit session.</div>
+      <div class="pc-line muted">A running list of everything logged this session, across every rod, so you can see at a glance what's happened. Past sessions get the same recap, oldest first, from Insights → Sessions → What happened.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Ending a session</div>
@@ -2079,7 +2084,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Sessions</div>
-      <div class="pc-line muted">Every trip, newest first: where, when, how long, your peg, how many fish and the weight, plus anything you wrote in the Session Log. Tap Edit for the full recap of that session, or Remove to delete it. If it has catches you choose whether they go too, and the default is to keep them.</div>
+      <div class="pc-line muted">Every trip, newest first: where, when, how long, your peg, how many fish and the weight, plus anything you wrote in the Session Log. Tap What happened to see everything logged that trip in the order it happened, Edit to change the venue, peg or Session Log, or Remove to delete it. If it has catches you choose whether they go too, and the default is to keep them.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Open and close</div>
@@ -8354,6 +8359,7 @@ function buildInsightsHtml(catches, venues, sessions){
         </div>
         ${s.log ? `<div class="ins-sub" style="margin-top:6px;white-space:pre-wrap;color:var(--ink);">📝 ${escapeHtml(s.log)}</div>` : ''}
         <div class="ins-actions">
+          <button type="button" class="mini-btn" data-recap-session="${s.id}">What happened</button>
           <button type="button" class="mini-btn" data-edit-session="${s.id}">Edit</button>
           <button type="button" class="mini-btn danger" data-delete-session="${s.id}">Remove</button>
         </div>
@@ -8713,6 +8719,10 @@ async function openInsights(){
   });
   const whereGroup = body.querySelector('details[data-ins-group="where"]');
   if(whereGroup && whereGroup.open) buildMapOnce();
+
+  body.querySelectorAll('[data-recap-session]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openSessionRecap(btn.dataset.recapSession));
+  });
 
   body.querySelectorAll('[data-edit-session]').forEach(btn=>{
     btn.addEventListener('click', ()=> openSessionEdit(btn.dataset.editSession));
@@ -9328,24 +9338,33 @@ async function openSessionEdit(sessionId){
   updateSessionEditCoordsLabel();
   refreshVenueSuggestions();
 
-  // Read-only recap of the session — same cross-rod chronological view as
-  // the live Timers feed, just pointed at this (finished) session's catches.
-  // Fetched directly rather than filtered from currentPerson.catches: on a
-  // shared device the angler picker can point currentPerson at someone
-  // other than the signed-in account, while Insights (and this modal) is
-  // always about the signed-in account's own sessions.
-  document.getElementById('session-edit-feed').innerHTML = '<div class="empty">Loading...</div>';
-  try{
-    const rows = await sbGet('catches?select=*&session_id=eq.'+s.id+'&order=time.asc');
-    document.getElementById('session-edit-feed').innerHTML =
-      sessionFeedRowsHtml(rows.map(mapCatchRow), 'Nothing was logged in this session.');
-  }catch(e){
-    console.error('Could not load session catches', e);
-    document.getElementById('session-edit-feed').innerHTML = '<div class="empty">Could not load what happened this session.</div>';
-  }
-
   document.getElementById('session-edit-modal').showModal();
 }
+
+async function openSessionRecap(sessionId){
+  const sessions = await loadMySessions();
+  const s = sessions.find(x=>x.id === sessionId);
+  if(!s) return;
+  const when = new Date(s.started_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+  document.getElementById('session-recap-sub').textContent = (s.venue_name || 'Session') + ' · ' + when;
+  const feed = document.getElementById('session-recap-feed');
+  feed.innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById('session-recap-modal').showModal();
+  // Fetched directly rather than filtered from currentPerson.catches: on a
+  // shared device the angler picker can point currentPerson at someone
+  // other than the signed-in account, while Insights is always about the
+  // signed-in account's own sessions.
+  try{
+    const rows = await sbGet('catches?select=*&session_id=eq.'+s.id+'&order=time.asc');
+    feed.innerHTML = sessionFeedRowsHtml(rows.map(mapCatchRow), 'Nothing was logged in this session.', true);
+  }catch(e){
+    console.error('Could not load session catches', e);
+    feed.innerHTML = '<div class="empty">Could not load what happened this session.</div>';
+  }
+}
+document.getElementById('session-recap-x').addEventListener('click', ()=>{
+  document.getElementById('session-recap-modal').close();
+});
 
 function updateSessionEditCoordsLabel(){
   const el = document.getElementById('session-edit-coords');
@@ -10868,13 +10887,14 @@ function renderCatchList(rod){
 // happened this session at a glance instead of checking each rod's card
 // in turn. Read-only — edit/remove still live on the per-rod list below.
 // Shared row renderer for both the live session feed (Timers) and the
-// read-only "What happened" list on a past session (Insights -> Edit
-// session) - same chronological, cross-rod view either way.
-function sessionFeedRowsHtml(entries, emptyMessage){
+// read-only "What happened" list on a past session (Insights -> What
+// happened) - same cross-rod view either way. The live feed shows newest
+// first; the past-session recap reads oldest first, in the order it happened.
+function sessionFeedRowsHtml(entries, emptyMessage, oldestFirst){
   if(entries.length===0){
     return `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
   }
-  return entries.slice().sort((a,b)=> b.time - a.time).map(c=>{
+  return entries.slice().sort((a,b)=> oldestFirst ? a.time - b.time : b.time - a.time).map(c=>{
     const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}` : `No catch`;
     const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
