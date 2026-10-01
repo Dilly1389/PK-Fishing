@@ -6474,7 +6474,7 @@ function rodCardHtml(r){
           <input type="text" maxlength="100" class="catch-type-other" data-rod="${r}" placeholder="Type of fish" style="display:none;margin-top:8px;" autocomplete="pk-field-27" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="field">
-          <label>Weight</label>
+          <label>Weight <span class="weight-unit-label">(kg)</span></label>
           <input type="number" step="0.01" min="0" max="500" class="catch-weight" data-rod="${r}" placeholder="e.g. 2.4" autocomplete="pk-x11" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div class="field catch-net-field" data-rod="${r}" style="display:none;">
@@ -8913,6 +8913,8 @@ function setupWeightUnitInput(kgInput){
   ozInput.addEventListener('input', syncFromLbOz);
 
   function applyMode(){
+    const unitLabel = kgInput.closest('.field') && kgInput.closest('.field').querySelector('.weight-unit-label');
+    if(unitLabel) unitLabel.textContent = getWeightUnit() === 'lb' ? '(lb/oz)' : '(kg)';
     if(getWeightUnit() === 'lb'){
       kgInput.style.display = 'none';
       wrap.style.display = 'flex';
@@ -9486,13 +9488,16 @@ document.getElementById('forecast-modal-x').addEventListener('click', ()=>{
 // is more meaningful than one fixed image. Reads from whichever profile is
 // currently open, so the bookcase and the profile strip agree.
 let badgeArtCatches = [];
-function badgeImageSrc(key){
-  if(key === 'ten_kg' && badgeArtCatches.length){
-    const bigOnes = badgeArtCatches.filter(c=> c.caught && (c.weight||0) >= 10).sort((a,b)=> b.time - a.time);
-    const species = bigOnes.length ? (bigOnes[0].type || '').toLowerCase() : '';
+function badgeImageSrc(key, speciesHint){
+  if(key === 'ten_kg'){
+    let species = (speciesHint || '').toLowerCase();
+    if(!species){
+      const bigOnes = badgeArtCatches.filter(c=> c.caught && (c.weight||0) >= 10).sort((a,b)=> b.time - a.time);
+      species = bigOnes.length ? (bigOnes[0].type || '').toLowerCase() : '';
+    }
     if(species === 'barbel') return 'badge-ten_kg-barbel.png';
-    if(species === 'carp' || species === 'mirror carp' || species === 'grass carp') return 'badge-ten_kg-carp.png';
     if(species.includes('yellowfish')) return 'badge-ten_kg-yellowfish.png';
+    return 'badge-ten_kg-carp.png';
   }
   return 'badge-'+key+'.png';
 }
@@ -11083,7 +11088,7 @@ async function loadFeedItems(fishermanIds){
 async function loadFeedBadgeItems(fishermanIds){
   if(!fishermanIds || !fishermanIds.length) return [];
   try{
-    const rows = await sbGet('badge_events?select=id,fisherman_id,badge_key,event_time&fisherman_id=in.(' + fishermanIds.join(',') + ')&order=event_time.desc&limit=20');
+    const rows = await sbGet('badge_events?select=id,fisherman_id,badge_key,event_time,species&fisherman_id=in.(' + fishermanIds.join(',') + ')&order=event_time.desc&limit=20');
     return rows.map(r=>{
       const def = BADGE_DEFS.find(b=>b.key===r.badge_key);
       if(!def) return null;
@@ -11095,6 +11100,7 @@ async function loadFeedBadgeItems(fishermanIds){
         fishermanName: p ? p.name : 'Unknown',
         fishermanAvatar: p ? p.avatar_url : null,
         badge: def,
+        species: r.species || '',
         time: new Date(r.event_time).getTime()
       };
     }).filter(Boolean);
@@ -11477,7 +11483,7 @@ async function renderHome(){
             <div class="pc-line"><b>${escapeHtml(it.fishermanName)}</b> earned <b>${escapeHtml(it.badge.name)}</b></div>
             <div class="pc-line muted">${formatTimeAgo(it.time)}</div>
           </div>
-          <img src="${badgeImageSrc(it.badge.key)}?v=${BADGE_ASSET_VERSION}" alt="" style="width:34px;height:34px;object-fit:contain;" loading="lazy" decoding="async" onerror="this.outerHTML='<span style=&quot;font-size:24px;&quot;>${it.badge.emoji}</span>';">
+          <img src="${badgeImageSrc(it.badge.key, it.species)}?v=${BADGE_ASSET_VERSION}" alt="" style="width:34px;height:34px;object-fit:contain;" loading="lazy" decoding="async" onerror="this.outerHTML='<span style=&quot;font-size:24px;&quot;>${it.badge.emoji}</span>';">
         </div>` : `
         <div class="profile-catch home-feed-item" data-feed-index="${idx}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;cursor:pointer;">
           ${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 34)}
