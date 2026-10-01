@@ -656,6 +656,11 @@
   }
   .profile-summary b{color:var(--ink);display:block;font-size:17px;}
   .profile-catch{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;}
+  .home-week-stats{display:flex;gap:8px;}
+  .home-stat{flex:1;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;}
+  .home-stat b{display:block;font-size:18px;color:var(--ink);}
+  .home-stat span{font-size:12px;color:var(--muted);}
+  .home-feed-thumb{width:44px;height:44px;max-width:44px;object-fit:cover;margin-top:0;border-radius:8px;flex-shrink:0;}
   .pc-head{font-weight:700;font-size:14px;margin-bottom:4px;color:var(--ink);}
   .pc-line{font-size:12.5px;margin:2px 0;color:var(--ink);}
   .rig-card p.pc-line{font-size:13.5px;margin-top:10px;line-height:1.5;}
@@ -706,16 +711,14 @@
     <!-- TIMERS -->
     <!-- HOME -->
     <div class="panel active" id="panel-home">
-      <div style="margin-bottom:14px;">
-        <button type="button" class="mini-btn" id="show-onboarding-btn"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How it works</button>
-      </div>
-
-      <div id="home-weather" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;"></div>
-
       <button class="primary-btn" id="home-start-session" style="margin-bottom:14px;">+ Start a session</button>
 
       <div id="home-active-session" style="display:none;"></div>
       <div id="home-competitions" style="margin-bottom:14px;"></div>
+
+      <div id="home-weather" role="button" tabindex="0" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;"></div>
+
+      <div id="home-week" style="display:none;margin-bottom:14px;"></div>
 
       <p class="sub-heading">Latest from your mates</p>
       <div id="home-feed"><div class="empty">Loading...</div></div>
@@ -850,7 +853,10 @@
 
     <!-- PROFILE -->
     <div class="panel" id="panel-schedule">
-      <button type="button" class="mini-btn" id="profile-help-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How the Profile works</button>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        <button type="button" class="mini-btn" id="show-onboarding-btn"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How PK Fishing works</button>
+        <button type="button" class="mini-btn" id="profile-help-btn"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How the Profile works</button>
+      </div>
 
       <section class="card" id="account-card">
         <div id="auth-forms">
@@ -4233,6 +4239,7 @@ function renderAccountArea(){
   const isSignedOutNormalView = !(session && session.user) && !IS_SPECTATOR;
   const appearanceCard = document.getElementById('appearance-card');
   const profileHelpBtn = document.getElementById('profile-help-btn');
+  const appHelpBtn = document.getElementById('show-onboarding-btn');
   // A body class, not inline styles on nav/header — inline display:flex was
   // overriding the hamburger menu's own CSS toggle at mobile widths, since
   // inline styles beat media-query rules regardless of the .open class.
@@ -4240,6 +4247,7 @@ function renderAccountArea(){
   document.body.classList.add('pk-ready');
   if(appearanceCard) appearanceCard.style.display = isSignedOutNormalView ? 'none' : 'block';
   if(profileHelpBtn) profileHelpBtn.style.display = isSignedOutNormalView ? 'none' : 'inline-block';
+  if(appHelpBtn) appHelpBtn.style.display = isSignedOutNormalView ? 'none' : 'inline-block';
   // With the nav hidden, a signed-out visitor can't leave whatever panel is open, and the
   // sign-in card only lives on the Profile panel — so always show that one when signed out.
   const schedulePanel = document.getElementById('panel-schedule');
@@ -11412,6 +11420,8 @@ async function renderHome(){
     startBtn.style.display = 'none';
     activeWrap.style.display = 'none';
     weatherWrap.style.display = 'none';
+    const weekWrapOut = document.getElementById('home-week');
+    if(weekWrapOut) weekWrapOut.style.display = 'none';
     compWrap.innerHTML = '';
     feedWrap.innerHTML = '<div class="empty">Sign in to see what your mates are catching.</div>';
     return;
@@ -11441,6 +11451,7 @@ async function renderHome(){
 
   // Current conditions where you are — useful for deciding whether to go
   renderHomeWeather();
+  renderHomeWeek();
 
   // Any competitions you're in that are live right now
   try{
@@ -11476,7 +11487,17 @@ async function renderHome(){
       loadFeedItems(ids),
       loadFeedBadgeItems([...followedIds])
     ]);
-    const recent = items.concat(badgeItems).sort((a,b)=> b.time - a.time).slice(0, 5);
+    const allRecent = items.concat(badgeItems).sort((a,b)=> b.time - a.time);
+    const recent = allRecent.slice(0, 5);
+    // Which of these catches I've already given a Lekker, so the buttons start in the right state
+    const likedIds = new Set();
+    const recentCatchIds = recent.filter(it=> it.kind !== 'badge' && it.fishermanId !== myId).map(it=> it.id);
+    if(recentCatchIds.length){
+      try{
+        const likeRows = await sbGet('catch_likes?select=catch_id&user_id=eq.'+session.user.id+'&catch_id=in.('+recentCatchIds.join(',')+')');
+        likeRows.forEach(r=> likedIds.add(r.catch_id));
+      }catch(e){ console.error('home likes lookup failed', e); }
+    }
     feedWrap.innerHTML = recent.length
       ? recent.map((it, idx)=> it.kind === 'badge' ? `
         <div class="profile-catch home-feed-item" data-feed-index="${idx}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;cursor:pointer;">
@@ -11489,13 +11510,47 @@ async function renderHome(){
         </div>` : `
         <div class="profile-catch home-feed-item" data-feed-index="${idx}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;cursor:pointer;">
           ${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 34)}
-          <div style="flex:1;">
+          <div style="flex:1;min-width:0;">
             <div class="pc-line"><b>${escapeHtml(it.fishermanName)}</b> ·${escapeHtml(it.type||'Fish')}</div>
             <div class="pc-line muted">${formatWeight(it.weight)} · ${formatTimeAgo(it.time)}</div>
           </div>
-          ${it.likes ? `<span class="pc-line muted">👌${it.likes}</span>` : ''}
-        </div>`).join('')
-      : '<div class="empty">No catches yet — follow some mates on the Friends tab.</div>';
+          ${it.photos && it.photos[0] ? `<img class="pc-photo home-feed-thumb" src="${escapeHtml(it.photos[0])}" data-catch-id="${it.id}" data-photo-index="0" alt="Photo of this catch" loading="lazy" decoding="async">` : ''}
+          ${it.fishermanId === myId
+            ? (it.likes ? `<span class="pc-line muted">👌${it.likes}</span>` : '')
+            : `<button type="button" class="lb-like-btn home-like-btn ${likedIds.has(it.id) ? 'liked' : ''}" data-catch-id="${it.id}" aria-pressed="${likedIds.has(it.id)}" aria-label="Give this catch a Lekker"><span aria-hidden="true">👌</span><span class="lb-like-count">${it.likes || 0}</span></button>`}
+        </div>`).join('') + (allRecent.length > recent.length
+          ? '<button type="button" class="mini-btn" id="home-feed-more" style="width:100%;">See more from your mates ›</button>' : '')
+      : (followedIds.size === 0
+        ? `<div class="empty">Your feed is empty. Follow a few mates to see their catches here.
+            <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;">
+              <button type="button" class="mini-btn" id="home-find-mates">Find mates</button>
+              <button type="button" class="mini-btn" id="home-invite-mate">Invite a mate</button>
+            </div></div>`
+        : '<div class="empty">Nothing from your mates yet. Start a session and get the first catch on the board.</div>');
+    const moreBtn = document.getElementById('home-feed-more');
+    if(moreBtn) moreBtn.addEventListener('click', ()=> goToTab('feed'));
+    const findBtn = document.getElementById('home-find-mates');
+    if(findBtn) findBtn.addEventListener('click', ()=> goToTab('feed'));
+    const inviteBtn = document.getElementById('home-invite-mate');
+    if(inviteBtn && myId){
+      inviteBtn.addEventListener('click', async ()=>{
+        const url = followInviteLink(myId);
+        try{
+          if(navigator.share){
+            await navigator.share({title: 'Follow me on PK Fishing', url});
+          }else{
+            await navigator.clipboard.writeText(url);
+            inviteBtn.textContent = 'Link copied!';
+            setTimeout(()=>{ inviteBtn.textContent = 'Invite a mate'; }, 1600);
+          }
+        }catch(e){
+          if(e && e.name !== 'AbortError') window.prompt('Copy this link:', url);
+        }
+      });
+    }
+    feedWrap.querySelectorAll('.home-like-btn').forEach(btn=>{
+      btn.addEventListener('click', e=>{ e.stopPropagation(); toggleHomeLike(btn); });
+    });
     // A badge opens its pop-up; a catch opens the angler's profile
     feedWrap.querySelectorAll('.home-feed-item').forEach(row=>{
       const open = ()=>{
@@ -11508,8 +11563,15 @@ async function renderHome(){
           openProfile(it.fishermanId);
         }
       };
-      row.addEventListener('click', open);
-      row.addEventListener('keydown', e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } });
+      // The like button and photo thumbnail do their own thing, so the row ignores them
+      row.addEventListener('click', e=>{
+        if(e.target.closest('.home-like-btn, .pc-photo')) return;
+        open();
+      });
+      row.addEventListener('keydown', e=>{
+        if(e.target !== row) return;
+        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); }
+      });
     });
   }catch(e){
     console.error('home feed failed', e);
@@ -11526,18 +11588,20 @@ async function renderHomeWeather(){
     const w = await fetchWeather(coords.lat, coords.lng);
     if(!w){ el.style.display = 'none'; return; }
     const m = moonPhase();
+    const trend = w.pressureChange == null ? ''
+      : (w.pressureChange >= 1 ? ' ↑ rising' : (w.pressureChange <= -1 ? ' ↓ falling' : ' → steady'));
     el.style.display = 'block';
     el.style.cursor = 'pointer';
+    el.setAttribute('aria-label', 'Weather where you are. Open the forecast');
     el.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:13px;font-weight:500;color:var(--muted);">Right now, where you are</div>
-        <div style="font-size:12px;color:var(--muted);">Forecast ›</div>
-      </div>
-      <div style="font-size:14px;color:var(--ink);margin-top:6px;">
-        ${w.temp != null ? Math.round(w.temp)+'°C' : ''}
-        ${w.windSpeed != null ? ' · 💨 '+Math.round(w.windSpeed)+'km/h '+windDirLabel(w.windDir) : ''}
-        ${w.pressure != null ? ' · '+Math.round(w.pressure)+'hPa' : ''}
-        · ${m.emoji} ${m.label}
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div style="font-size:13.5px;color:var(--ink);">
+          ${w.temp != null ? Math.round(w.temp)+'°C' : ''}
+          ${w.windSpeed != null ? ' · 💨 '+Math.round(w.windSpeed)+'km/h '+windDirLabel(w.windDir) : ''}
+          ${w.pressure != null ? ' · '+Math.round(w.pressure)+'hPa'+trend : ''}
+          · <span title="${escapeHtml(m.label)}" aria-label="${escapeHtml(m.label)}">${m.emoji}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);white-space:nowrap;">Forecast ›</div>
       </div>`;
     // Same forecast view as the session weather bar — the coordinates are
     // stashed so openForecast has something to work with
@@ -11545,7 +11609,73 @@ async function renderHomeWeather(){
       weatherCache = {sessionId: weatherCache.sessionId, weather: w, moon: m, coords, fetchedAt: Date.now()};
       openForecast();
     };
+    el.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); el.onclick(); } };
   }catch(e){ console.error('home weather failed', e); el.style.display = 'none'; }
+}
+
+// A quick look at your own last 7 days, above the mates feed
+async function renderHomeWeek(){
+  const el = document.getElementById('home-week');
+  if(!el) return;
+  const myId = getMyFishermanId();
+  if(!isSignedIn() || !myId){ el.style.display = 'none'; return; }
+  try{
+    const since = encodeURIComponent(new Date(Date.now() - 7*24*60*60*1000).toISOString());
+    const [fish, sess] = await Promise.all([
+      sbGet('catches?select=weight&fisherman_id=eq.'+myId+'&caught=eq.true&time=gte.'+since),
+      sbGet('sessions?select=id&fisherman_id=eq.'+myId+'&started_at=gte.'+since)
+    ]);
+    const biggest = fish.reduce((mx, c)=> Math.max(mx, Number(c.weight) || 0), 0);
+    el.style.display = 'block';
+    if(!fish.length && !sess.length){
+      el.innerHTML = '<p class="sub-heading">Your last 7 days</p><div class="home-stat" style="text-align:left;padding:10px 12px;"><span>No sessions yet. Start one and your numbers show up here.</span></div>';
+      return;
+    }
+    el.innerHTML = `<p class="sub-heading">Your last 7 days</p>
+      <div class="home-week-stats">
+        <div class="home-stat"><b>${sess.length}</b><span>${sess.length === 1 ? 'session' : 'sessions'}</span></div>
+        <div class="home-stat"><b>${fish.length}</b><span>fish</span></div>
+        <div class="home-stat"><b>${biggest > 0 ? formatWeight(biggest) : '-'}</b><span>biggest</span></div>
+      </div>`;
+  }catch(e){ console.error('home week failed', e); el.style.display = 'none'; }
+}
+
+async function toggleHomeLike(btn){
+  if(!isSignedIn()) return;
+  const catchId = btn.dataset.catchId;
+  const wasLiked = btn.classList.contains('liked');
+  const countEl = btn.querySelector('.lb-like-count');
+  const n = parseInt(countEl.textContent, 10) || 0;
+  btn.disabled = true;
+  try{
+    if(wasLiked){
+      await sbDelete('catch_likes', 'catch_id=eq.'+catchId+'&user_id=eq.'+session.user.id);
+      try{ await sbRpc('decrement_catch_likes', {p_catch_id: catchId}); }
+      catch(e){ console.error('like counter decrement failed', e); }
+      btn.classList.remove('liked');
+      countEl.textContent = Math.max(0, n - 1);
+    }else{
+      await sbPost('catch_likes', {id: uid(), catch_id: catchId, user_id: session.user.id});
+      try{ await sbRpc('increment_catch_likes', {p_catch_id: catchId}); }
+      catch(e){ console.error('like counter increment failed', e); }
+      btn.classList.add('liked');
+      countEl.textContent = n + 1;
+      showLekkerFlash();
+      notifyCatchLike(catchId);
+    }
+    btn.setAttribute('aria-pressed', String(btn.classList.contains('liked')));
+    clearDbError();
+  }catch(e){
+    console.error(e);
+    // Already liked (unique constraint) isn't a real error - just show it as liked
+    if(!wasLiked && String(e.message||'').includes('duplicate')){
+      btn.classList.add('liked');
+      btn.setAttribute('aria-pressed', 'true');
+    }else{
+      showDbError('Could not save like.');
+    }
+  }
+  btn.disabled = false;
 }
 
 document.getElementById('home-start-session').addEventListener('click', ()=> goToTab('timers'));
