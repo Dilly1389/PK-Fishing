@@ -2145,6 +2145,7 @@
     <div id="photo-zoom-stage" style="display:block;width:fit-content;max-width:100%;margin:0 auto;overflow:hidden;border-radius:10px;touch-action:none;">
       <img id="photo-modal-img" src="" alt="Catch photo" draggable="false" loading="lazy" decoding="async" style="max-width:100%;max-height:60vh;display:block;transform-origin:center center;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;">
     </div>
+    <div id="photo-modal-when" style="display:none;font-size:13px;font-weight:600;color:var(--ink);margin-top:8px;"></div>
     <div style="font-size:11px;color:var(--muted);margin-top:6px;">Pinch or double-tap to zoom</div>
     <div id="photo-modal-nav" style="display:none;justify-content:space-between;align-items:center;margin-top:8px;">
       <button type="button" id="photo-prev-btn" class="mini-btn">‹ Prev</button>
@@ -5085,8 +5086,9 @@ async function goToNotificationTarget(n){
     openProfile(n.target_id);
   }else if(n.target_type === 'catch'){
     try{
-      const rows = await sbGet('catches?id=eq.'+n.target_id+'&select=photos,photo,photo_labels');
+      const rows = await sbGet('catches?id=eq.'+n.target_id+'&select=photos,photo,photo_labels,time,has_known_time');
       if(rows[0]){
+        photoWhenCache[n.target_id] = {t:new Date(rows[0].time).getTime(), k:rows[0].has_known_time !== false};
         const photos = rows[0].photos
           ? (typeof rows[0].photos === 'string' ? JSON.parse(rows[0].photos) : rows[0].photos)
           : (rows[0].photo ? [rows[0].photo] : []);
@@ -7994,6 +7996,7 @@ function catchDetailHtml(c, editable, removable){
   if(c.photos && c.photos.length){
     photoGalleryCache[c.id] = c.photos;
     photoLabelsCache[c.id] = c.photoLabels || [];
+    photoWhenCache[c.id] = {t:c.time, k:c.hasKnownTime !== false};
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">` +
       c.photos.map((p,i)=>`<div class="photo-thumb-wrap"><img class="pc-photo" src="${p}" data-catch-id="${c.id}" data-photo-index="${i}" alt="Catch photo" loading="lazy" decoding="async" style="width:90px;height:90px;object-fit:cover;margin-top:0;">${(c.photoLabels||[])[i] ? `<span class="photo-label-tag">${escapeHtml(c.photoLabels[i])}</span>` : ''}</div>`).join('') +
       `</div>`;
@@ -9894,6 +9897,7 @@ async function openProfile(personId){
     if(c.photos && c.photos.length){
       photoGalleryCache[c.id] = c.photos;
       photoLabelsCache[c.id] = c.photoLabels || [];
+      photoWhenCache[c.id] = {t:c.time, k:c.hasKnownTime !== false};
       c.photos.forEach((src,i)=> photoEntries.push({src, catchId:c.id, index:i, type:c.type||''}));
     }
   });
@@ -10275,6 +10279,7 @@ document.getElementById('profile-modal-x').addEventListener('click', ()=>{
 let currentPhotoCatchId = null;
 let photoGalleryCache = {};
 let photoLabelsCache = {};
+let photoWhenCache = {};
 let currentPhotoList = [];
 let currentPhotoIndex = 0;
 
@@ -10293,6 +10298,19 @@ function renderPhotoModalImage(){
     const label = currentPhotoCatchId && (photoLabelsCache[currentPhotoCatchId] || [])[currentPhotoIndex];
     labelEl.textContent = label || '';
     labelEl.style.display = label ? 'inline-block' : 'none';
+  }
+  const whenEl = document.getElementById('photo-modal-when');
+  if(whenEl){
+    const w = currentPhotoCatchId && photoWhenCache[currentPhotoCatchId];
+    if(w && w.t && !isNaN(w.t)){
+      const d = new Date(w.t);
+      whenEl.textContent = d.toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'})
+        + (w.k ? ' · ' + d.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'}) : '');
+      whenEl.style.display = 'block';
+    }else{
+      whenEl.textContent = '';
+      whenEl.style.display = 'none';
+    }
   }
 }
 function showNextPhoto(){
@@ -10866,7 +10884,7 @@ function renderCatchList(rod){
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)} (${escapeHtml(c.hook||'')})` : `No catch`;
     const time = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
     const photoCount = (c.photos && c.photos.length) || 0;
-    if(photoCount){ photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || []; }
+    if(photoCount){ photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || []; photoWhenCache[c.id] = {t:c.time, k:c.hasKnownTime !== false}; }
     const thumb = photoCount
       ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="" loading="lazy" decoding="async">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
       : '';
@@ -10891,8 +10909,8 @@ function renderCatchList(rod){
 // Shared row renderer for both the live session feed (Timers) and the
 // read-only "What happened" list on a past session (Insights -> What
 // happened) - same cross-rod view either way. The live feed shows newest
-// first; the past-session recap reads oldest first, in the order it happened,
-// and puts a short date above each time.
+// first; the past-session recap reads oldest first, in the order it happened.
+// Both put a short date above each time.
 function sessionFeedRowsHtml(entries, emptyMessage, recap){
   if(entries.length===0){
     return `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
@@ -10901,11 +10919,9 @@ function sessionFeedRowsHtml(entries, emptyMessage, recap){
     const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
     const label = c.caught ? `${escapeHtml(c.type||'Fish')} — ${formatWeight(c.weight)}` : `No catch`;
     const timeOnly = new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'});
-    const time = recap
-      ? new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short'}) + '<br>' + timeOnly
-      : timeOnly;
+    const time = new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short'}) + '<br>' + timeOnly;
     const photoCount = (c.photos && c.photos.length) || 0;
-    if(photoCount){ photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || []; }
+    if(photoCount){ photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || []; photoWhenCache[c.id] = {t:c.time, k:c.hasKnownTime !== false}; }
     const thumb = photoCount
       ? `<span style="position:relative;flex-shrink:0;"><img class="catch-log-photo" src="${c.photos[0]}" data-catch-id="${c.id}" data-photo-index="0" alt="" loading="lazy" decoding="async">${photoCount>1?'<span style="position:absolute;bottom:-4px;right:-4px;background:var(--dam);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 4px;">+'+(photoCount-1)+'</span>':''}</span>`
       : '';
@@ -11130,6 +11146,7 @@ async function renderLeaderboard(){
         if(c.photos && c.photos.length){
           photoGalleryCache[c.id] = c.photos;
           photoLabelsCache[c.id] = c.photoLabels || [];
+          photoWhenCache[c.id] = {t:c.time, k:c.hasKnownTime !== false};
           c.photos.forEach((src,idx)=> bagPhotos.push({src, catchId:c.id, index:idx}));
         }
       });
@@ -11220,6 +11237,7 @@ async function loadFeedItems(fishermanIds){
         type: c.fish_type,
         weight: c.weight,
         time: new Date(c.time).getTime(),
+        hasKnownTime: c.has_known_time !== false,
         photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
         photoLabels: c.photo_labels ? (typeof c.photo_labels === 'string' ? JSON.parse(c.photo_labels) : c.photo_labels) : [],
         likes: c.likes || 0
@@ -11939,7 +11957,7 @@ async function renderFeed(refetch){
     return;
   }
   html += items.map(it=>{
-    if(it.photos.length){ photoGalleryCache[it.id] = it.photos; photoLabelsCache[it.id] = it.photoLabels || []; }
+    if(it.photos.length){ photoGalleryCache[it.id] = it.photos; photoLabelsCache[it.id] = it.photoLabels || []; photoWhenCache[it.id] = {t:it.time, k:it.hasKnownTime !== false}; }
     const photoHtml = it.photos.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">` +
           it.photos.map((src,i)=>`<div class="photo-thumb-wrap" style="max-width:220px;"><img class="pc-photo" src="${src}" data-catch-id="${it.id}" data-photo-index="${i}" alt="" loading="lazy" decoding="async" style="width:100%;max-width:220px;height:150px;object-fit:cover;margin-top:0;">${(it.photoLabels||[])[i] ? `<span class="photo-label-tag">${escapeHtml(it.photoLabels[i])}</span>` : ''}</div>`).join('') +
@@ -12718,7 +12736,7 @@ async function openCompetitionDetail(comp, anglerId){
       const total = counted.reduce((s,c)=> s + (c.weight||0), 0);
       const biggest = counted.reduce((b,c)=> Math.max(b, c.weight||0), 0);
       const list = catches.map(c=>{
-        photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || [];
+        photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || []; photoWhenCache[c.id] = {t:c.time, k:c.hasKnownTime !== false};
         const labels = c.photoLabels || [];
         const hasFish = labels.includes('fish'), hasScale = labels.includes('scale');
         const status = c.verificationStatus;
