@@ -1148,6 +1148,7 @@
               <option value="kmh">Kilometres per hour (km/h)</option>
               <option value="mph">Miles per hour (mph)</option>
               <option value="kn">Knots (kn)</option>
+              <option value="ms">Metres per second (m/s)</option>
             </select>
           </div>
           <div class="field">
@@ -2316,7 +2317,7 @@ function getPref(key, allowed, fallback){
   try{ const v = localStorage.getItem(key); return allowed.includes(v) ? v : fallback; }catch(e){ return fallback; }
 }
 function getTempUnit(){ return getPref('pk_fishing_temp_unit', ['c','f'], 'c'); }
-function getWindUnit(){ return getPref('pk_fishing_wind_unit', ['kmh','mph','kn'], 'kmh'); }
+function getWindUnit(){ return getPref('pk_fishing_wind_unit', ['kmh','mph','kn','ms'], 'kmh'); }
 function getPressureUnit(){ return getPref('pk_fishing_pressure_unit', ['hpa','inhg'], 'hpa'); }
 function getHomeWeatherMode(){ return getPref('pk_fishing_home_weather', ['summary','full','visual','off'], 'summary'); }
 function tempValue(c){ return getTempUnit() === 'f' ? Math.round(c * 9 / 5 + 32) : Math.round(c); }
@@ -2329,6 +2330,7 @@ function fmtWind(kmh){
   const u = getWindUnit();
   if(u === 'mph') return Math.round(kmh * 0.621371) + 'mph';
   if(u === 'kn') return Math.round(kmh * 0.539957) + 'kn';
+  if(u === 'ms') return (Math.round(kmh / 3.6 * 10) / 10) + 'm/s';
   return Math.round(kmh) + 'km/h';
 }
 function fmtPressure(hpa){
