@@ -2378,6 +2378,10 @@ function fmtTime(value, opts){
 function fmtDateTime(value, opts){
   return new Date(value).toLocaleString(dateLocale(), opts);
 }
+// Date plus time for a catch; retro catches have no real time, so they show the date only
+function fmtCatchWhen(value, knownTime){
+  return fmtDate(value) + (knownTime === false ? '' : ' · ' + fmtTime(value));
+}
 
 // The one function to use anywhere a weight is shown — formats according
 // to the person's own preference, whatever unit the number is stored in
@@ -11187,6 +11191,7 @@ async function renderLeaderboard(){
       <div class="lb-stats">
         <div>${statLine}</div>
         <div>${s.count} catch${s.count===1?'':'es'}${s.biggest? ' · biggest '+s.biggest.weight+'kg '+escapeHtml(s.biggest.type||''):''}</div>
+        ${s.biggest ? `<div>Biggest caught ${escapeHtml(fmtCatchWhen(s.biggest.time, s.biggest.hasKnownTime))}</div>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -11210,6 +11215,11 @@ function formatTimeAgo(ts){
   const days = Math.floor(hrs/24);
   if(days < 7) return days+'d ago';
   return new Date(ts).toLocaleDateString(dateLocale(), {day:'numeric', month:'short'});
+}
+
+// "· 2h ago" only while it is recent; older catches already show their full date
+function agoSuffix(ts){
+  return Date.now() - ts < 7 * 86400000 ? ' · ' + formatTimeAgo(ts) : '';
 }
 
 async function loadFeedItems(fishermanIds){
@@ -11665,7 +11675,7 @@ async function renderHome(){
           ${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 34)}
           <div style="flex:1;min-width:0;">
             <div class="pc-line"><b>${escapeHtml(it.fishermanName)}</b> ·${escapeHtml(it.type||'Fish')}</div>
-            <div class="pc-line muted">${formatWeight(it.weight)} · ${formatTimeAgo(it.time)}</div>
+            <div class="pc-line muted">${formatWeight(it.weight)} · ${escapeHtml(fmtCatchWhen(it.time, it.hasKnownTime))}${agoSuffix(it.time)}</div>
           </div>
           ${it.photos && it.photos[0] ? `<img class="pc-photo home-feed-thumb" src="${escapeHtml(it.photos[0])}" data-catch-id="${it.id}" data-photo-index="0" alt="Photo of this catch" loading="lazy" decoding="async">` : ''}
           ${it.fishermanId === myId
@@ -11966,7 +11976,7 @@ async function renderFeed(refetch){
     return `<div class="profile-catch">
       <div class="pc-head" style="display:flex;align-items:center;gap:8px;">${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 24)}${escapeHtml(it.fishermanName)}${feedRodLabel(it)}</div>
       <div class="pc-line">${escapeHtml(it.type||'Fish')} — <b>${formatWeight(it.weight)}</b></div>
-      <div class="pc-line muted">${escapeHtml(it.dam||'')} · ${formatTimeAgo(it.time)}${it.likes ? ' · 👌'+it.likes : ''}</div>
+      <div class="pc-line muted">${escapeHtml(it.dam||'')} · ${escapeHtml(fmtCatchWhen(it.time, it.hasKnownTime))}${agoSuffix(it.time)}${it.likes ? ' · 👌'+it.likes : ''}</div>
       ${photoHtml}
     </div>`;
   }).join('');
@@ -12742,7 +12752,7 @@ async function openCompetitionDetail(comp, anglerId){
         const status = c.verificationStatus;
         const badge = status === 'confirmed' ? '<span class="ver-ok"> ✓ Confirmed</span>'
           : status === 'rejected' ? '<span class="ver-bad"> ✗ Rejected</span>' : '';
-        const when = new Date(c.time).toLocaleString(dateLocale(), {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+        const when = fmtCatchWhen(c.time, c.hasKnownTime);
         const netLine = c.netWeight > 0
           ? `<p class="pc-line" style="text-align:left;">Net ${formatWeight(c.netWeight)} · scale should read <b>${formatWeight((c.weight||0) + c.netWeight)}</b></p>`
           : (canVerify ? '<p class="pc-line muted" style="text-align:left;">No net weight entered</p>' : '');
