@@ -2939,8 +2939,13 @@ function renderRebaitButton(rod){
   const shown = restoreRig ? [restoreRig.name] : [];
   if(last){
     keys.forEach(key=>{
-      const have = parseMultiValue(currentPerson.notes[rod][key]);
-      const missing = parseMultiValue(last[key]).filter(v=>!have.includes(v));
+      const left = parseMultiValue(currentPerson.notes[rod][key]);
+      const missing = parseMultiValue(last[key]).filter(v=>{
+        const i = left.indexOf(v);
+        if(i === -1) return true;
+        left.splice(i, 1);
+        return false;
+      });
       if(missing.length){
         toAdd[key] = missing;
         missing.forEach(v=>{ if(!shown.includes(v)) shown.push(v); });
@@ -2963,7 +2968,7 @@ function renderRebaitButton(rod){
     }
     Object.keys(toAdd).forEach(key=>{
       const arr = parseMultiValue(currentPerson.notes[rod][key]);
-      toAdd[key].forEach(v=>{ if(!arr.includes(v)) arr.push(v); });
+      toAdd[key].forEach(v=>{ arr.push(v); });
       currentPerson.notes[rod][key] = joinMultiValue(arr);
     });
     await saveRodState(currentPersonId, rod);
@@ -2984,12 +2989,13 @@ function renderMultiPickerPills(rod, key){
   const pillsEl = document.querySelector('.multi-picker-pills[data-rod="'+rod+'"][data-key="'+key+'"]');
   if(!pillsEl || !currentPerson) return;
   const current = parseMultiValue(currentPerson.notes[rod][key]);
-  pillsEl.innerHTML = current.map(v=>`
-    <span class="pill" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(v)}<button type="button" class="multi-picker-remove" data-rod="${rod}" data-key="${key}" data-value="${escapeHtml(v)}" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;">×</button></span>
+  pillsEl.innerHTML = current.map((v, i)=>`
+    <span class="pill" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(v)}<button type="button" class="multi-picker-remove" data-rod="${rod}" data-key="${key}" data-index="${i}" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;">×</button></span>
   `).join('');
   pillsEl.querySelectorAll('.multi-picker-remove').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      const arr = parseMultiValue(currentPerson.notes[rod][key]).filter(v=>v!==btn.dataset.value);
+      const arr = parseMultiValue(currentPerson.notes[rod][key]);
+      arr.splice(parseInt(btn.dataset.index, 10), 1);
       currentPerson.notes[rod][key] = joinMultiValue(arr);
       await saveRodState(currentPersonId, rod);
       renderMultiPickerPills(rod, key);
@@ -3007,9 +3013,7 @@ function renderMultiPickerResults(rod, key){
   // Show the whole list by default — hiding it until someone typed made it
   // look like there was no picker at all, especially on mobile
 
-  const current = parseMultiValue(currentPerson.notes[rod][key]);
   const matches = multiPickerSourceList(key)
-    .filter(item => !current.includes(item.name))
     .filter(item => !typeFilter || item.type === typeFilter)
     // Match on brand too — searching "Dynamite" should turn up their
     // boilies, wafters and pop-ups together, not just one type
@@ -3035,7 +3039,7 @@ function renderMultiPickerResults(rod, key){
     const value = sel ? sel.value : '';
     if(!value) return;
     const arr = parseMultiValue(currentPerson.notes[rod][key]);
-    if(!arr.includes(value)) arr.push(value);
+    arr.push(value);
     currentPerson.notes[rod][key] = joinMultiValue(arr);
     await saveRodState(currentPersonId, rod);
     // Keep the search term — you often want several items on one hook
@@ -3080,12 +3084,12 @@ function renderComboPickerPills(key){
   const pillsEl = document.querySelector('.combo-picker-pills[data-key="'+key+'"]');
   if(!pillsEl) return;
   const current = comboDraft.hooks[key] || [];
-  pillsEl.innerHTML = current.map(v=>`
-    <span class="pill" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(v)}<button type="button" class="combo-picker-remove" data-key="${key}" data-value="${escapeHtml(v)}" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;">×</button></span>
+  pillsEl.innerHTML = current.map((v, i)=>`
+    <span class="pill" style="display:inline-flex;align-items:center;gap:6px;">${escapeHtml(v)}<button type="button" class="combo-picker-remove" data-key="${key}" data-index="${i}" style="border:none;background:none;cursor:pointer;color:inherit;font-weight:700;padding:0;">×</button></span>
   `).join('');
   pillsEl.querySelectorAll('.combo-picker-remove').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      comboDraft.hooks[key] = (comboDraft.hooks[key]||[]).filter(v=>v!==btn.dataset.value);
+      comboDraft.hooks[key] = (comboDraft.hooks[key]||[]).filter((v, i)=>i !== parseInt(btn.dataset.index, 10));
       renderComboPickerPills(key);
       renderComboPickerResults(key);
     });
@@ -3099,9 +3103,7 @@ function renderComboPickerResults(key){
   if(!searchEl || !resultsEl) return;
   const term = searchEl.value.trim().toLowerCase();
   const typeFilter = typeEl ? typeEl.value : '';
-  const current = comboDraft.hooks[key] || [];
   const matches = knownBaitNames
-    .filter(item => !current.includes(item.name))
     .filter(item => !typeFilter || item.type === typeFilter)
     .filter(item => !term
       || item.name.toLowerCase().includes(term)
@@ -3125,7 +3127,7 @@ function renderComboPickerResults(key){
     const value = sel ? sel.value : '';
     if(!value) return;
     if(!comboDraft.hooks[key]) comboDraft.hooks[key] = [];
-    if(!comboDraft.hooks[key].includes(value)) comboDraft.hooks[key].push(value);
+    comboDraft.hooks[key].push(value);
     renderComboPickerResults(key);
     renderComboPickerPills(key);
   });
