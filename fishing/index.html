@@ -521,6 +521,15 @@
   .mini-btn.danger{color:#c04;}
   .mini-btn.liked{background:var(--dam);color:#fff;border-color:var(--dam);}
 
+  .spec-top{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .spec-badge{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--line);color:var(--ink);}
+  .spec-badge.live{background:var(--rust);color:#fff;}
+  .spec-badge.soon{background:#F2C14E;color:#3a2a00;}
+  .spec-badge.done{background:var(--ink);color:#fff;}
+  .spec-timing{font-weight:700;font-size:16px;}
+  .spec-winner{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px;margin:10px 0;border:2px solid var(--rust);border-radius:12px;background:var(--card-bg);}
+  .spec-winner b{font-size:22px;}
+  .spec-leader .lb-name{color:var(--dam);}
   .lb-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
   .lb-item:last-child{border-bottom:none;}
   .lb-rank{
@@ -13246,7 +13255,60 @@ document.getElementById('lb-filter-type').addEventListener('change', renderLeade
 const IS_SPECTATOR = new URLSearchParams(window.location.search).get('view') === 'spectator';
 const SPECTATOR_COMP_ID = new URLSearchParams(window.location.search).get('comp');
 
-// Live standings for one competition, rendered for anyone with the link
+// Live page for one competition, shown to anyone with the link. Only what is
+// safe for the public: standings, catches and photos, never locations or tackle.
+const specState = {comp: null, updatedAt: 0};
+
+function specSpan(ms){
+  const m = Math.max(0, Math.floor(ms / 60000));
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
+  if(d) return d + 'd ' + h + 'h';
+  if(h) return h + 'h ' + mm + 'm';
+  return mm + 'm';
+}
+
+function specMetricLabel(comp){
+  return comp.metric==='catch_count' ? 'most catches'
+    : (comp.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
+}
+
+function renderSpectatorHeader(){
+  const el = document.getElementById('spec-header');
+  const comp = specState.comp;
+  if(!el || !comp) return;
+  const now = new Date();
+  const startAt = new Date(comp.start_date + 'T' + (comp.start_time || '00:00').slice(0,5) + ':00');
+  const endAt = new Date(comp.end_date + 'T' + (comp.end_time || '23:59').slice(0,5) + ':59');
+  const ended = competitionHasEnded(comp, now), live = competitionIsLive(comp, now);
+  const badge = ended ? 'Finished' : (live ? 'Live' : 'Not started');
+  const timing = ended ? 'Ended ' + fmtDateTime(endAt, {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'})
+    : (live ? 'Ends in ' + specSpan(endAt - now) : 'Starts in ' + specSpan(startAt - now));
+  const ago = Math.max(0, Math.round((Date.now() - specState.updatedAt) / 1000));
+  const agoText = ago < 5 ? 'just now' : (ago < 60 ? ago + 's ago' : Math.floor(ago / 60) + 'm ago');
+  el.innerHTML = `
+    <div class="spec-top"><span class="spec-badge ${ended ? 'done' : (live ? 'live' : 'soon')}">${badge}</span><span class="spec-timing">${escapeHtml(timing)}</span></div>
+    <p class="pc-line muted">${escapeHtml(comp.dam || 'No venue set')} · ${escapeHtml(fmtDate(startAt))} – ${escapeHtml(fmtDate(endAt))} · ranked by ${specMetricLabel(comp)}${comp.fish_type_filter ? ' · ' + escapeHtml(comp.fish_type_filter) + ' only' : ''}</p>
+    <p class="pc-line muted">Updated ${agoText}</p>`;
+}
+
+function specRowHtml(comp, s, rank){
+  const metricKey = comp.metric==='catch_count' ? 'count' : (comp.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
+  const main = metricKey === 'count' ? String(s.count) : formatWeight(s[metricKey]);
+  const parts = [];
+  if(!s.count){ parts.push('No fish yet'); }
+  else{
+    if(metricKey !== 'count') parts.push(s.count + ' fish');
+    if(metricKey !== 'biggest') parts.push('biggest ' + formatWeight(s.biggest));
+    if(metricKey !== 'totalWeight' && s.count > 1) parts.push('total ' + formatWeight(s.totalWeight));
+  }
+  return `
+    <div class="lb-item${rank === 1 && s.count ? ' spec-leader' : ''}">
+      <div class="lb-rank">${s.count ? rank : '–'}</div>
+      <div style="flex:1;min-width:0;"><b class="lb-name">${escapeHtml(s.name)}</b><div class="lb-dam">${escapeHtml(parts.join(' · '))}</div></div>
+      <div class="lb-stats"><b>${s.count ? escapeHtml(main) : ''}</b></div>
+    </div>`;
+}
+
 async function renderSpectatorCompetition(compId){
   const el = document.getElementById('leaderboard-list');
   try{
@@ -13258,33 +13320,37 @@ async function renderSpectatorCompetition(compId){
     }
     const participantIds = await loadCompetitionParticipants(compId);
     const stats = await computeCompetitionLeaderboard(comp, participantIds);
-    const metricKey = comp.metric==='catch_count' ? 'count' : (comp.metric==='biggest_fish' ? 'biggest' : 'totalWeight');
-    const metricLabel = comp.metric==='catch_count' ? 'most catches'
-      : (comp.metric==='biggest_fish' ? 'biggest single fish' : 'biggest bag');
 
-    const today = new Date().toISOString().slice(0,10);
-    const status = (comp.end_date && comp.end_date < today) ? 'Finished'
-      : ((comp.start_date && comp.start_date > today) ? 'Not started yet' : 'Live');
+    // Everyone who signed up is listed, even before their first fish
+    const quiet = participantIds
+      .filter(fid => !stats.some(s => s.id === fid))
+      .map(fid => {
+        const p = people.find(x => x.id === fid);
+        return {id: fid, name: p ? p.name : 'Unknown', totalWeight: 0, count: 0, biggest: 0};
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    specState.comp = comp;
+    specState.updatedAt = Date.now();
 
     const heading = document.querySelector('#panel-leaderboard h2');
     if(heading) heading.textContent = comp.name;
 
-    el.innerHTML = `
-      <p class="pc-line muted" style="margin-bottom:10px;">
-        ${escapeHtml(comp.dam || 'No venue set')}
-        ${comp.start_date ? ' · ' + escapeHtml(comp.start_date) + ' → ' + escapeHtml(comp.end_date) : ''}
-        · ranked by ${metricLabel}${comp.fish_type_filter ? ' · '+escapeHtml(comp.fish_type_filter)+' only' : ''}
-        · <b>${status}</b>
-      </p>
-      ${stats.length
-        ? stats.map((s,i)=>`
-            <div class="lb-item">
-              <div class="lb-rank">${i+1}</div>
-              <div style="flex:1;"><b class="lb-name">${escapeHtml(s.name)}</b></div>
-              <div class="lb-stats"><b>${comp.metric==='catch_count' ? s[metricKey] : s[metricKey].toFixed(2)+'kg'}</b></div>
-            </div>`).join('')
-        : '<div class="empty">No catches counted yet.</div>'}
-    `;
+    if(!document.getElementById('spec-header')){
+      el.innerHTML = '<div id="spec-header"></div><div id="spec-winner"></div><div id="spec-board"></div>';
+    }
+    renderSpectatorHeader();
+
+    const ended = competitionHasEnded(comp);
+    const winner = stats[0];
+    document.getElementById('spec-winner').innerHTML = (ended && winner)
+      ? `<div class="spec-winner"><span>Winner</span><b>${escapeHtml(winner.name)}</b><span>${escapeHtml(comp.metric==='catch_count' ? winner.count + ' fish' : formatWeight(comp.metric==='biggest_fish' ? winner.biggest : winner.totalWeight))}</span></div>`
+      : '';
+
+    const rows = stats.map((s, i) => specRowHtml(comp, s, i + 1)).concat(quiet.map(s => specRowHtml(comp, s, 0)));
+    document.getElementById('spec-board').innerHTML = rows.length
+      ? rows.join('')
+      : '<div class="empty">No anglers have joined yet.</div>';
   }catch(e){
     console.error('Spectator competition failed', e);
     el.innerHTML = '<div class="empty">Could not load this competition.</div>';
@@ -13306,6 +13372,7 @@ async function renderSpectatorCompetition(compId){
         .forEach(elm=> elm.style.display = 'none');
       await renderSpectatorCompetition(SPECTATOR_COMP_ID);
       setInterval(()=> renderSpectatorCompetition(SPECTATOR_COMP_ID), 30000);
+      setInterval(renderSpectatorHeader, 1000);
     }else{
       if(subtitle) subtitle.textContent = 'Leaderboard — spectator view';
       await renderLeaderboard();
