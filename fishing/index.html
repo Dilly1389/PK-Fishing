@@ -1307,6 +1307,7 @@
         <label class="check-row"><input type="checkbox" id="competition-require-fish" checked> Photo of the fish is compulsory</label>
         <label class="check-row"><input type="checkbox" id="competition-require-scale"> Photo of the scale is compulsory</label>
         <label class="check-row"><input type="checkbox" id="competition-creator-fishing" checked> I'm fishing this one too</label>
+        <label class="check-row" id="competition-attach-session-row" style="display:none;"><input type="checkbox" id="competition-attach-session" checked> Count my session that's already running (catches from the competition start time)</label>
         <button class="primary-btn" id="competition-create-btn" style="margin-top:10px;">Create competition</button>
         <div class="status" id="competition-create-status"></div>
       </section>
@@ -7237,6 +7238,32 @@ async function renderSessionUi(){
     wireVenueSuggestions('past-catch-venue', 'venue-suggestion-list-past');
   }
   renderSessionFeed();
+  updateCompetitionAttachOption();
+}
+
+// The "count my running session" tick box only makes sense while a session is
+// running that isn't already in a competition, and the creator is fishing it
+function updateCompetitionAttachOption(){
+  const row = document.getElementById('competition-attach-session-row');
+  const fishing = document.getElementById('competition-creator-fishing');
+  if(!row || !fishing) return;
+  row.style.display = (activeSession && !activeSession.competition_id && fishing.checked) ? '' : 'none';
+}
+
+// Move the angler's already-running session (and its catches from the comp's
+// start time on) into a competition that has just been created
+async function attachRunningSessionToCompetition(comp){
+  if(!activeSession || activeSession.competition_id) return false;
+  const startMs = new Date(comp.start_date + 'T' + (comp.start_time || '00:00').slice(0,5) + ':00').getTime();
+  const endMs = new Date(comp.end_date + 'T' + (comp.end_time || '23:59').slice(0,5) + ':59').getTime();
+  if(Date.now() < startMs || Date.now() > endMs) return false;
+  await sbPatch('sessions', 'id=eq.'+activeSession.id, {competition_id: comp.id});
+  await sbPatch('catches', 'session_id=eq.'+activeSession.id+'&time=gte.'+new Date(startMs).toISOString()+'&time=lte.'+new Date(endMs).toISOString(), {competition_id: comp.id});
+  activeSession.competition_id = comp.id;
+  if(currentPerson) currentPerson.catches.forEach(c=>{
+    if(c.sessionId === activeSession.id && c.time >= startMs && c.time <= endMs) c.competitionId = comp.id;
+  });
+  return true;
 }
 
 // Cached per session, so switching tabs or re-rendering doesn't refetch
@@ -13161,7 +13188,7 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
   st.textContent = 'Creating...';
   try{
     const id = uid();
-    await insertCompetition({
+    const newComp = {
       id, name, dam: damEl.value.trim(),
       start_date: startEl.value, end_date: endEl.value,
       start_time: startTimeEl.value || '00:00', end_time: endTimeEl.value || '23:59',
@@ -13169,7 +13196,8 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
       require_fish_photo: document.getElementById('competition-require-fish').checked,
       require_scale_photo: document.getElementById('competition-require-scale').checked,
       creator_user_id: session.user.id
-    });
+    };
+    await insertCompetition(newComp);
     const myId = getMyFishermanId();
     if(myId && document.getElementById('competition-creator-fishing').checked && !selectedIds.includes(myId)){
       await sbPost('competition_participants', {id: uid(), competition_id: id, fisherman_id: myId, status: 'approved'});
@@ -13177,14 +13205,20 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
     for(const fid of selectedIds){
       await addCompetitionParticipant(id, fid);
     }
+    let attached = false;
+    if(myId && document.getElementById('competition-creator-fishing').checked && document.getElementById('competition-attach-session').checked){
+      try{ attached = await attachRunningSessionToCompetition(newComp); }
+      catch(e){ console.error(e); }
+      if(attached){ await renderSessionUi(); await renderActiveCompetitionsBar(); renderAll(); }
+    }
     nameEl.value = ''; damEl.value = '';
     startEl.value = ''; endEl.value = '';
     competitionSelectedIds = new Set();
     renderCompetitionSelectedPills();
     document.getElementById('competition-angler-search').value = '';
     renderCompetitionAnglerSearch();
-    st.textContent = 'Created.';
-    setTimeout(()=> st.textContent='', 1200);
+    st.textContent = attached ? 'Created. Your running session now counts.' : 'Created.';
+    setTimeout(()=> st.textContent='', attached ? 3500 : 1200);
     renderCompetitions();
   }catch(e){
     console.error(e);
@@ -13192,6 +13226,7 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
   }
 });
 document.getElementById('competition-angler-search').addEventListener('input', renderCompetitionAnglerSearch);
+document.getElementById('competition-creator-fishing').addEventListener('change', updateCompetitionAttachOption);
 
 document.getElementById('lb-filter-competition').addEventListener('change', renderLeaderboard);
 document.getElementById('lb-filter-type').addEventListener('change', renderLeaderboard);
