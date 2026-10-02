@@ -530,6 +530,14 @@
   .spec-winner{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px;margin:10px 0;border:2px solid var(--rust);border-radius:12px;background:var(--card-bg);}
   .spec-winner b{font-size:22px;}
   .spec-leader .lb-name{color:var(--dam);}
+  .spec-thumb{width:64px;height:64px;max-width:64px;object-fit:cover;margin-top:0;flex:none;}
+  .spec-h{font-size:15px;margin:18px 0 0;}
+  .spec-pending{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:#F2C14E;color:#3a2a00;}
+  .spec-biggest{display:flex;align-items:center;gap:14px;padding:12px;margin:10px 0;border:1px solid var(--line);border-radius:12px;background:var(--card-bg);}
+  .spec-biggest > div{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .spec-biggest b{font-size:24px;}
+  .spec-biggest-label{font-size:12px;color:var(--muted);}
+  .spec-big-photo{width:96px;height:96px;max-width:96px;object-fit:cover;margin-top:0;flex:none;}
   .lb-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);}
   .lb-item:last-child{border-bottom:none;}
   .lb-rank{
@@ -13309,6 +13317,53 @@ function specRowHtml(comp, s, rank){
     </div>`;
 }
 
+function specPhotos(c){
+  try{
+    const p = typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos;
+    return Array.isArray(p) ? p.filter(u => typeof u === 'string' && /^https?:/.test(u)) : [];
+  }catch(e){ return []; }
+}
+
+function specCatchRowHtml(c){
+  const photos = specPhotos(c);
+  const who = (people.find(x => x.id === c.fisherman_id) || {}).name || 'Unknown';
+  return `
+    <div class="lb-item">
+      ${photos.length ? `<img class="pc-photo spec-thumb" src="${escapeHtml(photos[0])}" alt="Catch photo" loading="lazy">` : ''}
+      <div style="flex:1;min-width:0;">
+        <b class="lb-name">${escapeHtml(who)}</b>
+        <div class="lb-dam">${escapeHtml(c.fish_type || 'Fish')} · ${escapeHtml(fmtCatchWhen(c.time, c.has_known_time))}</div>
+      </div>
+      <div class="lb-stats"><b>${escapeHtml(formatWeight(c.weight || 0))}</b>${c.verification_status === 'pending' ? '<div><span class="spec-pending">pending</span></div>' : ''}</div>
+    </div>`;
+}
+
+async function renderSpectatorCatches(comp){
+  const recentEl = document.getElementById('spec-recent'), bigEl = document.getElementById('spec-biggest');
+  if(!recentEl || !bigEl) return;
+  try{
+    let rows = await sbGet('catches?select=id,fisherman_id,fish_type,weight,time,has_known_time,verification_status,photos&caught=eq.true&competition_id=eq.' + comp.id + '&order=time.desc');
+    rows = rows.filter(c => c.verification_status !== 'rejected');
+    if(comp.fish_type_filter) rows = rows.filter(c => c.fish_type === comp.fish_type_filter);
+    const big = rows.reduce((m, c) => (!m || (c.weight || 0) > (m.weight || 0)) ? c : m, null);
+    if(big && (big.weight || 0) > 0){
+      const photos = specPhotos(big);
+      const who = (people.find(x => x.id === big.fisherman_id) || {}).name || 'Unknown';
+      bigEl.innerHTML = `<div class="spec-biggest">
+        ${photos.length ? `<img class="pc-photo spec-big-photo" src="${escapeHtml(photos[0])}" alt="Biggest fish" loading="lazy">` : ''}
+        <div><span class="spec-biggest-label">Biggest fish so far</span><b>${escapeHtml(formatWeight(big.weight))}</b><span>${escapeHtml(who)}${big.fish_type ? ' · ' + escapeHtml(big.fish_type) : ''}</span></div>
+      </div>`;
+    }else{
+      bigEl.innerHTML = '';
+    }
+    recentEl.innerHTML = rows.length
+      ? '<h3 class="spec-h">Recent catches</h3>' + rows.slice(0, 10).map(specCatchRowHtml).join('')
+      : '';
+  }catch(e){
+    console.error('Spectator catches failed', e);
+  }
+}
+
 async function renderSpectatorCompetition(compId){
   const el = document.getElementById('leaderboard-list');
   try{
@@ -13337,7 +13392,7 @@ async function renderSpectatorCompetition(compId){
     if(heading) heading.textContent = comp.name;
 
     if(!document.getElementById('spec-header')){
-      el.innerHTML = '<div id="spec-header"></div><div id="spec-winner"></div><div id="spec-board"></div>';
+      el.innerHTML = '<div id="spec-header"></div><div id="spec-winner"></div><div id="spec-biggest"></div><div id="spec-board"></div><div id="spec-recent"></div>';
     }
     renderSpectatorHeader();
 
@@ -13351,6 +13406,7 @@ async function renderSpectatorCompetition(compId){
     document.getElementById('spec-board').innerHTML = rows.length
       ? rows.join('')
       : '<div class="empty">No anglers have joined yet.</div>';
+    await renderSpectatorCatches(comp);
   }catch(e){
     console.error('Spectator competition failed', e);
     el.innerHTML = '<div class="empty">Could not load this competition.</div>';
