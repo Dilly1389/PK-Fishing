@@ -530,6 +530,12 @@
   .spec-winner{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px;margin:10px 0;border:2px solid var(--rust);border-radius:12px;background:var(--card-bg);}
   .spec-winner b{font-size:22px;}
   .spec-leader .lb-name{color:var(--dam);}
+  .spec-click{cursor:pointer;}
+  .spec-chev{align-self:center;font-size:22px;color:var(--muted);transition:transform .15s;}
+  .spec-chev.open{transform:rotate(90deg);}
+  .spec-detail{padding-left:20px;}
+  .spec-detail:empty{display:none;}
+  .spec-detail .lb-item{border-bottom:1px dashed var(--line);}
   .spec-thumb{width:64px;height:64px;max-width:64px;object-fit:cover;margin-top:0;flex:none;}
   .spec-h{font-size:15px;margin:18px 0 0;}
   .spec-pending{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:#F2C14E;color:#3a2a00;}
@@ -13265,7 +13271,7 @@ const SPECTATOR_COMP_ID = new URLSearchParams(window.location.search).get('comp'
 
 // Live page for one competition, shown to anyone with the link. Only what is
 // safe for the public: standings, catches and photos, never locations or tackle.
-const specState = {comp: null, updatedAt: 0};
+const specState = {comp: null, updatedAt: 0, open: null, catches: []};
 
 function specSpan(ms){
   const m = Math.max(0, Math.floor(ms / 60000));
@@ -13309,12 +13315,35 @@ function specRowHtml(comp, s, rank){
     if(metricKey !== 'biggest') parts.push('biggest ' + formatWeight(s.biggest));
     if(metricKey !== 'totalWeight' && s.count > 1) parts.push('total ' + formatWeight(s.totalWeight));
   }
+  const open = s.count && specState.open === s.id;
   return `
-    <div class="lb-item${rank === 1 && s.count ? ' spec-leader' : ''}">
+    <div class="lb-item${rank === 1 && s.count ? ' spec-leader' : ''}${s.count ? ' spec-click' : ''}"${s.count ? ` data-fid="${escapeHtml(s.id)}" role="button" tabindex="0" aria-expanded="${open ? 'true' : 'false'}"` : ''}>
       <div class="lb-rank">${s.count ? rank : '–'}</div>
       <div style="flex:1;min-width:0;"><b class="lb-name">${escapeHtml(s.name)}</b><div class="lb-dam">${escapeHtml(parts.join(' · '))}</div></div>
       <div class="lb-stats"><b>${s.count ? escapeHtml(main) : ''}</b></div>
-    </div>`;
+      ${s.count ? '<span class="spec-chev' + (open ? ' open' : '') + '" aria-hidden="true">›</span>' : ''}
+    </div>${s.count ? `<div class="spec-detail" data-detail="${escapeHtml(s.id)}"></div>` : ''}`;
+}
+
+function renderSpectatorDetails(){
+  document.querySelectorAll('#spec-board .spec-detail').forEach(d => {
+    const fid = d.dataset.detail;
+    d.innerHTML = specState.open === fid
+      ? specState.catches.filter(c => c.fisherman_id === fid).map(c => specCatchRowHtml(c, true)).join('')
+      : '';
+  });
+  document.querySelectorAll('#spec-board .spec-click').forEach(r => {
+    const open = specState.open === r.dataset.fid;
+    r.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const chev = r.querySelector('.spec-chev');
+    if(chev) chev.classList.toggle('open', open);
+  });
+}
+
+function toggleSpectatorAngler(row){
+  const fid = row.dataset.fid;
+  specState.open = specState.open === fid ? null : fid;
+  renderSpectatorDetails();
 }
 
 function specPhotos(c){
@@ -13324,15 +13353,15 @@ function specPhotos(c){
   }catch(e){ return []; }
 }
 
-function specCatchRowHtml(c){
+function specCatchRowHtml(c, hideName){
   const photos = specPhotos(c);
   const who = (people.find(x => x.id === c.fisherman_id) || {}).name || 'Unknown';
   return `
     <div class="lb-item">
       ${photos.length ? `<img class="pc-photo spec-thumb" src="${escapeHtml(photos[0])}" alt="Catch photo" loading="lazy">` : ''}
       <div style="flex:1;min-width:0;">
-        <b class="lb-name">${escapeHtml(who)}</b>
-        <div class="lb-dam">${escapeHtml(c.fish_type || 'Fish')} · ${escapeHtml(fmtCatchWhen(c.time, c.has_known_time))}</div>
+        ${hideName ? '' : `<b class="lb-name">${escapeHtml(who)}</b>`}
+        <div class="lb-dam"${hideName ? ' style="font-size:14px;color:var(--ink);"' : ''}>${escapeHtml(c.fish_type || 'Fish')} · ${escapeHtml(fmtCatchWhen(c.time, c.has_known_time))}</div>
       </div>
       <div class="lb-stats"><b>${escapeHtml(formatWeight(c.weight || 0))}</b>${c.verification_status === 'pending' ? '<div><span class="spec-pending">pending</span></div>' : ''}</div>
     </div>`;
@@ -13345,6 +13374,8 @@ async function renderSpectatorCatches(comp){
     let rows = await sbGet('catches?select=id,fisherman_id,fish_type,weight,time,has_known_time,verification_status,photos&caught=eq.true&competition_id=eq.' + comp.id + '&order=time.desc');
     rows = rows.filter(c => c.verification_status !== 'rejected');
     if(comp.fish_type_filter) rows = rows.filter(c => c.fish_type === comp.fish_type_filter);
+    specState.catches = rows;
+    renderSpectatorDetails();
     const big = rows.reduce((m, c) => (!m || (c.weight || 0) > (m.weight || 0)) ? c : m, null);
     if(big && (big.weight || 0) > 0){
       const photos = specPhotos(big);
@@ -13391,6 +13422,17 @@ async function renderSpectatorCompetition(compId){
     const heading = document.querySelector('#panel-leaderboard h2');
     if(heading) heading.textContent = comp.name;
 
+    if(!el.dataset.specBound){
+      el.dataset.specBound = '1';
+      el.addEventListener('click', e => {
+        const row = e.target.closest('.spec-click');
+        if(row && !e.target.closest('.spec-detail')) toggleSpectatorAngler(row);
+      });
+      el.addEventListener('keydown', e => {
+        const row = e.target.closest && e.target.closest('.spec-click');
+        if(row && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); toggleSpectatorAngler(row); }
+      });
+    }
     if(!document.getElementById('spec-header')){
       el.innerHTML = '<div id="spec-header"></div><div id="spec-winner"></div><div id="spec-biggest"></div><div id="spec-board"></div><div id="spec-recent"></div>';
     }
