@@ -10098,7 +10098,11 @@ async function openProfile(personId, focusCatchId){
       photoGalleryCache[c.id] = c.photos;
       photoLabelsCache[c.id] = c.photoLabels || [];
       photoWhenCache[c.id] = {t:c.time, k:c.hasKnownTime !== false};
-      c.photos.forEach((src,i)=> photoEntries.push({src, catchId:c.id, index:i, type:c.type||''}));
+      const labels = c.photoLabels || [];
+      c.photos.forEach((src,i)=>{
+        if(labels[i] === 'scale') return;
+        photoEntries.push({src, catchId:c.id, index:i, type:c.type||''});
+      });
     }
   });
   const photoTypes = [...new Set(photoEntries.map(e=>e.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
