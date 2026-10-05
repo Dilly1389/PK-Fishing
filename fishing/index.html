@@ -7487,6 +7487,20 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
       if(near && confirm('You already have a venue saved here called "' + near.name + '". Use that instead of creating "' + venueName + '"?')){
         existing = near;
       }
+      if(!existing && coords){
+        // Still new: see what the map calls this water, so spellings stay consistent
+        st.textContent = 'Checking the map...';
+        const mapName = await lookupWaterName(coords);
+        st.textContent = 'Starting...';
+        if(mapName && normVenueName(mapName) !== normVenueName(venueName)){
+          const saved = findVenueByName(venues, mapName);
+          if(saved){
+            if(confirm('The map calls this water "' + mapName + '", which you already have saved. Use that instead of "' + venueName + '"?')) existing = saved;
+          }else if(confirm('The map calls this water "' + mapName + '". Use that name instead of "' + venueName + '"?')){
+            venueName = mapName;
+          }
+        }
+      }
     }
     if(existing){
       venueId = existing.id;
@@ -7808,6 +7822,42 @@ function findVenueNear(venues, coords){
   return best;
 }
 
+// Best-effort: the name OpenStreetMap gives the water body at these
+// coordinates, so everyone at the same dam is offered the same spelling.
+// The free server is sometimes slow or down, so it gives up after a few
+// seconds and the caller simply carries on with whatever was typed.
+const waterNameCache = {};
+async function lookupWaterName(coords){
+  if(!coords || !navigator.onLine) return null;
+  const key = coords.lat.toFixed(3) + ',' + coords.lng.toFixed(3);
+  if(key in waterNameCache) return waterNameCache[key];
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), 5000);
+  let name = null;
+  try{
+    const around = 'around:800,' + coords.lat + ',' + coords.lng;
+    const query = '[out:json][timeout:10];(way(' + around + ')[natural=water][name];relation(' + around + ')[natural=water][name];);out tags center;';
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST', body: 'data=' + encodeURIComponent(query),
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'}, signal: ctrl.signal
+    });
+    if(res.ok){
+      const data = await res.json();
+      let bestD = Infinity;
+      (data.elements || []).forEach(el=>{
+        const n = (el.tags && (el.tags['name:en'] || el.tags.name) || '').trim();
+        if(!n) return;
+        const c = el.center;
+        const d = c ? distanceMeters(coords, {lat: c.lat, lng: c.lon}) : 0;
+        if(d < bestD){ bestD = d; name = n; }
+      });
+      waterNameCache[key] = name;
+    }
+  }catch(e){ /* offline, slow or blocked: just skip the suggestion */ }
+  finally{ clearTimeout(timer); }
+  return name;
+}
+
 async function findOrPromptVenue(coords){
   if(!coords || !isSignedIn()) return null;
   const venues = await loadMyVenues();
@@ -7817,7 +7867,8 @@ async function findOrPromptVenue(coords){
   );
   if(match) return match.id;
   // New water — ask once what to call it, then reuse automatically from now on
-  const name = prompt('New water detected. What do you call this venue? (leave blank to skip)');
+  const mapName = await lookupWaterName(coords);
+  const name = prompt('New water detected. What do you call this venue? (leave blank to skip)', mapName || '');
   if(!name || !name.trim()) return null;
   const sameName = findVenueByName(venues, name);
   if(sameName) return sameName.id;
