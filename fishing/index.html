@@ -696,6 +696,16 @@
   .home-stat{flex:1;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;}
   .home-stat b{display:block;font-size:18px;color:var(--ink);}
   .home-stat span{font-size:12px;color:var(--muted);}
+  .home-stat-btn{font:inherit;color:inherit;cursor:pointer;}
+  .home-stat-btn:disabled{cursor:default;}
+  .home-stat-btn.open{border-color:var(--ink);}
+  .home-week-list{margin-top:8px;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .home-week-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--line);padding:10px 12px;font:inherit;color:var(--ink);cursor:pointer;}
+  .home-week-row:last-child{border-bottom:none;}
+  .home-week-row small{display:block;font-size:12px;color:var(--muted);}
+  .home-week-row .hw-side{font-weight:700;white-space:nowrap;}
+  .row-flash{animation:rowFlash 2.4s ease-out;}
+  @keyframes rowFlash{0%,50%{background:rgba(193,68,14,.2);}100%{background:transparent;}}
   .home-feed-thumb{width:44px;height:44px;max-width:44px;object-fit:cover;margin-top:0;border-radius:8px;flex-shrink:0;}
   .pc-head{font-weight:700;font-size:14px;margin-bottom:4px;color:var(--ink);}
   .pc-line{font-size:12.5px;margin:2px 0;color:var(--ink);}
@@ -1920,7 +1930,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">4. Log your catches</div>
-      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time, and the weather and moon phase at the time, are all recorded automatically. The timer resets afterwards, but the rig, distance and note stay on the rod, so you only need to pick new baits before the next cast. In a competition you can also enter the weight of your net, and the organiser may need a fish photo and a scale photo with every catch.</div>
+      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time, and the weather and moon phase at the time, are all recorded automatically. The timer resets afterwards, but the rig, distance and note stay on the rod after a fish (a blank clears the distance and note too), so you only need to pick new baits before the next cast. In a competition you can also enter the weight of your net, and the organiser may need a fish photo and a scale photo with every catch.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">5. See what's working</div>
@@ -1972,7 +1982,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Running a timer</div>
-      <div class="pc-line muted">Start it when a rod goes out. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. It resets automatically once you log a catch or a blank, ready for the next run — your rig, distance and note stay on the rod, and only the baits are cleared. Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
+      <div class="pc-line muted">Start it when a rod goes out. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. It resets automatically once you log a catch or a blank, ready for the next run — after a fish your rig, distance and note stay on the rod and only the baits are cleared (after a blank the distance and note clear too), and only the baits are cleared. Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Recast</div>
@@ -8010,9 +8020,10 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
     hookCount: currentPerson.notes[rod].hookCount,
     rodItemId: currentPerson.notes[rod].rodItemId,
     reelItemId: currentPerson.notes[rod].reelItemId,
-    // The rod's still in the same spot, so distance and note carry over
-    castDistance: currentPerson.notes[rod].castDistance,
-    rodNote: currentPerson.notes[rod].rodNote
+    // After a fish the rod's usually still in the same spot, so distance and
+    // note carry over; after a blank you'll normally move, so they clear
+    castDistance: entry.caught ? currentPerson.notes[rod].castDistance : '',
+    rodNote: entry.caught ? currentPerson.notes[rod].rodNote : ''
   };
   for(let n=1; n<=MAX_HOOKS; n++){ clearedNotes['hook'+n] = ''; }
   currentPerson.notes[rod] = clearedNotes;
@@ -8123,6 +8134,15 @@ function renderProfilePhotoGrid(entries, filterType){
   ).join('');
 }
 
+// The photo that shows the fish itself: the first one not labelled as the scale
+function fishPhotoSrc(c){
+  const photos = (c && c.photos) || [];
+  if(!photos.length) return null;
+  const labels = c.photoLabels || [];
+  const i = photos.findIndex((p, k)=> (labels[k] || 'fish') !== 'scale');
+  return photos[i >= 0 ? i : 0];
+}
+
 function catchDetailHtml(c, editable, removable, showDate){
   const timeStr = c.hasKnownTime === false
     ? 'not recorded'
@@ -8130,7 +8150,7 @@ function catchDetailHtml(c, editable, removable, showDate){
   const timerStr = fmt(c.timerElapsed||0);
   const rodLabel = c.rodIdentifier ? escapeHtml(c.rodIdentifier) : (RID_LABEL[c.rod] || 'Rod');
   const dateStr = new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
-  let html = `<div class="profile-catch">
+  let html = `<div class="profile-catch" data-row-catch="${escapeHtml(c.id)}">
     <div class="pc-head" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <span>${showDate ? `<b class="pc-date">${escapeHtml(dateStr)}</b> · ${c.hasKnownTime === false ? '' : escapeHtml(new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit',minute:'2-digit'})) + ' · '}` : ''}${rodLabel}${c.caught ? ' · '+escapeHtml(c.hook||'') : ' · No catch'}</span>
       <span style="display:flex;gap:6px;">
@@ -8509,7 +8529,7 @@ function buildInsightsHtml(catches, venues, sessions){
         <div><b>${(caught.length / totalSessions).toFixed(1)}</b>fish per session</div>
         <div><b>${withCatches} of ${totalSessions}</b>caught a fish</div>
       </div>`;
-    const sessionLi = s=>`<li class="ins-row">
+    const sessionLi = s=>`<li class="ins-row" data-session-row="${escapeHtml(s.id)}">
         <div class="ins-row-top">
           <div class="ins-main">
             <b>${escapeHtml(s.name)}</b>${s.ongoing ? ' <span class="ins-tag">Ongoing</span>' : ''}
@@ -8845,6 +8865,17 @@ async function loadMySessions(){
   }catch(e){ console.error('loadMySessions failed', e); return []; }
 }
 
+let pendingInsightsSession = null;
+function focusInsightsSession(body, sid){
+  const row = body.querySelector('[data-session-row="' + CSS.escape(sid) + '"]');
+  if(!row) return;
+  const grp = row.closest('details[data-ins-group]'); if(grp) grp.open = true;
+  const more = row.closest('details.ins-more'); if(more) more.open = true;
+  row.classList.add('row-flash');
+  setTimeout(()=> row.scrollIntoView({behavior: 'smooth', block: 'center'}), 80);
+  setTimeout(()=> row.classList.remove('row-flash'), 2600);
+}
+
 async function openInsights(){
   const body = document.getElementById('insights-body');
   body.innerHTML = '<div class="empty">Loading...</div>';
@@ -8879,6 +8910,11 @@ async function openInsights(){
   });
   const whereGroup = body.querySelector('details[data-ins-group="where"]');
   if(whereGroup && whereGroup.open) buildMapOnce();
+  if(pendingInsightsSession){
+    const sid = pendingInsightsSession;
+    pendingInsightsSession = null;
+    focusInsightsSession(body, sid);
+  }
 
   body.querySelectorAll('[data-recap-session]').forEach(btn=>{
     btn.addEventListener('click', ()=> openSessionRecap(btn.dataset.recapSession));
@@ -10041,7 +10077,7 @@ document.getElementById('badge-detail-close').addEventListener('click', ()=>{
 // Which profile is currently open — so an edit made from it can refresh it
 let currentProfileId = null;
 
-async function openProfile(personId){
+async function openProfile(personId, focusCatchId){
   const p = people.find(x=>x.id===personId);
   const rec = await loadPerson(personId);
   if(!p) return;
@@ -10187,7 +10223,7 @@ async function openProfile(personId){
     html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;">` +
       speciesStats.map(s=>{
         const pbDate = s.pb ? new Date(s.pb.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}) : '';
-        const pbPhoto = (s.pb && s.pb.photos && s.pb.photos.length) ? s.pb.photos[0] : null;
+        const pbPhoto = fishPhotoSrc(s.pb);
         return `
         <div class="profile-catch" style="flex:1;min-width:130px;text-align:center;">
           ${pbPhoto ? `<img src="${escapeHtml(pbPhoto)}" alt="${escapeHtml(s.species)} PB" class="pb-thumb" data-pb-photo="${escapeHtml(pbPhoto)}" loading="lazy" decoding="async" style="width:100%;height:90px;object-fit:cover;border-radius:8px;margin-bottom:6px;cursor:pointer;">` : ''}
@@ -10291,6 +10327,14 @@ async function openProfile(personId){
     });
   }
   renderProfileCatchList();
+  if(focusCatchId){
+    const row = document.querySelector('#profile-catch-list-container [data-row-catch="' + CSS.escape(focusCatchId) + '"]');
+    if(row){
+      row.classList.add('row-flash');
+      setTimeout(()=> row.scrollIntoView({block: 'center'}), 80);
+      setTimeout(()=> row.classList.remove('row-flash'), 2600);
+    }
+  }
   const searchInput = document.getElementById('profile-catch-search');
   if(searchInput) searchInput.addEventListener('input', renderProfileCatchList);
   const speciesFilterSel = document.getElementById('profile-catch-species-filter');
@@ -11997,7 +12041,39 @@ async function renderHomeWeather(){
   }catch(e){ console.error('home weather failed', e); el.style.display = 'none'; }
 }
 
-// A quick look at your own last 7 days, above the mates feed
+// A quick look at your own last 7 days, above the mates feed. Each number
+// opens its list; tapping a row jumps to that session in Insights or that
+// catch on your profile.
+let homeWeek = null;
+let homeWeekOpen = null;
+
+function paintHomeWeek(){
+  const el = document.getElementById('home-week');
+  if(!el || !homeWeek) return;
+  const {fish, sess, biggest} = homeWeek;
+  const dayFmt = {weekday:'short', day:'numeric', month:'short'};
+  let list = '';
+  if(homeWeekOpen === 'sessions'){
+    list = sess.map(s=>{
+      const n = fish.filter(c=>c.session_id === s.id).length;
+      return `<button type="button" class="home-week-row" data-week-session="${escapeHtml(s.id)}"><span>${escapeHtml(s.venue_name || 'Session')}<small>${escapeHtml(new Date(s.started_at).toLocaleDateString(dateLocale(), dayFmt))}</small></span><span class="hw-side">${n} fish ›</span></button>`;
+    }).join('');
+  }else if(homeWeekOpen === 'fish'){
+    list = fish.map(c=>{
+      const s = sess.find(x=>x.id === c.session_id);
+      return `<button type="button" class="home-week-row" data-week-fish="${escapeHtml(c.id)}"><span>${escapeHtml(c.fish_type || 'Fish')}<small>${escapeHtml(new Date(c.time).toLocaleDateString(dateLocale(), dayFmt))}${s && s.venue_name ? ' · ' + escapeHtml(s.venue_name) : ''}</small></span><span class="hw-side">${formatWeight(c.weight)} ›</span></button>`;
+    }).join('');
+  }
+  const tile = (key, big, label, disabled)=>
+    `<button type="button" class="home-stat home-stat-btn${homeWeekOpen === key ? ' open' : ''}" data-week="${key}" ${disabled ? 'disabled' : ''} aria-expanded="${homeWeekOpen === key ? 'true' : 'false'}"><b>${big}</b><span>${label}</span></button>`;
+  el.innerHTML = `<p class="sub-heading">Your last 7 days</p>
+    <div class="home-week-stats">
+      ${tile('sessions', sess.length, sess.length === 1 ? 'session' : 'sessions', !sess.length)}
+      ${tile('fish', fish.length, 'fish', !fish.length)}
+      ${tile('biggest', biggest ? formatWeight(biggest.weight) : '-', 'biggest', !biggest)}
+    </div>${list ? '<div class="home-week-list">' + list + '</div>' : ''}`;
+}
+
 async function renderHomeWeek(){
   const el = document.getElementById('home-week');
   if(!el) return;
@@ -12006,21 +12082,40 @@ async function renderHomeWeek(){
   try{
     const since = encodeURIComponent(new Date(Date.now() - 7*24*60*60*1000).toISOString());
     const [fish, sess] = await Promise.all([
-      sbGet('catches?select=weight&fisherman_id=eq.'+myId+'&caught=eq.true&time=gte.'+since),
-      sbGet('sessions?select=id&fisherman_id=eq.'+myId+'&started_at=gte.'+since)
+      sbGet('catches?select=id,weight,fish_type,time,session_id&fisherman_id=eq.'+myId+'&caught=eq.true&time=gte.'+since+'&order=time.desc'),
+      sbGet('sessions?select=id,venue_name,started_at&fisherman_id=eq.'+myId+'&started_at=gte.'+since+'&order=started_at.desc')
     ]);
-    const biggest = fish.reduce((mx, c)=> Math.max(mx, Number(c.weight) || 0), 0);
+    const biggest = fish.reduce((best, c)=> (Number(c.weight) || 0) > (best ? Number(best.weight) || 0 : 0) ? c : best, null);
     el.style.display = 'block';
     if(!fish.length && !sess.length){
+      homeWeek = null;
       el.innerHTML = '<p class="sub-heading">Your last 7 days</p><div class="home-stat" style="text-align:left;padding:10px 12px;"><span>No sessions yet. Start one and your numbers show up here.</span></div>';
       return;
     }
-    el.innerHTML = `<p class="sub-heading">Your last 7 days</p>
-      <div class="home-week-stats">
-        <div class="home-stat"><b>${sess.length}</b><span>${sess.length === 1 ? 'session' : 'sessions'}</span></div>
-        <div class="home-stat"><b>${fish.length}</b><span>fish</span></div>
-        <div class="home-stat"><b>${biggest > 0 ? formatWeight(biggest) : '-'}</b><span>biggest</span></div>
-      </div>`;
+    homeWeek = {fish, sess, biggest, myId};
+    if(homeWeekOpen === 'sessions' && !sess.length) homeWeekOpen = null;
+    if(homeWeekOpen === 'fish' && !fish.length) homeWeekOpen = null;
+    paintHomeWeek();
+    if(!el.dataset.weekBound){
+      el.dataset.weekBound = '1';
+      el.addEventListener('click', e=>{
+        const tileBtn = e.target.closest('[data-week]');
+        const sessBtn = e.target.closest('[data-week-session]');
+        const fishBtn = e.target.closest('[data-week-fish]');
+        if(!homeWeek) return;
+        if(tileBtn){
+          const key = tileBtn.dataset.week;
+          if(key === 'biggest'){ if(homeWeek.biggest) openProfile(homeWeek.myId, homeWeek.biggest.id); return; }
+          homeWeekOpen = homeWeekOpen === key ? null : key;
+          paintHomeWeek();
+        }else if(sessBtn){
+          pendingInsightsSession = sessBtn.dataset.weekSession;
+          goToTab('insights');
+        }else if(fishBtn){
+          openProfile(homeWeek.myId, fishBtn.dataset.weekFish);
+        }
+      });
+    }
   }catch(e){ console.error('home week failed', e); el.style.display = 'none'; }
 }
 
