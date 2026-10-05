@@ -1930,7 +1930,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">4. Log your catches</div>
-      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time, and the weather and moon phase at the time, are all recorded automatically. The timer resets afterwards, but the rig, distance and note stay on the rod after a fish (a blank clears the distance and note too), so you only need to pick new baits before the next cast. In a competition you can also enter the weight of your net, and the organiser may need a fish photo and a scale photo with every catch.</div>
+      <div class="pc-line muted">Got a run? Tap "Caught a fish", add the details and a photo. Your soak time, and the weather and moon phase at the time, are all recorded automatically. The timer resets afterwards, but the rig and note stay on the rod after a fish, so you only need to pick new baits before the next cast. The cast distance only stays if the rig uses a bait boat, since a bait boat puts the feed on the same spot every time while a cast never lands exactly the same. A blank clears the distance and the note. In a competition you can also enter the weight of your net, and the organiser may need a fish photo and a scale photo with every catch.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">5. See what's working</div>
@@ -1982,7 +1982,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Running a timer</div>
-      <div class="pc-line muted">Start it when a rod goes out. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. It resets automatically once you log a catch or a blank, ready for the next run — after a fish your rig, distance and note stay on the rod and only the baits are cleared (after a blank the distance and note clear too), and only the baits are cleared. Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
+      <div class="pc-line muted">Start it when a rod goes out. It's based on real timestamps, not something that has to stay running — close the app and reopen it later, and the time shown is still accurate. It resets automatically once you log a catch or a blank, ready for the next run — after a fish your rig and note stay on the rod and only the baits are cleared (the distance stays only on a bait boat rig, and a blank clears the distance and note too). Starting a timer while offline is saved locally and syncs automatically once you're back online.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Recast</div>
@@ -2841,6 +2841,11 @@ function rigOptionLabel(r){
 
 // Bom and hook lines on a saved catch: show only what the rig has (or anything
 // actually recorded). Unknown rig (deleted, or someone else's) -> recorded values only.
+function rigUsesBaitBoat(notes){
+  const rigDef = notes && notes.rig ? findRigDef(notes.rig, notes.rigId) : null;
+  return !!(rigDef && rigDef.feedMethods.includes('Bait boat'));
+}
+
 function catchRigLines(c){
   const rigDef = c.rig ? findRigDef(c.rig, c.rigId) : null;
   const lines = [];
@@ -8020,9 +8025,10 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
     hookCount: currentPerson.notes[rod].hookCount,
     rodItemId: currentPerson.notes[rod].rodItemId,
     reelItemId: currentPerson.notes[rod].reelItemId,
-    // After a fish the rod's usually still in the same spot, so distance and
-    // note carry over; after a blank you'll normally move, so they clear
-    castDistance: entry.caught ? currentPerson.notes[rod].castDistance : '',
+    // A bait boat drops the feed on the same spot every time, so the distance
+    // only carries over for a fish on a bait boat rig; a cast lands a bit
+    // differently each time. A blank clears the note too (you'll normally move)
+    castDistance: (entry.caught && rigUsesBaitBoat(currentPerson.notes[rod])) ? currentPerson.notes[rod].castDistance : '',
     rodNote: entry.caught ? currentPerson.notes[rod].rodNote : ''
   };
   for(let n=1; n<=MAX_HOOKS; n++){ clearedNotes['hook'+n] = ''; }
