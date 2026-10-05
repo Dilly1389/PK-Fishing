@@ -2115,7 +2115,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">When and where</div>
-      <div class="pc-line muted">Time of day, moon phase, cast distance and your venues. Past catches logged without a time are left out of Time of day, and moon phase only covers catches logged since it was added. Each venue shows the rig that caught most there and any local knowledge you've saved, and venues with coordinates appear on a private map. Venues are only ever visible to you.</div>
+      <div class="pc-line muted">Time of day, moon phase, cast distance, your venues and your pegs. Past catches logged without a time are left out of Time of day, and moon phase only covers catches logged since it was added. Each venue shows the rig that caught most there and any local knowledge you've saved, and venues with coordinates appear on a private map. Venues are only ever visible to you. If you note a peg or stand number on your sessions, Pegs and stands shows, for each venue, how many fish each peg gave per session, so you can pick where to fish next time. A peg you've only fished once doesn't tell you much yet.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Sessions</div>
@@ -8501,6 +8501,48 @@ function buildInsightsHtml(catches, venues, sessions){
     });
     where += '</ul></div>';
   }
+  // Pegs / stands at each venue: which spot has actually produced, for
+  // planning the next trip. Judged per session, since the peg belongs to the
+  // session (blank sessions count as 0 fish, which is the point).
+  const pegVenues = {};
+  (sessions||[]).forEach(s=>{
+    const pegKey = normVenueName(s.peg).replace(/^peg/, '');
+    if(!pegKey) return;
+    const vKey = s.venue_id || ('n:' + normVenueName(s.venue_name));
+    const v = pegVenues[vKey] || (pegVenues[vKey] = {label: (s.venue_id && venueNames[s.venue_id]) || s.venue_name || 'Unknown venue', pegs:{}});
+    const p = v.pegs[pegKey] || (v.pegs[pegKey] = {label: String(s.peg).trim(), sessions:0, fish:0, weight:0, biggest:0});
+    const sc = caught.filter(c=>c.sessionId === s.id);
+    p.sessions++;
+    p.fish += sc.length;
+    sc.forEach(c=>{ p.weight += (c.weight||0); if((c.weight||0) > p.biggest) p.biggest = c.weight||0; });
+  });
+  const pegVenueList = Object.keys(pegVenues).map(k=>{
+    const v = pegVenues[k];
+    const pegs = Object.keys(v.pegs).map(pk=>v.pegs[pk]);
+    pegs.forEach(p=>{ p.perSession = p.fish / p.sessions; });
+    pegs.sort((a,b)=> b.perSession - a.perSession || b.fish - a.fish || b.sessions - a.sessions);
+    return {label: v.label, pegs, sessions: pegs.reduce((n,p)=>n+p.sessions,0)};
+  }).sort((a,b)=> b.sessions - a.sessions);
+  if(pegVenueList.length){
+    where += `<div class="ins-sec"><p class="sub-heading">Pegs and stands</p>
+      <p class="ins-sub" style="margin:-4px 0 8px;">Fish per session on each peg, for planning your next trip. A peg you've only fished once doesn't tell you much yet.</p>`;
+    pegVenueList.forEach(v=>{
+      where += `<p class="ins-sub" style="margin:10px 0 4px;color:var(--ink);"><b>${escapeHtml(v.label)}</b></p><ul class="ins-list">`;
+      v.pegs.forEach((p, i)=>{
+        const best = i === 0 && v.pegs.length > 1 && p.perSession > 0;
+        where += `<li class="ins-row"><div class="ins-row-top">
+          <div class="ins-main">
+            <b>${/^(peg|stand)\b/i.test(p.label) ? '' : 'Peg '}${escapeHtml(p.label)}</b>${best ? ' <span class="ins-tag">Best so far</span>' : ''}
+            <div class="ins-sub">${p.sessions} session${p.sessions===1?'':'s'} · ${p.fish} fish${p.biggest ? ' · biggest ' + formatWeight(p.biggest) : ''}</div>
+          </div>
+          <div class="ins-side"><b>${(Math.round(p.perSession*10)/10)} per session</b>${p.weight ? `<div class="ins-sub">${formatWeight(p.weight)} total</div>` : ''}</div>
+        </div></li>`;
+      });
+      where += '</ul>';
+    });
+    where += '</div>';
+  }
+
   // A private map of your own venues — only waters with real coordinates
   // (some are name-only if GPS was denied or unavailable)
   if((venues||[]).some(v=> v.latitude != null && v.longitude != null)){
@@ -8560,7 +8602,7 @@ function buildInsightsHtml(catches, venues, sessions){
 
   return group('overview', 'Overview', 'Your totals, species and time in the water', overview)
     + group('works', 'What works', 'Rigs, hooks, baits and feed', works)
-    + group('where', 'When and where', 'Time of day, moon, distance and venues', where)
+    + group('where', 'When and where', 'Time of day, moon, distance, venues and pegs', where)
     + group('sessions', 'Sessions', 'How each trip went', sessionsHtml);
 }
 
