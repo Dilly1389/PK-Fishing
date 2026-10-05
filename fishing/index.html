@@ -7465,7 +7465,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
   // tap during that window creates a whole duplicate session
   if(btn.disabled) return;
   const st = document.getElementById('session-status');
-  const venueName = document.getElementById('session-venue').value.trim();
+  let venueName = document.getElementById('session-venue').value.trim();
   const competitionId = document.getElementById('session-competition').value || null;
   const rods = normalizeRodsCount(document.getElementById('session-rods').value);
   const peg = document.getElementById('session-peg').value.trim();
@@ -7478,11 +7478,20 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
     // Match this venue to a saved one, or create it (with coordinates if available)
     let venueId = null;
     const venues = await loadMyVenues();
-    const existing = venues.find(v=>v.name.toLowerCase() === venueName.toLowerCase());
+    let existing = findVenueByName(venues, venueName);
+    let coords = null;
+    if(!existing){
+      // Different spelling, same water? Check the saved venues near here
+      coords = await capturePosition();
+      const near = findVenueNear(venues, coords);
+      if(near && confirm('You already have a venue saved here called "' + near.name + '". Use that instead of creating "' + venueName + '"?')){
+        existing = near;
+      }
+    }
     if(existing){
       venueId = existing.id;
+      venueName = existing.name;
     }else{
-      const coords = await capturePosition();
       venueId = uid();
       const venueRecord = {
         id: venueId, owner_user_id: session.user.id, name: venueName,
@@ -7665,7 +7674,7 @@ async function searchPlaces(query){
   try{
     const url = 'https://nominatim.openstreetmap.org/search'
       + '?q=' + encodeURIComponent(query.trim())
-      + '&format=json&limit=6&countrycodes=za&addressdetails=1';
+      + '&format=json&limit=6&countrycodes=za&addressdetails=1&accept-language=en';
     const res = await fetch(url, {headers: {'Accept': 'application/json'}});
     if(!res.ok) return [];
     const data = await res.json();
@@ -7685,9 +7694,15 @@ async function refreshVenueSuggestions(){
   if(!isSignedIn()) return;
   try{
     const venues = await loadMyVenues();
+    const seenNames = new Set();
     knownVenueNames = venues
       .map(v=>v.name)
-      .filter(Boolean)
+      .filter(n=>{
+        const k = normVenueName(n);
+        if(!k || seenNames.has(k)) return false;
+        seenNames.add(k);
+        return true;
+      })
       .sort((a,b)=> a.localeCompare(b));
   }catch(e){ console.error('refreshVenueSuggestions failed', e); }
 }
@@ -7771,6 +7786,28 @@ async function loadMyVenues(){
   return serverVenues.concat(pendingVenues.filter(v=>!seen.has(v.id)));
 }
 
+// Spelling and spacing shouldn't create a second venue: "Klipdrift dam",
+// "Klipdriftdam" and "KLIPDRIFT DAM" all count as the same name.
+function normVenueName(n){
+  return String(n || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+}
+
+function findVenueByName(venues, name){
+  const key = normVenueName(name);
+  return key ? (venues.find(v=> normVenueName(v.name) === key) || null) : null;
+}
+
+function findVenueNear(venues, coords){
+  if(!coords) return null;
+  let best = null, bestD = Infinity;
+  venues.forEach(v=>{
+    if(v.latitude == null || v.longitude == null) return;
+    const d = distanceMeters(coords, {lat: v.latitude, lng: v.longitude});
+    if(d <= VENUE_MATCH_RADIUS && d < bestD){ best = v; bestD = d; }
+  });
+  return best;
+}
+
 async function findOrPromptVenue(coords){
   if(!coords || !isSignedIn()) return null;
   const venues = await loadMyVenues();
@@ -7782,6 +7819,8 @@ async function findOrPromptVenue(coords){
   // New water — ask once what to call it, then reuse automatically from now on
   const name = prompt('New water detected. What do you call this venue? (leave blank to skip)');
   if(!name || !name.trim()) return null;
+  const sameName = findVenueByName(venues, name);
+  if(sameName) return sameName.id;
   const id = uid();
   try{
     await sbPost('venues', {
@@ -8878,14 +8917,13 @@ async function openInsights(){
 
 let venueMapInstance = null;
 
-// Street, satellite, satellite with place names, and terrain. The pick is
+// Street, satellite (with place names), and terrain. The pick is
 // remembered, and both the venue map and the pin-drop map use it.
 function addMapLayers(map){
   const osmAttr = '&copy; OpenStreetMap contributors';
   const esriAttr = 'Tiles &copy; Esri, Maxar, Earthstar Geographics';
   const satUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
   const street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: osmAttr, maxZoom: 19});
-  const satellite = L.tileLayer(satUrl, {attribution: esriAttr, maxZoom: 19});
   const hybrid = L.layerGroup([
     L.tileLayer(satUrl, {attribution: esriAttr, maxZoom: 19}),
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {maxZoom: 19})
@@ -8893,9 +8931,10 @@ function addMapLayers(map){
   const terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
     attribution: osmAttr + ', SRTM | Style &copy; OpenTopoMap (CC-BY-SA)', maxNativeZoom: 17, maxZoom: 19
   });
-  const bases = {'Street': street, 'Satellite': satellite, 'Satellite + names': hybrid, 'Terrain': terrain};
+  const bases = {'Street': street, 'Satellite': hybrid, 'Terrain': terrain};
   let saved = '';
   try{ saved = localStorage.getItem('pk_fishing_map_view') || ''; }catch(e){}
+  if(saved === 'Satellite + names') saved = 'Satellite';
   (bases[saved] || street).addTo(map);
   L.control.layers(bases, null, {position: 'topright'}).addTo(map);
   map.on('baselayerchange', (e)=>{
@@ -9478,7 +9517,7 @@ document.getElementById('session-edit-lookup').addEventListener('click', async (
 document.getElementById('session-edit-save').addEventListener('click', async ()=>{
   const st = document.getElementById('session-edit-status');
   if(!editingSession) return;
-  const newName = document.getElementById('session-edit-venue').value.trim();
+  let newName = document.getElementById('session-edit-venue').value.trim();
   if(!newName){ st.textContent = 'Enter a venue name.'; return; }
   st.textContent = 'Saving...';
   try{
@@ -9486,9 +9525,12 @@ document.getElementById('session-edit-save').addEventListener('click', async ()=
     // Reuse a matching venue if one exists, otherwise create it — same
     // case-insensitive matching as everywhere else, to avoid duplicates
     let venueId = editingSession.venue_id;
-    const existing = venues.find(v=> v.name.toLowerCase() === newName.toLowerCase());
+    const existing = findVenueByName(venues, newName);
     if(existing){
       venueId = existing.id;
+      // Typing a different spelling of another saved venue adopts its name;
+      // correcting the spelling of this session's own venue keeps what you typed
+      if(existing.id !== editingSession.venue_id) newName = existing.name;
       if(editingSessionCoords){
         await sbPatch('venues', 'id=eq.'+existing.id, {
           latitude: editingSessionCoords.lat, longitude: editingSessionCoords.lng
@@ -9590,7 +9632,7 @@ document.getElementById('past-catch-save-btn').addEventListener('click', async (
     let venueId = null;
     if(venueName){
       const venues = await loadMyVenues();
-      const existing = venues.find(v=>v.name.toLowerCase() === venueName.toLowerCase());
+      const existing = findVenueByName(venues, venueName);
       if(existing){
         venueId = existing.id;
         // If this venue had no coordinates and we've just looked some up,
