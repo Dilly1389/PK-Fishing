@@ -2115,7 +2115,11 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">When and where</div>
-      <div class="pc-line muted">Time of day, moon phase, cast distance, your venues and your pegs. Past catches logged without a time are left out of Time of day, and moon phase only covers catches logged since it was added. Each venue shows the rig that caught most there and any local knowledge you've saved, and venues with coordinates appear on a private map. Venues are only ever visible to you. If you note a peg or stand number on your sessions, Pegs and stands shows, for each venue, how many fish each peg gave per session, so you can pick where to fish next time. A peg you've only fished once doesn't tell you much yet.</div>
+      <div class="pc-line muted">Time of day, moon phase, cast distance, which of your rods did the work, the spots you put them (from the note on each rod), your venues and your pegs. Past catches logged without a time are left out of Time of day, and moon phase only covers catches logged since it was added. Each venue shows the rig that caught most there and any local knowledge you've saved, and venues with coordinates appear on a private map. Venues are only ever visible to you. If you note a peg or stand number on your sessions, Pegs and stands shows, for each venue, how many fish each peg gave per session, so you can pick where to fish next time. A peg you've only fished once doesn't tell you much yet.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Over time</div>
+      <div class="pc-line muted">Your catches by season (summer, autumn, winter and spring, as they fall in South Africa) and month by month, newest month first, each showing fish from casts so you can see whether your catch rate is climbing. A season or month with no logging doesn't appear. Seasons mix every year together, so a few years of logging makes them far more reliable.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Sessions</div>
@@ -8493,6 +8497,29 @@ function buildInsightsHtml(catches, venues, sessions){
     return [d < 20 ? distBands[0] : d < 40 ? distBands[1] : d < 60 ? distBands[2] : d < 80 ? distBands[3] : distBands[4]];
   }, {casts:true, order:distBands}));
 
+  // Which rod did the work. Rods can be renamed, so each slot is labelled with
+  // the name it was last given.
+  const rodNames = {};
+  const rodLastSeen = {};
+  catches.forEach(c=>{
+    if(!c.rod) return;
+    if(c.rodIdentifier && (rodLastSeen[c.rod] == null || c.time > rodLastSeen[c.rod])){
+      rodNames[c.rod] = c.rodIdentifier; rodLastSeen[c.rod] = c.time;
+    }
+  });
+  const rodLabels = {};
+  catches.forEach(c=>{ if(c.rod) rodLabels[c.rod] = rodNames[c.rod] || RID_LABEL[c.rod] || 'Rod'; });
+  const rodRows = groupStats(c=> c.rod ? [c.rod] : [], {casts:true, labels:rodLabels});
+  if(rodRows.length > 1) where += statTable('Rods', rodRows);
+
+  // Where the rod was put, from the free-text spot note on Timers. Written by
+  // hand, so "Margin" and "margin " count as the same spot.
+  const spotKey = c=> String(c.rodNote || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const spotLabels = {};
+  catches.forEach(c=>{ const k = spotKey(c); if(k && !spotLabels[k]) spotLabels[k] = String(c.rodNote).trim().replace(/\s+/g, ' '); });
+  where += statTable('Rod spots', groupStats(c=>{ const k = spotKey(c); return k ? [k] : []; }, {casts:true, labels:spotLabels}),
+    'Taken from the note you type on each rod, like "margin" or "near the reeds".');
+
   // Venues — private to you, never shown anywhere else in the app
   const venueNames = {};
   (venues||[]).forEach(v=>{ venueNames[v.id] = v.name; });
@@ -8573,6 +8600,24 @@ function buildInsightsHtml(catches, venues, sessions){
     where += `<div id="venue-map" style="height:260px;border-radius:10px;overflow:hidden;margin-top:14px;border:1px solid var(--line);"></div>`;
   }
 
+  // ===== Over time =====
+  // Seasons are the southern hemisphere's, and every catch has a date even
+  // when its time of day is unknown
+  let trends = '';
+  const seasonOf = m => (m === 11 || m <= 1) ? 'Summer (Dec–Feb)' : m <= 4 ? 'Autumn (Mar–May)' : m <= 7 ? 'Winter (Jun–Aug)' : 'Spring (Sep–Nov)';
+  const seasonOrder = ['Summer (Dec–Feb)', 'Autumn (Mar–May)', 'Winter (Jun–Aug)', 'Spring (Sep–Nov)'];
+  const seasonRows = groupStats(c=> [seasonOf(new Date(c.time).getMonth())], {casts:true, order:seasonOrder});
+  if(seasonRows.length > 1) trends += statTable('Seasons', seasonRows, 'Every catch counts, whatever the year.');
+  const monthKey = c=>{ const d = new Date(c.time); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0'); };
+  const monthLabels = {};
+  catches.forEach(c=>{
+    const k = monthKey(c);
+    if(!monthLabels[k]) monthLabels[k] = new Date(c.time).toLocaleDateString(dateLocale(), {month:'short', year:'numeric'});
+  });
+  const monthOrder = Object.keys(monthLabels).sort().reverse();
+  const monthRows = groupStats(c=>[monthKey(c)], {casts:true, labels:monthLabels, order:monthOrder});
+  if(monthRows.length > 1) trends += statTable('Month by month', monthRows, 'Newest first, so you can see whether your catch rate is climbing.', 12);
+
   // ===== Sessions =====
   let sessionsHtml = '';
   if(sessions && sessions.length){
@@ -8626,7 +8671,8 @@ function buildInsightsHtml(catches, venues, sessions){
 
   return group('overview', 'Overview', 'Your totals, species and time in the water', overview)
     + group('works', 'What works', 'Rigs, hooks, baits and feed', works)
-    + group('where', 'When and where', 'Time of day, moon, distance, venues and pegs', where)
+    + group('where', 'When and where', 'Time of day, moon, distance, rods, spots, venues and pegs', where)
+    + group('trends', 'Over time', 'Seasons and month by month', trends)
     + group('sessions', 'Sessions', 'How each trip went', sessionsHtml);
 }
 
