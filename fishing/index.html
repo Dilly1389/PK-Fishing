@@ -452,6 +452,13 @@
   }
   .catch-toggle button.sel-yes.active{background:var(--catch-green);color:#fff;border-color:var(--catch-green);}
   .catch-toggle button.sel-no.active{background:var(--muted);color:var(--card-bg);border-color:var(--muted);}
+  .metric-toggle{display:flex;flex-wrap:wrap;gap:8px;}
+  .metric-toggle button{
+    flex:1 1 0;min-width:96px;padding:10px 8px;border-radius:8px;border:1.5px solid var(--line);
+    background:var(--card-bg);font-weight:700;font-family:inherit;cursor:pointer;
+    color:var(--muted);font-size:13.5px;min-height:44px;
+  }
+  .metric-toggle button.active{background:var(--dam);color:#fff;border-color:var(--dam);}
 
   .catch-log-item{
     display:flex;justify-content:space-between;align-items:center;padding:9px 0;
@@ -1315,19 +1322,18 @@
             <input type="time" id="competition-end-time" value="23:59" autocomplete="pk-x7" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
           </div>
         </div>
-        <div class="row2">
-          <div class="field">
-            <label>Ranked by</label>
-            <select id="competition-metric">
-              <option value="total_weight">Total weight (biggest bag)</option>
-              <option value="catch_count">Most catches</option>
-              <option value="biggest_fish">Biggest single fish</option>
-            </select>
+        <div class="field">
+          <label>Ranked by</label>
+          <input type="hidden" id="competition-metric" value="total_weight">
+          <div class="metric-toggle" id="competition-metric-toggle" role="group" aria-label="Ranked by">
+            <button type="button" class="active" data-metric="total_weight" aria-pressed="true">Biggest bag</button>
+            <button type="button" data-metric="catch_count" aria-pressed="false">Most catches</button>
+            <button type="button" data-metric="biggest_fish" aria-pressed="false">Biggest fish</button>
           </div>
-          <div class="field">
-            <label>Species (optional)</label>
-            <select id="competition-fishtype"></select>
-          </div>
+        </div>
+        <div class="field">
+          <label>Species (optional)</label>
+          <select id="competition-fishtype"></select>
         </div>
         <p class="sub-heading">Add anglers</p>
         <div class="field">
@@ -9991,15 +9997,26 @@ function openBadgeDetailFor(def, count, whenText, personId, isComp){
   // Competition wins live in their own table and show which competition
   // each one was won at, not species/weight
   if(isComp){
-    sbGet('competition_badges?fisherman_id=eq.'+personId+'&badge_key=eq.'+def.key+'&select=awarded_at,competition_name&order=awarded_at.desc')
-      .then(rows=>{
+    sbGet('competition_badges?fisherman_id=eq.'+personId+'&badge_key=eq.'+def.key+'&select=awarded_at,competition_name,competition_id&order=awarded_at.desc')
+      .then(async rows=>{
         if(!rows.length) return;
+        // The species (if the competition was for one) lives on the competition itself
+        const speciesByComp = {};
+        const compIds = [...new Set(rows.map(r=> r.competition_id).filter(Boolean))];
+        if(compIds.length){
+          try{
+            const comps = await sbGet('competitions?select=id,fish_type_filter&id=in.('+compIds.map(encodeURIComponent).join(',')+')');
+            comps.forEach(c=>{ if(c.fish_type_filter) speciesByComp[c.id] = c.fish_type_filter; });
+          }catch(e){ console.error('competition species lookup failed', e); }
+        }
         histEl.innerHTML = '<p class="sub-heading" style="margin-bottom:8px;">Every time</p>' +
           rows.map(r=>{
             const when = new Date(r.awarded_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+            const species = speciesByComp[r.competition_id];
             return '<div class="pc-line" style="padding:5px 0;border-bottom:1px solid var(--line);">' +
               '<span class="muted">' + when + '</span>' +
-              (r.competition_name ? ' \u00b7 ' + escapeHtml(r.competition_name) : '') + '</div>';
+              (r.competition_name ? ': ' + escapeHtml(r.competition_name) : '') +
+              (species ? ' (' + escapeHtml(species) + ')' : '') + '</div>';
           }).join('');
       })
       .catch(e=> console.error('competition badge history load failed', e));
@@ -13590,6 +13607,16 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
     console.error(e);
     st.textContent = 'Could not create: ' + (e.message || 'unknown error');
   }
+});
+document.querySelectorAll('#competition-metric-toggle button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.getElementById('competition-metric').value = btn.dataset.metric;
+    document.querySelectorAll('#competition-metric-toggle button').forEach(b=>{
+      const on = b === btn;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  });
 });
 document.getElementById('competition-angler-search').addEventListener('input', renderCompetitionAnglerSearch);
 document.getElementById('competition-creator-fishing').addEventListener('change', updateCompetitionAttachOption);
