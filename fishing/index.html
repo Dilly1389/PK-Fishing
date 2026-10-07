@@ -2111,7 +2111,7 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">What works</div>
-      <div class="pc-line muted">Your rigs, your hooks (by the names you gave them), the baits on the hook that actually caught, rig and bait pairings, your feed methods, and what went into the bom, PVA bag, PVA mesh / stick, stringer or bait boat. Two rigs with the same name stay separate rows, and catches logged before rigs had IDs are grouped as "older catches".</div>
+      <div class="pc-line muted">Your rigs, your hooks (by the names you gave them), the baits on the hook that actually caught, rig and bait pairings (both show fish from casts, so a bait that has been fished a lot without a fish shows up too), your feed methods, and what went into the bom, PVA bag, PVA mesh / stick, stringer or bait boat. Two rigs with the same name stay separate rows, and catches logged before rigs had IDs are grouped as "older catches".</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">When and where</div>
@@ -8265,8 +8265,9 @@ function buildInsightsHtml(catches, venues, sessions){
       });
     });
     if(opts.casts){
+      const castKeys = opts.castKeyFn || keyFn;
       catches.forEach(c=>{
-        new Set(keyFn(c).filter(Boolean)).forEach(k=>{ ensure(k).total++; });
+        new Set(castKeys(c).filter(Boolean)).forEach(k=>{ ensure(k).total++; });
       });
     }
     const rows = Object.keys(groups).map(k=>{
@@ -8450,12 +8451,24 @@ function buildInsightsHtml(catches, venues, sessions){
     return [rk ? `${rigLabels[rk]} — ${label}` : label];
   }));
 
-  works += statTable('Baits on the hook that caught', groupStats(catchingBaits));
+  // A fish is credited to the bait on the hook that caught it, but a cast
+  // counts for every bait that was out there on any hook, blank casts included
+  const baitsOnAnyHook = c=>{
+    const out = [];
+    for(let n=1; n<=MAX_HOOKS; n++) out.push(...contentItems(c['hook'+n]));
+    return [...new Set(out)];
+  };
+  works += statTable('Baits on the hook that caught', groupStats(catchingBaits, {casts:true, castKeyFn:baitsOnAnyHook}),
+    'Casts count every bait that was on any hook, so a bait on a spare hook shares the casts but not the fish.');
   works += statTable('Rig + bait pairings', groupStats(c=>{
     const rk = rigKey(c);
     if(!rk) return [];
     return catchingBaits(c).map(b=> rigLabels[rk] + ' + ' + b);
-  }));
+  }, {casts:true, castKeyFn:c=>{
+    const rk = rigKey(c);
+    if(!rk) return [];
+    return baitsOnAnyHook(c).map(b=> rigLabels[rk] + ' + ' + b);
+  }}));
 
   // The delivery method is fixed by the rig's own design, so it's read off
   // the rig that was fished rather than stored on each catch
@@ -10327,7 +10340,12 @@ async function openProfile(personId, focusCatchId){
       <div><b>${biggestCatch ? biggestCatch.weight+'kg' : '—'}</b>biggest</div>
     </div>`;
   const trophySpecies = getTrophySpeciesFor(p);
-  const speciesStats = trophySpecies.map(species=>{
+  const otherCaughtSpecies = {};
+  caughtOnly.forEach(c=>{
+    if(c.type && !trophySpecies.includes(c.type)) otherCaughtSpecies[c.type] = (otherCaughtSpecies[c.type] || 0) + 1;
+  });
+  const recordSpecies = trophySpecies.concat(Object.keys(otherCaughtSpecies).sort((a,b)=> otherCaughtSpecies[b] - otherCaughtSpecies[a]));
+  const speciesStats = recordSpecies.map(species=>{
     const matches = caughtOnly.filter(c=>c.type===species);
     const pb = matches.reduce((best,c)=> (!best || (c.weight||0) > (best.weight||0)) ? c : best, null);
     const speciesTotal = matches.reduce((sum,c)=>sum+(c.weight||0), 0);
