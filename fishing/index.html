@@ -3786,8 +3786,7 @@ document.getElementById('edit-catch-save').addEventListener('click', async ()=>{
     c.type = editCaught ? typeValue : '';
     c.weight = editCaught ? (parseFloat(document.getElementById('edit-catch-weight').value) || 0) : 0;
   }
-  c.photos = editCaught ? editPhotos.slice() : [];
-  c.photoLabels = editCaught ? editPhotoLabels.slice() : [];
+  { const o = orderPhotosFishFirst(editPhotos, editPhotoLabels); c.photos = editCaught ? o.photos : []; c.photoLabels = editCaught ? o.photoLabels : []; }
 
   const st = document.getElementById('edit-catch-status');
   st.textContent = 'Saving...';
@@ -5292,11 +5291,12 @@ async function goToNotificationTarget(n){
           ? (typeof rows[0].photos === 'string' ? JSON.parse(rows[0].photos) : rows[0].photos)
           : (rows[0].photo ? [rows[0].photo] : []);
         if(photos.length){
-          photoGalleryCache[n.target_id] = photos;
-          photoLabelsCache[n.target_id] = rows[0].photo_labels
+          const o = orderPhotosFishFirst(photos, rows[0].photo_labels
             ? (typeof rows[0].photo_labels === 'string' ? JSON.parse(rows[0].photo_labels) : rows[0].photo_labels)
-            : [];
-          openPhotoModal(photos[0], n.target_id, 0);
+            : []);
+          photoGalleryCache[n.target_id] = o.photos;
+          photoLabelsCache[n.target_id] = o.photoLabels;
+          openPhotoModal(o.photos[0], n.target_id, 0);
         }
       }
     }catch(e){ console.error(e); }
@@ -6511,6 +6511,7 @@ function mapCatchRow(c){
     netWeight: c.net_weight ?? null,
     verificationStatus: c.verification_status || 'pending'
   };
+  { const o = orderPhotosFishFirst(entry.photos, entry.photoLabels); entry.photos = o.photos; entry.photoLabels = entry.photoLabels.length ? o.photoLabels : []; }
   if(c.weather_temp != null || c.weather_wind_speed != null || c.weather_pressure != null || c.weather_precipitation != null || c.weather_pressure_change != null){
     entry.weather = {
       temp: c.weather_temp ?? null, windSpeed: c.weather_wind_speed ?? null, windDir: c.weather_wind_dir ?? null,
@@ -8094,8 +8095,8 @@ function buildCatchEntry(rod){
     castDistance: notes.castDistance ? parseFloat(notes.castDistance) : null,
     rodNote: notes.rodNote || '',
     netWeight,
-    photos: caught ? (pendingPhotos[rod] || []).slice() : [],
-    photoLabels: caught ? (pendingPhotoLabels[rod] || []).slice() : []
+    photos: caught ? orderPhotosFishFirst(pendingPhotos[rod], pendingPhotoLabels[rod]).photos : [],
+    photoLabels: caught ? orderPhotosFishFirst(pendingPhotos[rod], pendingPhotoLabels[rod]).photoLabels : []
   };
   for(let n=1; n<=MAX_HOOKS; n++){
     entry['hook'+n] = notes['hook'+n] || '';
@@ -8292,6 +8293,18 @@ function renderProfilePhotoGrid(entries, filterType){
   grid.innerHTML = filtered.map(e=>
     `<img class="pc-photo" src="${e.src}" data-catch-id="${e.catchId}" data-photo-index="${e.index}" alt="Catch photo" loading="lazy" decoding="async" style="width:80px;height:80px;object-fit:cover;margin-top:0;">`
   ).join('');
+}
+
+// Fish photos first, scale photos after, however they were uploaded. Photos with
+// no label (older catches) count as fish. Stable, so same-kind photos keep their order.
+function orderPhotosFishFirst(photos, labels){
+  photos = photos || []; labels = labels || [];
+  const idx = photos.map((p,i)=>i);
+  idx.sort((a,b)=>{
+    const sa = labels[a] === 'scale' ? 1 : 0, sb = labels[b] === 'scale' ? 1 : 0;
+    return sa - sb || a - b;
+  });
+  return { photos: idx.map(i=>photos[i]), photoLabels: idx.map(i=>labels[i] || '') };
 }
 
 // The photo that shows the fish itself: the first one not labelled as the scale
@@ -11724,8 +11737,12 @@ async function loadFeedItems(fishermanIds){
         weight: c.weight,
         time: new Date(c.time).getTime(),
         hasKnownTime: c.has_known_time !== false,
-        photos: c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
-        photoLabels: c.photo_labels ? (typeof c.photo_labels === 'string' ? JSON.parse(c.photo_labels) : c.photo_labels) : [],
+        ...(()=>{
+          const o = orderPhotosFishFirst(
+            c.photos ? (typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos) : (c.photo ? [c.photo] : []),
+            c.photo_labels ? (typeof c.photo_labels === 'string' ? JSON.parse(c.photo_labels) : c.photo_labels) : []);
+          return { photos: o.photos, photoLabels: o.photoLabels };
+        })(),
         likes: c.likes || 0
       };
     });
@@ -13839,7 +13856,9 @@ function toggleSpectatorAngler(row){
 function specPhotos(c){
   try{
     const p = typeof c.photos === 'string' ? JSON.parse(c.photos) : c.photos;
-    return Array.isArray(p) ? p.filter(u => typeof u === 'string' && /^https?:/.test(u)) : [];
+    if(!Array.isArray(p)) return [];
+    const l = c.photo_labels ? (typeof c.photo_labels === 'string' ? JSON.parse(c.photo_labels) : c.photo_labels) : [];
+    return orderPhotosFishFirst(p, l).photos.filter(u => typeof u === 'string' && /^https?:/.test(u));
   }catch(e){ return []; }
 }
 
@@ -13861,7 +13880,7 @@ async function renderSpectatorCatches(comp){
   const recentEl = document.getElementById('spec-recent'), bigEl = document.getElementById('spec-biggest');
   if(!recentEl || !bigEl) return;
   try{
-    let rows = await sbGet('catches?select=id,fisherman_id,fish_type,weight,time,has_known_time,verification_status,photos&caught=eq.true&competition_id=eq.' + comp.id + '&order=time.desc');
+    let rows = await sbGet('catches?select=id,fisherman_id,fish_type,weight,time,has_known_time,verification_status,photos,photo_labels&caught=eq.true&competition_id=eq.' + comp.id + '&order=time.desc');
     rows = rows.filter(c => c.verification_status !== 'rejected');
     if(comp.fish_type_filter) rows = rows.filter(c => c.fish_type === comp.fish_type_filter);
     specState.catches = rows;
