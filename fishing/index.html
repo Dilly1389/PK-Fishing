@@ -844,9 +844,16 @@
   #desk-pane #tackle-content > *{grid-column:2;min-width:0;}
   #desk-pane #tackle-content > #tackle-help-btn{grid-column:1 / -1;justify-self:start;}
   #desk-pane #tackle-content > #tackle-list-card{grid-column:1;grid-row:2 / span 8;}
-  #desk-pane #panel-schedule.active{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;align-items:start;max-width:1100px;}
-  #desk-pane #panel-schedule > *{min-width:0;}
-  #desk-pane #panel-schedule > div:first-child{grid-column:1 / -1;}
+  #desk-pane #panel-schedule.active{display:block;column-count:2;column-gap:20px;max-width:1100px;}
+  #desk-pane #panel-schedule > *{min-width:0;break-inside:avoid;}
+  #desk-pane #panel-schedule > div:first-child{column-span:all;}
+  body.desk-mode #tackle-list-body{display:flex !important;flex-wrap:wrap;gap:0 14px;}
+  body.desk-mode #tackle-list-body > .row2{display:contents;}
+  body.desk-mode #tackle-list-body .field{flex:1 1 180px;min-width:0;}
+  body.desk-mode #tackle-list-body > #tackle-list{flex:0 0 100%;}
+  body.desk-mode .tackle-cat-toggle > span:first-child{color:var(--ink) !important;}
+  .desk-user-btn{background:none;border:1px solid transparent;border-radius:999px;padding:6px 12px;font:inherit;color:var(--muted);cursor:pointer;}
+  .desk-user-btn:hover,.desk-user-btn:focus-visible{border-color:var(--line);background:var(--bg,#fafafa);color:var(--ink);}
   .desk-bookcase{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,3fr);gap:28px;align-items:start;max-width:1300px;}
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.48.0/dist/tabler-icons.min.css">
@@ -14090,7 +14097,7 @@ async function deskShow(section){
   const pane = document.getElementById('desk-pane');
   const myId = getMyFishermanId();
   const me = people.find(p=>p.id === myId);
-  document.getElementById('desk-user').innerHTML = me ? 'Signed in as <b>' + escapeHtml(me.name) + '</b>' : '';
+  document.getElementById('desk-user').innerHTML = me ? '<button type="button" class="desk-user-btn" aria-label="Open your profile">Signed in as <b>' + escapeHtml(me.name) + '</b></button>' : '';
   deskNeedsRetry = !myId;
   if(!myId){
     pane.innerHTML = '<div class="empty">Loading...</div>';
@@ -14458,6 +14465,7 @@ function deskRenderRecords(pane, d, me){
 
 document.querySelectorAll('#desk-nav button').forEach(b=> b.addEventListener('click', ()=> deskShow(b.dataset.desk)));
 document.getElementById('desk-to-phone').addEventListener('click', ()=>{ deskSetForcedPhone(true); deskEvaluate(); });
+document.getElementById('desk-user').addEventListener('click', e=>{ if(e.target.closest('.desk-user-btn')) deskShow('profile'); });
 document.getElementById('desk-return').addEventListener('click', ()=>{ deskSetForcedPhone(false); deskEvaluate(); });
 document.getElementById('desk-bell').addEventListener('click', ()=> document.getElementById('notif-bell').click());
 (function mirrorBellBadge(){
