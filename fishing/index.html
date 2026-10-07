@@ -811,7 +811,6 @@
   .desk-record .meta{font-size:13px;color:var(--muted);line-height:1.5;}
   .desk-pane-narrow{max-width:1000px;}
   #desk-pane .panel{padding:0;}
-  #desk-pane #panel-insights.active{max-width:1000px;}
   #desk-pane #panel-competitions.active{display:grid;grid-template-columns:minmax(340px,440px) minmax(0,1fr);gap:0 20px;align-items:start;}
   #desk-pane #panel-competitions > #competitions-help-btn,
   #desk-pane #panel-competitions > #competition-signin-required{grid-column:1 / -1;justify-self:start;}
@@ -821,6 +820,34 @@
     .desk-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
     .desk-grid{grid-template-columns:minmax(0,1fr);}
   }
+  .desk-kpi-btn{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;}
+  .desk-kpi-btn:hover{border-color:var(--dam);box-shadow:0 2px 10px rgba(0,0,0,.1);}
+  .desk-kpi-btn:focus-visible{outline:3px solid var(--dam);outline-offset:2px;}
+  .desk-seg{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+  .desk-seg button{min-height:44px;padding:9px 16px;border:1px solid var(--line);border-radius:999px;background:var(--card-bg);color:var(--ink);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;}
+  .desk-seg button:hover{border-color:var(--dam);}
+  .desk-seg button.active{background:var(--dam);border-color:var(--dam);color:#fff;}
+  .desk-seg button:focus-visible{outline:3px solid var(--dam);outline-offset:2px;}
+  .desk-only{display:none;}
+  #desk-tackle-cats{display:none;}
+  body.desk-mode .desk-only{display:block;}
+  body.desk-mode #desk-tackle-cats{display:flex;}
+  body.desk-mode .ins-group > summary{display:none;}
+  body.desk-mode .ins-group{border:none;background:none;margin:0;}
+  body.desk-mode .ins-group-body{padding:0;}
+  body.desk-mode #panel-tackle .photo-camera-btn{display:none;}
+  body.desk-mode .field:has(> #tackle-filter-category){display:none;}
+  body.desk-mode #add-tackle-body,body.desk-mode #tackle-list-body{display:block !important;}
+  body.desk-mode #add-tackle-card h2 > button,body.desk-mode #tackle-list-card h2 > button{display:none;}
+  #desk-pane #panel-insights.active{max-width:1100px;}
+  #desk-pane #tackle-content{display:grid !important;grid-template-columns:minmax(0,3fr) minmax(320px,2fr);gap:0 20px;align-items:start;}
+  #desk-pane #tackle-content > *{grid-column:2;min-width:0;}
+  #desk-pane #tackle-content > #tackle-help-btn{grid-column:1 / -1;justify-self:start;}
+  #desk-pane #tackle-content > #tackle-list-card{grid-column:1;grid-row:2 / span 8;}
+  #desk-pane #panel-schedule.active{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;align-items:start;max-width:1100px;}
+  #desk-pane #panel-schedule > *{min-width:0;}
+  #desk-pane #panel-schedule > div:first-child{grid-column:1 / -1;}
+  .desk-bookcase{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,3fr);gap:28px;align-items:start;max-width:1300px;}
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.48.0/dist/tabler-icons.min.css">
 </head>
@@ -1665,6 +1692,7 @@
           <div class="field">
             <label>Photo (optional)</label>
             <div style="display:flex;gap:8px;margin-bottom:6px;"><button type="button" class="mini-btn photo-camera-btn" data-target="tackle-photo"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button><button type="button" class="mini-btn photo-gallery-btn" data-target="tackle-photo"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button></div><div class="photo-filename" data-target="tackle-photo" style="font-size:12px;color:var(--muted);margin-bottom:4px;"></div><input type="file" accept="image/*" id="tackle-photo" style="display:none;">
+            <p class="pc-line muted desk-only" style="margin:4px 0 0;">No photo needed now. You can add one later from your phone: open the item in your tackle box and choose Edit.</p>
           </div>
           <div class="field">
             <label>Share with friends (mutual follows only)</label>
@@ -1843,10 +1871,12 @@
       <button type="button" data-desk="records"><i class="ti ti-fish" aria-hidden="true"></i>Reel Records</button>
       <button type="button" data-desk="insights"><i class="ti ti-chart-bar" aria-hidden="true"></i>Insights</button>
       <button type="button" data-desk="competitions"><i class="ti ti-trophy" aria-hidden="true"></i>Competitions</button>
-      <button type="button" id="desk-badges"><i class="ti ti-medal" aria-hidden="true"></i>Fins of Fame</button>
+      <button type="button" data-desk="badges"><i class="ti ti-medal" aria-hidden="true"></i>Fins of Fame</button>
+      <button type="button" data-desk="tackle"><i class="ti ti-box" aria-hidden="true"></i>Tackle box</button>
+      <button type="button" data-desk="profile"><i class="ti ti-user" aria-hidden="true"></i>Profile</button>
     </nav>
     <div class="desk-side-foot">
-      <p>Logging catches, timers, tackle and your profile live in the phone view.</p>
+      <p>Logging catches and running timers is done in the phone view.</p>
       <button type="button" id="desk-to-phone"><i class="ti ti-device-mobile" aria-hidden="true"></i>Switch to phone view</button>
     </div>
   </aside>
@@ -5510,7 +5540,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
       <input type="text" maxlength="100" class="tackle-edit-notes" value="${escapeHtml(item.notes||'')}" autocomplete="pk-field-23" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
     </div>
     <div class="field">
-      <label>Replace photo (optional)</label>
+      <label>${(item.photo || item.has_photo) ? 'Replace photo' : 'Add photo'} (optional)</label>
       <div style="display:flex;gap:8px;margin-bottom:6px;">
         <button type="button" class="mini-btn photo-camera-btn" data-target="tackle-edit-photo-${itemId}"><i class="ti ti-camera" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Take photo</button>
         <button type="button" class="mini-btn photo-gallery-btn" data-target="tackle-edit-photo-${itemId}"><i class="ti ti-photo" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>Gallery</button>
@@ -9172,9 +9202,10 @@ async function openInsights(){
     mapBuilt = true;
     renderVenueMap(venues, myCatches);
   };
+  if(deskOn) deskBuildInsightsBar(body);
   body.querySelectorAll('details[data-ins-group]').forEach(d=>{
     d.addEventListener('toggle', ()=>{
-      saveInsightsGroupOpen(d.dataset.insGroup, d.open);
+      if(!deskOn) saveInsightsGroupOpen(d.dataset.insGroup, d.open);
       if(d.open && d.dataset.insGroup === 'where') buildMapOnce();
     });
   });
@@ -10174,13 +10205,7 @@ function openBadgeDetailFor(def, count, whenText, personId, isComp){
     .catch(e=> console.error('badge history load failed', e));
 }
 
-async function openBadgeBookcase(personId){
-  const el = document.getElementById('badge-bookcase-cabinet');
-  const elComp = document.getElementById('badge-bookcase-cabinet-comp');
-  el.innerHTML = '<div class="empty">Loading...</div>';
-  elComp.innerHTML = '';
-  document.getElementById('badge-bookcase-modal').showModal();
-
+async function loadBookcaseData(personId){
   const [earned, compAwards] = await Promise.all([
     loadBadgesFor(personId),
     loadCompetitionBadgesFor(personId)
@@ -10199,6 +10224,17 @@ async function openBadgeBookcase(personId){
     }
     compByKey[a.badge_key].count++;
   });
+  return {byKey, compByKey};
+}
+
+async function openBadgeBookcase(personId){
+  const el = document.getElementById('badge-bookcase-cabinet');
+  const elComp = document.getElementById('badge-bookcase-cabinet-comp');
+  el.innerHTML = '<div class="empty">Loading...</div>';
+  elComp.innerHTML = '';
+  document.getElementById('badge-bookcase-modal').showModal();
+
+  const {byKey, compByKey} = await loadBookcaseData(personId);
 
   renderCabinet(el, cabinetOrderedBadgeDefs(), byKey, 'Fins of Fame', personId, false);
   renderCabinet(elComp, COMPETITION_BADGE_DEFS, compByKey, 'Trophy Case', personId, true);
@@ -10207,7 +10243,10 @@ async function openBadgeBookcase(personId){
 
 // Shared by both cabinets. `isComp` switches where a tapped badge reads its
 // history from, since competition wins live in their own table.
-function renderCabinet(el, defs, byKey, title, personId, isComp){
+function renderCabinet(el, defs, byKey, title, personId, isComp, opts){
+  opts = opts || {};
+  const perRow = opts.perRow || 3, px = opts.px || 64, fs = opts.font || 9.5;
+  const nameH = Math.round(fs * 2.3);
   // The little spotlight only shines on a slot that actually holds a badge —
   // an unlit slot reads as empty shelf rather than something being hidden
   const shellOpen = (lit)=> '<div style="position:relative;height:100%;box-sizing:border-box;padding:12px 4px 8px;'
@@ -10222,7 +10261,7 @@ function renderCabinet(el, defs, byKey, title, personId, isComp){
   let earnedCount = 0;
   defs.forEach((b, i)=>{
     const e = byKey[b.key];
-    const borderR = (i % 3 === 2) ? '' : 'border-right:1px solid rgba(0,0,0,.62);';
+    const borderR = (i % perRow === perRow - 1) ? '' : 'border-right:1px solid rgba(0,0,0,.62);';
     let inner;
     if(e){
       earnedCount++;
@@ -10237,20 +10276,20 @@ function renderCabinet(el, defs, byKey, title, personId, isComp){
         : '';
       inner = bubble
         + '<img src="' + badgeImageSrc(b.key) + '?v=' + BADGE_ASSET_VERSION + '" alt="' + escapeHtml(b.name) + '" '
-        + 'style="width:64px;height:auto;display:block;margin:0 auto;filter:drop-shadow(0 5px 6px rgba(0,0,0,.75));" '
-        + 'onerror="this.outerHTML=\'<div style=&quot;width:58px;height:58px;margin:0 auto;border-radius:14px;'
+        + 'style="width:' + px + 'px;height:auto;display:block;margin:0 auto;filter:drop-shadow(0 5px 6px rgba(0,0,0,.75));" '
+        + 'onerror="this.outerHTML=\'<div style=&quot;width:' + (px - 6) + 'px;height:' + (px - 6) + 'px;margin:0 auto;border-radius:14px;'
         + 'background:var(--dam);display:flex;align-items:center;justify-content:center;font-size:26px;&quot;>'
         + b.emoji + '</div>\';">'
-        + '<div style="margin-top:6px;font-size:9.5px;line-height:1.2;text-align:center;color:#e8cda4;'
-        + 'text-shadow:0 1px 2px rgba(0,0,0,.85);min-height:22px;">' + escapeHtml(b.name) + '</div>';
+        + '<div style="margin-top:6px;font-size:' + fs + 'px;line-height:1.2;text-align:center;color:#e8cda4;'
+        + 'text-shadow:0 1px 2px rgba(0,0,0,.85);min-height:' + nameH + 'px;">' + escapeHtml(b.name) + '</div>';
       cells += '<div style="height:100%;' + borderR + '"><button type="button" class="bookcase-badge" '
         + 'data-badge-key="' + b.key + '" data-badge-count="' + count + '" data-badge-when="' + escapeHtml(when) + '" '
         + 'data-badge-comp="' + (isComp ? '1' : '') + '" '
         + 'style="display:block;width:100%;height:100%;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">'
         + shellOpen(true) + inner + '</div></button></div>';
     }else{
-      inner = '<div style="width:64px;height:74px;margin:0 auto;"></div>'
-        + '<div style="margin-top:6px;min-height:22px;"></div>';
+      inner = '<div style="width:' + px + 'px;height:' + Math.round(px * 74 / 64) + 'px;margin:0 auto;"></div>'
+        + '<div style="margin-top:6px;min-height:' + nameH + 'px;"></div>';
       cells += '<div style="height:100%;' + borderR + '">' + shellOpen(false) + inner + '</div></div>';
     }
   });
@@ -10274,7 +10313,6 @@ function renderCabinet(el, defs, byKey, title, personId, isComp){
   holder.innerHTML = cells;
   const nodes = Array.from(holder.children);
   const shelves = el.querySelector('.bookcase-shelves');
-  const perRow = 3;
   // Pad the last shelf when the badge count doesn't divide evenly, so it
   // reads as an empty part of the cabinet rather than a hole in it
   const remainder = nodes.length % perRow;
@@ -10288,11 +10326,11 @@ function renderCabinet(el, defs, byKey, title, personId, isComp){
         + 'background:linear-gradient(180deg,#2a1a0d 0%,#3a2513 70%,#2a1a0d 100%);'
         + 'box-shadow:inset 0 5px 10px rgba(0,0,0,.82), inset 0 -4px 8px rgba(0,0,0,.5),'
         + 'inset 4px 0 8px rgba(0,0,0,.45), inset -4px 0 8px rgba(0,0,0,.45);">'
-        + '<div style="width:64px;height:74px;margin:0 auto;"></div>'
-        + '<div style="margin-top:6px;min-height:22px;"></div></div>';
+        + '<div style="width:' + px + 'px;height:' + Math.round(px * 74 / 64) + 'px;margin:0 auto;"></div>'
+        + '<div style="margin-top:6px;min-height:' + nameH + 'px;"></div></div>';
       return filler;
     };
-    if(remainder === 1){
+    if(remainder === 1 && perRow === 3){
       // A single badge on the last shelf sits centred, with a blank panel
       // either side — a lone badge stranded on the left looks like the row
       // is missing two rather than deliberately holding one
@@ -10309,7 +10347,7 @@ function renderCabinet(el, defs, byKey, title, personId, isComp){
   for(let i = 0; i < nodes.length; i += perRow){
     const row = document.createElement('div');
     row.style.display = 'grid';
-    row.style.gridTemplateColumns = 'repeat(3,1fr)';
+    row.style.gridTemplateColumns = 'repeat(' + perRow + ',1fr)';
     nodes.slice(i, i + perRow).forEach(n=> row.appendChild(n));
     shelves.appendChild(row);
     const b = document.createElement('div');
@@ -11441,6 +11479,31 @@ function renderSessionFeed(){
 // highlighted while you're in them.
 const MORE_TABS = ['feed','tackle','competitions','admin','whatsnew','privacy','terms'];
 
+function enterTackleTab(){
+  updateTackleVisibility();
+  if(isSignedIn()){
+    renderTackleList();
+    renderTackleSharePicker();
+    renderTackleBoxSharePicker();
+    const hookSel = document.getElementById('rig-hook-count');
+    if(hookSel && !hookSel.options.length) hookSel.innerHTML = hookCountOptionsHtml(2);
+    const feedWrap = document.getElementById('rig-feed-methods');
+    if(feedWrap && !feedWrap.innerHTML) feedWrap.innerHTML = feedMethodChecksHtml([], 'rig-feed');
+    renderRigsList();
+    const comboRigSel = document.getElementById('combo-rig-select');
+    if(comboRigSel) comboRigSel.innerHTML = buildRigOptionsHtml();
+    renderCombosList();
+    makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
+    makeCardCollapsible('build-rig-card', 'build-rig-body', 'pk_fishing_collapse_buildrig');
+    makeCardCollapsible('my-rigs-card', 'my-rigs-body', 'pk_fishing_collapse_myrigs', true);
+    makeCardCollapsible('build-combo-card', 'build-combo-body', 'pk_fishing_collapse_buildcombo');
+    makeCardCollapsible('my-combos-card', 'my-combos-body', 'pk_fishing_collapse_mycombos', true);
+    makeCardCollapsible('tackle-share-box-card', 'tackle-share-box-body', 'pk_fishing_collapse_sharebox');
+    makeCardCollapsible('tackle-list-card', 'tackle-list-body', 'pk_fishing_collapse_tacklelist', true);
+  }
+  if(isSignedIn() && document.body.classList.contains('desk-mode')) deskBuildTackleCats();
+}
+
 function goToTab(tabName){
   if(document.body.classList.contains('desk-mode')){ deskGoto(tabName); return; }
   const panel = document.getElementById('panel-'+tabName);
@@ -11471,29 +11534,7 @@ function goToTab(tabName){
   }
   if(tabName==='feed') renderFeed();
   if(tabName==='competitions') renderCompetitions();
-  if(tabName==='tackle'){
-    updateTackleVisibility();
-    if(isSignedIn()){
-      renderTackleList();
-      renderTackleSharePicker();
-      renderTackleBoxSharePicker();
-      const hookSel = document.getElementById('rig-hook-count');
-      if(hookSel && !hookSel.options.length) hookSel.innerHTML = hookCountOptionsHtml(2);
-      const feedWrap = document.getElementById('rig-feed-methods');
-      if(feedWrap && !feedWrap.innerHTML) feedWrap.innerHTML = feedMethodChecksHtml([], 'rig-feed');
-      renderRigsList();
-      const comboRigSel = document.getElementById('combo-rig-select');
-      if(comboRigSel) comboRigSel.innerHTML = buildRigOptionsHtml();
-      renderCombosList();
-      makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
-      makeCardCollapsible('build-rig-card', 'build-rig-body', 'pk_fishing_collapse_buildrig');
-      makeCardCollapsible('my-rigs-card', 'my-rigs-body', 'pk_fishing_collapse_myrigs', true);
-      makeCardCollapsible('build-combo-card', 'build-combo-body', 'pk_fishing_collapse_buildcombo');
-      makeCardCollapsible('my-combos-card', 'my-combos-body', 'pk_fishing_collapse_mycombos', true);
-      makeCardCollapsible('tackle-share-box-card', 'tackle-share-box-body', 'pk_fishing_collapse_sharebox');
-      makeCardCollapsible('tackle-list-card', 'tackle-list-body', 'pk_fishing_collapse_tacklelist', true);
-    }
-  }
+  if(tabName==='tackle') enterTackleTab();
   if(tabName==='admin') renderAdminTab();
 }
 
@@ -13971,7 +14012,9 @@ async function renderSpectatorCompetition(compId){
 // moving them into the dashboard, so they stay a single copy of the code.
 const DESK_MIN_WIDTH = 1100;
 const deskMq = window.matchMedia('(min-width:' + DESK_MIN_WIDTH + 'px)');
-const DESK_TITLES = {overview:'Overview', log:'Catch log', records:'Reel Records', insights:'Insights', competitions:'Competitions'};
+const DESK_TITLES = {overview:'Overview', log:'Catch log', records:'Reel Records', insights:'Insights', competitions:'Competitions', badges:'Fins of Fame', tackle:'Tackle box', profile:'Profile'};
+const DESK_PANELS = {insights:'insights', competitions:'competitions', tackle:'tackle', profile:'schedule'};
+let deskInsightsGroup = 'overview';
 let deskOn = false;
 let deskSection = 'overview';
 let deskData = null;
@@ -13992,7 +14035,7 @@ function deskWanted(){
 
 function deskStashPanels(){
   const main = document.querySelector('main');
-  ['insights','competitions'].forEach(name=>{
+  Object.keys(DESK_PANELS).map(k=> DESK_PANELS[k]).forEach(name=>{
     const panel = document.getElementById('panel-' + name);
     if(panel && panel.parentElement && panel.parentElement.id === 'desk-pane'){
       panel.classList.remove('active');
@@ -14024,6 +14067,7 @@ function deskEvaluate(){
 }
 
 function deskGoto(tabName){
+  if(tabName === 'schedule') tabName = 'profile';
   deskShow(DESK_TITLES[tabName] ? tabName : 'overview');
 }
 
@@ -14053,12 +14097,36 @@ async function deskShow(section){
     if(deskRetries++ < 8) setTimeout(()=>{ if(deskOn && token === deskToken) deskShow(section); }, 1200);
     return;
   }
-  if(section === 'insights' || section === 'competitions'){
-    const panel = document.getElementById('panel-' + section);
+  if(DESK_PANELS[section]){
+    const panel = document.getElementById('panel-' + DESK_PANELS[section]);
     pane.innerHTML = '';
     pane.appendChild(panel);
     panel.classList.add('active');
-    if(section === 'insights') openInsights(); else renderCompetitions();
+    if(section === 'insights') openInsights();
+    else if(section === 'competitions') renderCompetitions();
+    else if(section === 'tackle') enterTackleTab();
+    else if(section === 'profile'){
+      const db = document.getElementById('my-details-body');
+      const dc = document.getElementById('my-details-card');
+      if(db && dc && db.style.display === 'none'){
+        const tb = dc.querySelector('h2 button');
+        if(tb) tb.click();
+      }
+    }
+    window.scrollTo(0, 0);
+    return;
+  }
+  if(section === 'badges'){
+    pane.innerHTML = '<div class="desk-bookcase"><div id="desk-cab-fame"><div class="empty">Loading...</div></div><div id="desk-cab-comp"></div></div>';
+    try{
+      const data = await loadBookcaseData(myId);
+      if(token !== deskToken) return;
+      renderCabinet(pane.querySelector('#desk-cab-fame'), cabinetOrderedBadgeDefs(), data.byKey, 'Fins of Fame', myId, false, {perRow: 5, px: 72, font: 11});
+      renderCabinet(pane.querySelector('#desk-cab-comp'), COMPETITION_BADGE_DEFS, data.compByKey, 'Trophy Case', myId, true, {perRow: 3, px: 72, font: 11});
+    }catch(e){
+      console.error('desk bookcase failed', e);
+      if(token === deskToken) pane.innerHTML = '<div class="empty">Could not load your badges. Check your connection and try again.</div>';
+    }
     window.scrollTo(0, 0);
     return;
   }
@@ -14071,6 +14139,71 @@ async function deskShow(section){
   else if(section === 'records') deskRenderRecords(pane, d, me);
   else deskRenderOverview(pane, d);
   window.scrollTo(0, 0);
+}
+
+function deskBuildInsightsBar(body){
+  const groups = Array.from(body.querySelectorAll('details[data-ins-group]'));
+  if(!groups.length) return;
+  if(pendingInsightsSession){
+    const row = body.querySelector('[data-session-row="' + CSS.escape(pendingInsightsSession) + '"]');
+    const g = row && row.closest('details[data-ins-group]');
+    if(g) deskInsightsGroup = g.dataset.insGroup;
+  }
+  if(!groups.some(g=> g.dataset.insGroup === deskInsightsGroup)) deskInsightsGroup = groups[0].dataset.insGroup;
+  const bar = document.createElement('div');
+  bar.className = 'desk-seg';
+  bar.setAttribute('role', 'group');
+  bar.setAttribute('aria-label', 'Insights sections');
+  const pick = key=>{
+    deskInsightsGroup = key;
+    groups.forEach(g=>{ g.open = g.dataset.insGroup === key; });
+    bar.querySelectorAll('button').forEach(b=>{
+      const on = b.dataset.key === key;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  };
+  groups.forEach(g=>{
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.key = g.dataset.insGroup;
+    b.textContent = g.querySelector('.ins-group-title').textContent;
+    b.title = g.querySelector('.ins-group-hint').textContent;
+    b.addEventListener('click', ()=> pick(g.dataset.insGroup));
+    bar.appendChild(b);
+  });
+  body.insertBefore(bar, body.firstChild);
+  pick(deskInsightsGroup);
+}
+
+function deskBuildTackleCats(){
+  const sel = document.getElementById('tackle-filter-category');
+  const host = document.getElementById('tackle-list-body');
+  if(!sel || !host || document.getElementById('desk-tackle-cats')) return;
+  const bar = document.createElement('div');
+  bar.id = 'desk-tackle-cats';
+  bar.className = 'desk-seg';
+  bar.setAttribute('role', 'group');
+  bar.setAttribute('aria-label', 'Filter tackle by category');
+  const sync = ()=> bar.querySelectorAll('button').forEach(b=>{
+    const on = b.dataset.cat === sel.value;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  Array.from(sel.options).forEach(o=>{
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.cat = o.value;
+    b.textContent = o.value ? o.textContent : 'All';
+    b.addEventListener('click', ()=>{
+      sel.value = o.value;
+      sel.dispatchEvent(new Event('change'));
+      sync();
+    });
+    bar.appendChild(b);
+  });
+  host.insertBefore(bar, host.firstChild);
+  sync();
 }
 
 function deskBait(c){
@@ -14154,12 +14287,12 @@ function deskRenderOverview(pane, d){
     <div class="desk-kpis">
       <div class="desk-kpi"><div class="k-label">Fish caught</div><div class="k-num">${caught.length}</div><div class="k-sub">${casts ? `from ${casts} cast${casts === 1 ? '' : 's'} (${rate}%)` : 'Nothing logged yet'}</div></div>
       <div class="desk-kpi"><div class="k-label">Total weight</div><div class="k-num">${caught.length ? escapeHtml(formatWeight(totalW)) : '-'}</div><div class="k-sub">${caught.length ? 'Average ' + escapeHtml(formatWeight(totalW / caught.length)) : ''}</div></div>
-      <div class="desk-kpi"><div class="k-label">Biggest fish</div><div class="k-num">${biggest ? escapeHtml(formatWeight(biggest.weight)) : '-'}</div><div class="k-sub">${biggest ? escapeHtml((biggest.type || 'Unknown') + ', ' + fmtDate(biggest.time)) : ''}</div></div>
-      <div class="desk-kpi"><div class="k-label">Sessions</div><div class="k-num">${d.sessions.length}${d.sessions.length >= 50 ? '+' : ''}</div><div class="k-sub">${lastSession && lastSession.started_at ? 'Last: ' + escapeHtml(fmtDate(lastSession.started_at)) : 'None yet'}</div></div>
+      <button type="button" class="desk-kpi desk-kpi-btn" data-desk-big="1" aria-label="Biggest fish, open its photo"><div class="k-label">Biggest fish</div><div class="k-num">${biggest ? escapeHtml(formatWeight(biggest.weight)) : '-'}</div><div class="k-sub">${biggest ? escapeHtml((biggest.type || 'Unknown') + ', ' + fmtDate(biggest.time)) : ''}</div></button>
+      <button type="button" class="desk-kpi desk-kpi-btn" data-desk-go="sessions" aria-label="Sessions, open them in Insights"><div class="k-label">Sessions</div><div class="k-num">${d.sessions.length}${d.sessions.length >= 50 ? '+' : ''}</div><div class="k-sub">${lastSession && lastSession.started_at ? 'Last: ' + escapeHtml(fmtDate(lastSession.started_at)) : 'None yet'}</div></button>
     </div>
     <div class="desk-grid">
       <section class="desk-card"><h2>Fish caught per month</h2>${deskMonthChart(caught)}</section>
-      <section class="desk-card"><h2>Species</h2><p class="desk-hint">Number of fish, with total weight</p>${deskSpeciesBars(caught)}</section>
+      <section class="desk-card"><h2>Species</h2><p class="desk-hint">Number of fish, with total weight</p>${deskSpeciesBars(caught)}<button type="button" class="desk-link" data-desk-go="insights" style="margin-top:14px;">Open Insights</button></section>
     </div>
     <div class="desk-grid">
       <section class="desk-card"><h2>Latest catches</h2>
@@ -14169,7 +14302,15 @@ function deskRenderOverview(pane, d){
       </section>
       <section class="desk-card" id="desk-comps-card"><h2>Competitions on now</h2><div class="empty">Loading...</div></section>
     </div>`;
-  pane.querySelectorAll('[data-desk-go]').forEach(b=> b.addEventListener('click', ()=> deskShow(b.dataset.deskGo)));
+  pane.querySelectorAll('[data-desk-go]').forEach(b=> b.addEventListener('click', ()=>{
+    if(b.dataset.deskGo === 'sessions'){ deskInsightsGroup = 'sessions'; deskShow('insights'); }
+    else deskShow(b.dataset.deskGo);
+  }));
+  const bigBtn = pane.querySelector('[data-desk-big]');
+  if(bigBtn && biggest) bigBtn.addEventListener('click', ()=>{
+    if(biggest.photos && biggest.photos.length) deskOpenPhoto(biggest);
+    else openProfile(d.myId, biggest.id);
+  });
   deskFillCompetitionsCard(d.myId, document.getElementById('desk-comps-card'));
 }
 
@@ -14316,7 +14457,6 @@ function deskRenderRecords(pane, d, me){
 }
 
 document.querySelectorAll('#desk-nav button').forEach(b=> b.addEventListener('click', ()=> deskShow(b.dataset.desk)));
-document.getElementById('desk-badges').addEventListener('click', ()=>{ const id = getMyFishermanId(); if(id) openBadgeBookcase(id); });
 document.getElementById('desk-to-phone').addEventListener('click', ()=>{ deskSetForcedPhone(true); deskEvaluate(); });
 document.getElementById('desk-return').addEventListener('click', ()=>{ deskSetForcedPhone(false); deskEvaluate(); });
 document.getElementById('desk-bell').addEventListener('click', ()=> document.getElementById('notif-bell').click());
