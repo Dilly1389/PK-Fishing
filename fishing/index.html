@@ -12842,22 +12842,21 @@ function renderCompetitionEditForm(comp, containerEl){
         <input type="time" class="comp-edit-end-time" value="${escapeHtml(String(comp.end_time||'23:59').slice(0,5))}" autocomplete="pk-x17" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
     </div>
-    <div class="row2">
-      <div class="field">
-        <label>Ranked by</label>
-        <select class="comp-edit-metric">
-          <option value="total_weight" ${comp.metric==='total_weight'?'selected':''}>Total weight (biggest bag)</option>
-          <option value="catch_count" ${comp.metric==='catch_count'?'selected':''}>Most catches</option>
-          <option value="biggest_fish" ${comp.metric==='biggest_fish'?'selected':''}>Biggest single fish</option>
-        </select>
+    <div class="field">
+      <label>Ranked by</label>
+      <input type="hidden" class="comp-edit-metric" value="${escapeHtml(comp.metric||'total_weight')}">
+      <div class="metric-toggle comp-edit-metric-toggle" role="group" aria-label="Ranked by">
+        <button type="button" data-metric="total_weight" class="${(comp.metric||'total_weight')==='total_weight'?'active':''}" aria-pressed="${(comp.metric||'total_weight')==='total_weight'}">Biggest bag</button>
+        <button type="button" data-metric="catch_count" class="${comp.metric==='catch_count'?'active':''}" aria-pressed="${comp.metric==='catch_count'}">Most catches</button>
+        <button type="button" data-metric="biggest_fish" class="${comp.metric==='biggest_fish'?'active':''}" aria-pressed="${comp.metric==='biggest_fish'}">Biggest fish</button>
       </div>
-      <div class="field">
-        <label>Species (optional)</label>
-        <select class="comp-edit-fishtype">
-          <option value="">Any species</option>
-          ${ALL_TROPHY_SPECIES.map(s=>`<option value="${escapeHtml(s)}" ${comp.fish_type_filter===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
-        </select>
-      </div>
+    </div>
+    <div class="field">
+      <label>Species (optional)</label>
+      <select class="comp-edit-fishtype">
+        <option value="">Any species</option>
+        ${ALL_TROPHY_SPECIES.map(s=>`<option value="${escapeHtml(s)}" ${comp.fish_type_filter===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+      </select>
     </div>
     <p class="sub-heading">Proof for each catch</p>
     <label class="check-row"><input type="checkbox" class="comp-edit-require-fish" ${comp.require_fish_photo ? 'checked' : ''}> Photo of the fish is compulsory</label>
@@ -12865,6 +12864,16 @@ function renderCompetitionEditForm(comp, containerEl){
     <button class="primary-btn comp-edit-save">Save changes</button>
     <div class="status comp-edit-status"></div>
   `;
+  containerEl.querySelectorAll('.comp-edit-metric-toggle button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      containerEl.querySelector('.comp-edit-metric').value = btn.dataset.metric;
+      containerEl.querySelectorAll('.comp-edit-metric-toggle button').forEach(b=>{
+        const on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
+    });
+  });
   containerEl.querySelector('.comp-edit-save').addEventListener('click', async ()=>{
     const st = containerEl.querySelector('.comp-edit-status');
     const name = containerEl.querySelector('.comp-edit-name').value.trim();
