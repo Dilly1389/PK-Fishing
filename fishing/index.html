@@ -730,6 +730,97 @@
     .bobber{margin:0 auto;}
     .bobber-controls{justify-content:stretch;}
   }
+  /* ---------- Desktop dashboard: wide screens, signed in ---------- */
+  #desk{display:none;}
+  #desk-return{display:none;}
+  body.desk-mode{background:var(--paper);}
+  body.desk-mode .app{display:none;}
+  body.desk-mode #install-banner{display:none !important;}
+  body.desk-mode #desk{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh;}
+  #desk-return.show{display:flex;position:fixed;right:18px;bottom:18px;z-index:1600;align-items:center;gap:8px;padding:10px 16px;min-height:44px;border:none;border-radius:999px;background:var(--dam);color:#fff;font:700 13px inherit;font-family:inherit;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3);}
+  .desk-side{background:var(--dam-deep);color:#fff;padding:20px 14px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh;align-self:start;overflow-y:auto;}
+  .desk-brand{display:flex;align-items:center;gap:10px;padding:0 8px 20px;font-family:Rockwell,"Roboto Slab",Georgia,serif;font-weight:700;font-size:19px;}
+  .desk-brand img{height:36px;width:auto;}
+  .desk-side button{display:flex;align-items:center;gap:11px;width:100%;padding:11px 12px;min-height:44px;border:none;border-radius:8px;background:transparent;color:rgba(255,255,255,.74);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;text-align:left;}
+  .desk-side button i{font-size:19px;flex-shrink:0;}
+  .desk-side button:hover{background:rgba(255,255,255,.09);color:#fff;}
+  .desk-side button.active{background:rgba(255,255,255,.17);color:#fff;box-shadow:inset 3px 0 0 var(--rust);}
+  .desk-side button:focus-visible{outline:3px solid #fff;outline-offset:2px;}
+  .desk-side-foot{margin-top:auto;display:flex;flex-direction:column;gap:4px;padding-top:16px;border-top:1px solid rgba(255,255,255,.15);}
+  .desk-side-foot p{margin:0 8px 8px;font-size:12px;color:rgba(255,255,255,.6);line-height:1.4;}
+  .desk-main{min-width:0;display:flex;flex-direction:column;}
+  .desk-top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 32px;border-bottom:1px solid var(--line);background:var(--card-bg);position:sticky;top:0;z-index:5;}
+  .desk-top h1{margin:0;font-size:24px;color:var(--ink);}
+  .desk-top-right{display:flex;align-items:center;gap:14px;font-size:13.5px;color:var(--muted);}
+  .desk-top-right b{color:var(--ink);}
+  #desk-bell{position:relative;width:44px;height:44px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font-size:18px;cursor:pointer;}
+  #desk-bell-badge{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:var(--rust);color:#fff;font-size:11px;font-weight:700;display:none;align-items:center;justify-content:center;}
+  #desk-pane{padding:24px 32px 56px;width:100%;max-width:1500px;}
+  .desk-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px;}
+  .desk-kpi{background:var(--card-bg);border:1px solid var(--line);border-radius:12px;padding:16px 18px;}
+  .desk-kpi .k-label{font-size:13px;color:var(--muted);font-weight:600;}
+  .desk-kpi .k-num{font-family:Rockwell,"Roboto Slab",Georgia,serif;font-size:32px;font-weight:700;color:var(--ink);line-height:1.15;margin-top:4px;}
+  .desk-kpi .k-sub{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .desk-grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:18px;margin-bottom:18px;}
+  .desk-card{background:var(--card-bg);border:1px solid var(--line);border-radius:12px;padding:18px 20px;min-width:0;}
+  .desk-card h2{font-size:16px;margin:0 0 14px;color:var(--card-heading);}
+  .desk-card .desk-hint{font-size:12.5px;color:var(--muted);margin:-8px 0 12px;}
+  .desk-chart{width:100%;height:auto;display:block;}
+  .desk-chart .grid{stroke:var(--line);stroke-width:1;}
+  .desk-chart .bar{fill:var(--dam);}
+  .desk-chart text{fill:var(--muted);font-size:11px;font-family:inherit;}
+  .desk-chart text.val{fill:var(--ink);font-weight:700;}
+  .desk-bars{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px;}
+  .desk-bars li{display:grid;grid-template-columns:minmax(90px,1.2fr) 3fr auto;gap:10px;align-items:center;font-size:14px;}
+  .desk-bars .track{height:10px;border-radius:5px;background:var(--line);overflow:hidden;}
+  .desk-bars .track span{display:block;height:100%;background:var(--dam);border-radius:5px;}
+  .desk-bars .num{font-weight:700;color:var(--ink);white-space:nowrap;}
+  .desk-bars .num small{font-weight:400;color:var(--muted);margin-left:6px;}
+  .desk-list{list-style:none;margin:0;padding:0;}
+  .desk-list li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;}
+  .desk-list li:last-child{border-bottom:none;}
+  .desk-list .sub{font-size:12.5px;color:var(--muted);}
+  .desk-list b{color:var(--ink);}
+  .desk-link{background:none;border:none;padding:0;font:inherit;font-weight:700;color:var(--dam);cursor:pointer;text-align:left;}
+  .desk-link:hover{text-decoration:underline;}
+  .desk-link:focus-visible,.desk-table button:focus-visible{outline:3px solid var(--dam);outline-offset:2px;border-radius:4px;}
+  .desk-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:14px;}
+  .desk-filters input[type=text],.desk-filters select{padding:10px 12px;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--card-bg);color:var(--ink);font-family:inherit;font-size:14px;}
+  .desk-filters input[type=text]{width:280px;max-width:100%;}
+  .desk-filters label.check{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);min-height:44px;}
+  .desk-filters .count{margin-left:auto;font-size:13px;color:var(--muted);}
+  .desk-table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card-bg);}
+  .desk-table{width:100%;border-collapse:collapse;font-size:14px;}
+  .desk-table th{text-align:left;padding:0;border-bottom:1px solid var(--line);background:var(--paper);white-space:nowrap;}
+  .desk-table th button{display:flex;align-items:center;gap:6px;width:100%;padding:12px 14px;min-height:44px;border:none;background:transparent;color:var(--muted);font:700 13px inherit;font-family:inherit;cursor:pointer;}
+  .desk-table th.num button{justify-content:flex-end;}
+  .desk-table th button:hover{color:var(--ink);}
+  .desk-table td{padding:11px 14px;border-bottom:1px solid var(--line);color:var(--ink);vertical-align:middle;}
+  .desk-table td.num{text-align:right;font-weight:700;white-space:nowrap;}
+  .desk-table td.muted{color:var(--muted);}
+  .desk-table tbody tr:last-child td{border-bottom:none;}
+  .desk-table tbody tr:hover{background:var(--paper);}
+  .desk-table .photo-btn{border:none;background:transparent;color:var(--dam);font-size:19px;cursor:pointer;min-width:44px;min-height:44px;}
+  .desk-more{display:block;margin:16px auto 0;}
+  .desk-records{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
+  .desk-record{background:var(--card-bg);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
+  .desk-record img{width:100%;height:150px;object-fit:cover;display:block;cursor:pointer;}
+  .desk-record .body{padding:14px 16px;}
+  .desk-record .sp{font-family:Rockwell,"Roboto Slab",Georgia,serif;font-weight:700;font-size:17px;color:var(--ink);}
+  .desk-record .pb{font-family:Rockwell,"Roboto Slab",Georgia,serif;font-size:26px;font-weight:700;color:var(--dam);margin:4px 0 2px;}
+  .desk-record .meta{font-size:13px;color:var(--muted);line-height:1.5;}
+  .desk-pane-narrow{max-width:1000px;}
+  #desk-pane .panel{padding:0;}
+  #desk-pane #panel-insights.active{max-width:1000px;}
+  #desk-pane #panel-competitions.active{display:grid;grid-template-columns:minmax(340px,440px) minmax(0,1fr);gap:0 20px;align-items:start;}
+  #desk-pane #panel-competitions > #competitions-help-btn,
+  #desk-pane #panel-competitions > #competition-signin-required{grid-column:1 / -1;justify-self:start;}
+  #desk-pane #panel-competitions > #competition-create-card{grid-column:1;position:sticky;top:90px;}
+  #desk-pane #panel-competitions > section.card:last-child{grid-column:2;grid-row:2 / span 3;}
+  @media (max-width:1280px){
+    .desk-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .desk-grid{grid-template-columns:minmax(0,1fr);}
+  }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.48.0/dist/tabler-icons.min.css">
 </head>
@@ -1742,6 +1833,35 @@
     <button type="button" id="footer-privacy-link" style="background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-family:inherit;font-size:11px;padding:6px 4px 0;">Privacy Policy</button>
   </footer>
 </div>
+
+<div id="desk">
+  <aside class="desk-side" aria-label="Desktop navigation">
+    <div class="desk-brand"><img src="logo-small.webp" width="203" height="300" alt=""> PK Fishing</div>
+    <nav id="desk-nav" aria-label="Sections">
+      <button type="button" data-desk="overview"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Overview</button>
+      <button type="button" data-desk="log"><i class="ti ti-table" aria-hidden="true"></i>Catch log</button>
+      <button type="button" data-desk="records"><i class="ti ti-fish" aria-hidden="true"></i>Reel Records</button>
+      <button type="button" data-desk="insights"><i class="ti ti-chart-bar" aria-hidden="true"></i>Insights</button>
+      <button type="button" data-desk="competitions"><i class="ti ti-trophy" aria-hidden="true"></i>Competitions</button>
+      <button type="button" id="desk-badges"><i class="ti ti-medal" aria-hidden="true"></i>Fins of Fame</button>
+    </nav>
+    <div class="desk-side-foot">
+      <p>Logging catches, timers, tackle and your profile live in the phone view.</p>
+      <button type="button" id="desk-to-phone"><i class="ti ti-device-mobile" aria-hidden="true"></i>Switch to phone view</button>
+    </div>
+  </aside>
+  <div class="desk-main">
+    <header class="desk-top">
+      <h1 id="desk-title">Overview</h1>
+      <div class="desk-top-right">
+        <span id="desk-user"></span>
+        <button type="button" id="desk-bell" aria-label="Notifications"><i class="ti ti-bell" aria-hidden="true"></i><span id="desk-bell-badge"></span></button>
+      </div>
+    </header>
+    <div id="desk-pane"></div>
+  </div>
+</div>
+<button type="button" id="desk-return"><i class="ti ti-device-desktop" aria-hidden="true"></i>Switch to desktop view</button>
 
 <dialog id="confirm-modal" closedby="any" aria-label="Confirm catch details">
   <div class="modal-card">
@@ -4413,6 +4533,7 @@ function renderAccountArea(){
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     schedulePanel.classList.add('active');
   }
+  try{ deskEvaluate(); }catch(e){ console.error('desk evaluate failed', e); }
 }
 
 function updateTimersVisibility(){
@@ -11308,6 +11429,7 @@ function renderSessionFeed(){
 const MORE_TABS = ['feed','tackle','competitions','admin','whatsnew','privacy','terms'];
 
 function goToTab(tabName){
+  if(document.body.classList.contains('desk-mode')){ deskGoto(tabName); return; }
   const panel = document.getElementById('panel-'+tabName);
   if(!panel) return;
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
@@ -13823,6 +13945,376 @@ async function renderSpectatorCompetition(compId){
   }
 }
 
+// ---------- Desktop dashboard ----------
+// Wide screens, signed in: a sidebar dashboard for looking back over the
+// season. Logging, timers and tackle stay in the phone layout, which this
+// leaves untouched. Insights and Competitions reuse the phone panels by
+// moving them into the dashboard, so they stay a single copy of the code.
+const DESK_MIN_WIDTH = 1100;
+const deskMq = window.matchMedia('(min-width:' + DESK_MIN_WIDTH + 'px)');
+const DESK_TITLES = {overview:'Overview', log:'Catch log', records:'Reel Records', insights:'Insights', competitions:'Competitions'};
+let deskOn = false;
+let deskSection = 'overview';
+let deskData = null;
+let deskToken = 0;
+let deskRetries = 0;
+let deskNeedsRetry = false;
+let deskLogState = {sort:'time', dir:-1, search:'', species:'', blanks:false, shown:100};
+
+function deskForcedPhone(){
+  try{ return localStorage.getItem('pk_fishing_phone_view') === 'true'; }catch(e){ return false; }
+}
+function deskSetForcedPhone(on){
+  try{ localStorage.setItem('pk_fishing_phone_view', on ? 'true' : 'false'); }catch(e){}
+}
+function deskWanted(){
+  return deskMq.matches && isSignedIn() && !IS_SPECTATOR && !deskForcedPhone();
+}
+
+function deskStashPanels(){
+  const main = document.querySelector('main');
+  ['insights','competitions'].forEach(name=>{
+    const panel = document.getElementById('panel-' + name);
+    if(panel && panel.parentElement && panel.parentElement.id === 'desk-pane'){
+      panel.classList.remove('active');
+      main.appendChild(panel);
+    }
+  });
+}
+
+function deskEvaluate(){
+  const want = deskWanted();
+  const ret = document.getElementById('desk-return');
+  if(ret) ret.classList.toggle('show', deskMq.matches && isSignedIn() && !IS_SPECTATOR && deskForcedPhone());
+  if(want === deskOn){
+    if(want && deskNeedsRetry && getMyFishermanId()) deskShow(deskSection);
+    return;
+  }
+  deskOn = want;
+  document.body.classList.toggle('desk-mode', want);
+  if(want){
+    deskRetries = 0;
+    deskShow(deskSection);
+  }else{
+    deskToken++;
+    deskData = null;
+    deskStashPanels();
+    document.getElementById('desk-pane').innerHTML = '';
+    goToTab('home');
+  }
+}
+
+function deskGoto(tabName){
+  deskShow(DESK_TITLES[tabName] ? tabName : 'overview');
+}
+
+async function deskLoadData(force){
+  if(!force && deskData && deskData.myId === getMyFishermanId() && Date.now() - deskData.at < 120000) return deskData;
+  const myId = getMyFishermanId();
+  const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
+  const venueNames = {};
+  venues.forEach(v=>{ venueNames[v.id] = v.name; });
+  deskData = {at: Date.now(), myId, catches: rec && rec.catches ? rec.catches : [], venues, venueNames, sessions};
+  return deskData;
+}
+
+async function deskShow(section){
+  deskSection = section;
+  const token = ++deskToken;
+  deskStashPanels();
+  document.querySelectorAll('#desk-nav button').forEach(b=> b.classList.toggle('active', b.dataset.desk === section));
+  document.getElementById('desk-title').textContent = DESK_TITLES[section] || 'Overview';
+  const pane = document.getElementById('desk-pane');
+  const myId = getMyFishermanId();
+  const me = people.find(p=>p.id === myId);
+  document.getElementById('desk-user').innerHTML = me ? 'Signed in as <b>' + escapeHtml(me.name) + '</b>' : '';
+  deskNeedsRetry = !myId;
+  if(!myId){
+    pane.innerHTML = '<div class="empty">Loading...</div>';
+    if(deskRetries++ < 8) setTimeout(()=>{ if(deskOn && token === deskToken) deskShow(section); }, 1200);
+    return;
+  }
+  if(section === 'insights' || section === 'competitions'){
+    const panel = document.getElementById('panel-' + section);
+    pane.innerHTML = '';
+    pane.appendChild(panel);
+    panel.classList.add('active');
+    if(section === 'insights') openInsights(); else renderCompetitions();
+    window.scrollTo(0, 0);
+    return;
+  }
+  pane.innerHTML = '<div class="empty">Loading...</div>';
+  let d;
+  try{ d = await deskLoadData(false); }
+  catch(e){ console.error('desk load failed', e); pane.innerHTML = '<div class="empty">Could not load your catches. Check your connection and try again.</div>'; deskToken = 0; return; }
+  if(token !== deskToken) return;
+  if(section === 'log') deskRenderLog(pane, d);
+  else if(section === 'records') deskRenderRecords(pane, d, me);
+  else deskRenderOverview(pane, d);
+  window.scrollTo(0, 0);
+}
+
+function deskBait(c){
+  const m = /Hook (\d+)/.exec(c.hook || '');
+  if(!m) return '';
+  return [...new Set((c['hook' + m[1]] || '').split(',').map(s=>s.trim()).filter(Boolean))].join(', ');
+}
+
+function deskOpenPhoto(c){
+  if(!c || !c.photos || !c.photos.length) return;
+  photoGalleryCache[c.id] = c.photos;
+  photoLabelsCache[c.id] = c.photoLabels || [];
+  photoWhenCache[c.id] = {t: c.time, k: c.hasKnownTime !== false};
+  openPhotoModal(c.photos[0], c.id, 0);
+}
+
+function deskMonthChart(caught){
+  const now = new Date();
+  const months = [];
+  for(let i = 11; i >= 0; i--){
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({y: d.getFullYear(), m: d.getMonth(), n: 0, label: d.toLocaleDateString(dateLocale(), {month:'short'}), full: d.toLocaleDateString(dateLocale(), {month:'long', year:'numeric'})});
+  }
+  caught.forEach(c=>{
+    const d = new Date(c.time);
+    const slot = months.find(x=> x.y === d.getFullYear() && x.m === d.getMonth());
+    if(slot) slot.n++;
+  });
+  const max = Math.max.apply(null, months.map(x=>x.n));
+  const top = max <= 4 ? 4 : Math.ceil(max / 4) * 4;
+  const W = 640, H = 250, padL = 34, padR = 8, padT = 16, padB = 30;
+  const plotW = W - padL - padR, plotH = H - padT - padB, bw = plotW / 12;
+  let svg = '';
+  for(let k = 0; k <= 4; k++){
+    const y = padT + plotH - plotH * k / 4;
+    svg += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}"/><text x="${padL - 6}" y="${y + 4}" text-anchor="end">${top * k / 4}</text>`;
+  }
+  months.forEach((mo, i)=>{
+    const h = plotH * mo.n / top;
+    const x = padL + i * bw + bw * 0.17;
+    const w = bw * 0.66;
+    if(mo.n > 0){
+      svg += `<rect class="bar" x="${x}" y="${padT + plotH - h}" width="${w}" height="${h}" rx="3"><title>${escapeHtml(mo.full)}: ${mo.n} fish</title></rect>`;
+      svg += `<text class="val" x="${x + w / 2}" y="${padT + plotH - h - 5}" text-anchor="middle">${mo.n}</text>`;
+    }
+    svg += `<text x="${x + w / 2}" y="${H - 10}" text-anchor="middle">${escapeHtml(mo.label)}</text>`;
+  });
+  const summary = months.map(mo=> mo.label + ' ' + mo.n).join(', ');
+  return `<svg class="desk-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Fish caught per month over the last 12 months. ${escapeHtml(summary)}">${svg}</svg>`;
+}
+
+function deskSpeciesBars(caught){
+  const by = {};
+  caught.forEach(c=>{
+    const k = c.type || 'Unknown';
+    if(!by[k]) by[k] = {n: 0, w: 0};
+    by[k].n++; by[k].w += c.weight || 0;
+  });
+  const rows = Object.keys(by).map(k=>({k, n: by[k].n, w: by[k].w})).sort((a, b)=> b.n - a.n).slice(0, 8);
+  if(!rows.length) return '<div class="empty">No catches yet.</div>';
+  const max = rows[0].n;
+  return '<ul class="desk-bars">' + rows.map(r=>
+    `<li><span>${escapeHtml(r.k)}</span><span class="track"><span style="width:${Math.max(4, Math.round(r.n / max * 100))}%"></span></span><span class="num">${r.n}<small>${escapeHtml(formatWeight(r.w))}</small></span></li>`
+  ).join('') + '</ul>';
+}
+
+function deskLocalIso(d){
+  const p = n=> String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+function deskRenderOverview(pane, d){
+  const caught = d.catches.filter(c=>c.caught);
+  const casts = d.catches.length;
+  const totalW = caught.reduce((s, c)=> s + (c.weight || 0), 0);
+  const biggest = caught.reduce((b, c)=> (!b || (c.weight || 0) > (b.weight || 0)) ? c : b, null);
+  const rate = casts ? Math.round(caught.length / casts * 100) : 0;
+  const lastSession = d.sessions[0];
+  const recent = caught.slice().sort((a, b)=> b.time - a.time).slice(0, 6);
+  pane.innerHTML = `
+    <div class="desk-kpis">
+      <div class="desk-kpi"><div class="k-label">Fish caught</div><div class="k-num">${caught.length}</div><div class="k-sub">${casts ? `from ${casts} cast${casts === 1 ? '' : 's'} (${rate}%)` : 'Nothing logged yet'}</div></div>
+      <div class="desk-kpi"><div class="k-label">Total weight</div><div class="k-num">${caught.length ? escapeHtml(formatWeight(totalW)) : '-'}</div><div class="k-sub">${caught.length ? 'Average ' + escapeHtml(formatWeight(totalW / caught.length)) : ''}</div></div>
+      <div class="desk-kpi"><div class="k-label">Biggest fish</div><div class="k-num">${biggest ? escapeHtml(formatWeight(biggest.weight)) : '-'}</div><div class="k-sub">${biggest ? escapeHtml((biggest.type || 'Unknown') + ', ' + fmtDate(biggest.time)) : ''}</div></div>
+      <div class="desk-kpi"><div class="k-label">Sessions</div><div class="k-num">${d.sessions.length}${d.sessions.length >= 50 ? '+' : ''}</div><div class="k-sub">${lastSession && lastSession.started_at ? 'Last: ' + escapeHtml(fmtDate(lastSession.started_at)) : 'None yet'}</div></div>
+    </div>
+    <div class="desk-grid">
+      <section class="desk-card"><h2>Fish caught per month</h2>${deskMonthChart(caught)}</section>
+      <section class="desk-card"><h2>Species</h2><p class="desk-hint">Number of fish, with total weight</p>${deskSpeciesBars(caught)}</section>
+    </div>
+    <div class="desk-grid">
+      <section class="desk-card"><h2>Latest catches</h2>
+        ${recent.length ? '<ul class="desk-list">' + recent.map(c=>
+          `<li><span><b>${escapeHtml(c.type || 'Unknown')}</b><div class="sub">${escapeHtml(fmtDate(c.time))}${c.venueId && d.venueNames[c.venueId] ? ' · ' + escapeHtml(d.venueNames[c.venueId]) : ''}</div></span><b>${escapeHtml(formatWeight(c.weight))}</b></li>`
+        ).join('') + '</ul><button type="button" class="desk-link" data-desk-go="log" style="margin-top:12px;">See the whole catch log</button>' : '<div class="empty">Log your first catch on the phone and it shows up here.</div>'}
+      </section>
+      <section class="desk-card" id="desk-comps-card"><h2>Competitions on now</h2><div class="empty">Loading...</div></section>
+    </div>`;
+  pane.querySelectorAll('[data-desk-go]').forEach(b=> b.addEventListener('click', ()=> deskShow(b.dataset.deskGo)));
+  deskFillCompetitionsCard(d.myId, document.getElementById('desk-comps-card'));
+}
+
+async function deskFillCompetitionsCard(myId, card){
+  try{
+    const comps = await loadCompetitions();
+    const today = deskLocalIso(new Date());
+    const live = [];
+    for(const c of comps){
+      if(!(c.start_date && c.end_date && c.start_date <= today && today <= c.end_date)) continue;
+      const ids = await loadCompetitionParticipants(c.id);
+      if(!ids.includes(myId)) continue;
+      const stats = await computeCompetitionLeaderboard(c, ids);
+      live.push({c, stats: stats.slice(0, 3)});
+    }
+    if(!card.isConnected) return;
+    let html = '<h2>Competitions on now</h2>';
+    if(!live.length){
+      html += '<div class="empty">None right now.</div><button type="button" class="desk-link" data-desk-go="competitions">Open competitions</button>';
+    }else{
+      html += live.map(({c, stats})=>{
+        const val = s=> c.metric === 'catch_count' ? s.count : formatWeight(c.metric === 'biggest_fish' ? s.biggest : s.totalWeight);
+        return `<div style="margin-bottom:14px;"><button type="button" class="desk-link" data-desk-comp="${escapeHtml(c.id)}">${escapeHtml(c.name)}</button><div class="sub" style="font-size:12.5px;color:var(--muted);">${escapeHtml(c.dam || '')}</div>
+          ${stats.length ? '<ul class="desk-list">' + stats.map((s, i)=> `<li><span>${i + 1}. ${escapeHtml(s.name)}</span><b>${escapeHtml(String(val(s)))}</b></li>`).join('') + '</ul>' : '<div class="empty">No catches counted yet.</div>'}</div>`;
+      }).join('');
+    }
+    card.innerHTML = html;
+    card.querySelectorAll('[data-desk-go]').forEach(b=> b.addEventListener('click', ()=> deskShow(b.dataset.deskGo)));
+    card.querySelectorAll('[data-desk-comp]').forEach(b=> b.addEventListener('click', ()=>{
+      const found = live.find(x=> x.c.id === b.dataset.deskComp);
+      if(found) openCompetitionDetail(found.c, null);
+    }));
+  }catch(e){
+    console.error('desk competitions card failed', e);
+    if(card.isConnected) card.innerHTML = '<h2>Competitions on now</h2><div class="empty">Could not load competitions.</div>';
+  }
+}
+
+function deskLogRows(d){
+  const st = deskLogState;
+  const q = st.search.trim().toLowerCase();
+  let rows = d.catches.filter(c=> st.blanks ? true : c.caught);
+  if(st.species) rows = rows.filter(c=> c.type === st.species);
+  if(q) rows = rows.filter(c=>
+    [c.type, d.venueNames[c.venueId], c.rig, deskBait(c), c.rodIdentifier].some(v=> v && String(v).toLowerCase().includes(q)));
+  const val = {
+    time: c=> c.time,
+    type: c=> (c.type || '').toLowerCase(),
+    weight: c=> c.weight || 0,
+    venue: c=> (d.venueNames[c.venueId] || '').toLowerCase(),
+    rig: c=> (c.rig || '').toLowerCase()
+  }[st.sort] || (c=> c.time);
+  rows.sort((a, b)=>{ const x = val(a), y = val(b); return x < y ? -st.dir : (x > y ? st.dir : 0); });
+  return rows;
+}
+
+function deskRenderLogBody(pane, d){
+  const rows = deskLogRows(d);
+  const st = deskLogState;
+  const shown = rows.slice(0, st.shown);
+  pane.querySelector('#desk-log-body').innerHTML = shown.length ? shown.map(c=>
+    `<tr>
+      <td>${escapeHtml(fmtCatchWhen(c.time, c.hasKnownTime))}</td>
+      <td>${c.caught ? escapeHtml(c.type || 'Unknown') : '<span class="muted">No catch</span>'}</td>
+      <td class="num">${c.caught ? escapeHtml(formatWeight(c.weight)) : ''}</td>
+      <td class="muted">${escapeHtml(d.venueNames[c.venueId] || '')}</td>
+      <td class="muted">${escapeHtml(c.rig || '')}</td>
+      <td class="muted">${escapeHtml(deskBait(c))}</td>
+      <td>${c.photos && c.photos.length ? `<button type="button" class="photo-btn" data-photo-catch="${escapeHtml(c.id)}" aria-label="View photos of this catch"><i class="ti ti-photo" aria-hidden="true"></i></button>` : ''}</td>
+    </tr>`).join('') : '<tr><td colspan="7"><div class="empty">Nothing matches these filters.</div></td></tr>';
+  pane.querySelector('#desk-log-count').textContent = rows.length + (rows.length === 1 ? ' entry' : ' entries');
+  const more = pane.querySelector('#desk-log-more');
+  more.style.display = rows.length > shown.length ? 'block' : 'none';
+  pane.querySelectorAll('#desk-log-body [data-photo-catch]').forEach(b=> b.addEventListener('click', ()=>{
+    deskOpenPhoto(d.catches.find(c=> c.id === b.dataset.photoCatch));
+  }));
+  pane.querySelectorAll('th[data-col]').forEach(th=>{
+    th.setAttribute('aria-sort', th.dataset.col === st.sort ? (st.dir > 0 ? 'ascending' : 'descending') : 'none');
+  });
+}
+
+function deskRenderLog(pane, d){
+  const st = deskLogState;
+  const species = [...new Set(d.catches.filter(c=>c.caught).map(c=>c.type).filter(Boolean))].sort((a, b)=> a.localeCompare(b));
+  if(!d.catches.length){
+    pane.innerHTML = '<div class="empty">No catches yet. Log one on the phone and it appears here.</div>';
+    return;
+  }
+  const col = (key, label, cls)=> `<th data-col="${key}" class="${cls || ''}"><button type="button" data-sort="${key}">${label}</button></th>`;
+  pane.innerHTML = `
+    <div class="desk-filters">
+      <input type="text" id="desk-log-search" maxlength="100" placeholder="Search species, venue, rig or bait" aria-label="Search the catch log" autocomplete="off" value="${escapeHtml(st.search)}">
+      <select id="desk-log-species" aria-label="Filter by species"><option value="">All species</option>${species.map(s=> `<option value="${escapeHtml(s)}"${s === st.species ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('')}</select>
+      <label class="check"><input type="checkbox" id="desk-log-blanks"${st.blanks ? ' checked' : ''}> Show casts with no fish</label>
+      <span class="count" id="desk-log-count" aria-live="polite"></span>
+    </div>
+    <div class="desk-table-wrap"><table class="desk-table">
+      <thead><tr>${col('time', 'Date')}${col('type', 'Species')}${col('weight', 'Weight', 'num')}${col('venue', 'Venue')}${col('rig', 'Rig')}<th><span style="padding:0 14px;color:var(--muted);font-weight:700;font-size:13px;">Bait</span></th><th><span class="sr-only" style="position:absolute;left:-9999px;">Photos</span></th></tr></thead>
+      <tbody id="desk-log-body"></tbody>
+    </table></div>
+    <button type="button" class="mini-btn desk-more" id="desk-log-more">Show more</button>`;
+  deskRenderLogBody(pane, d);
+  pane.querySelector('#desk-log-search').addEventListener('input', e=>{ st.search = e.target.value; st.shown = 100; deskRenderLogBody(pane, d); });
+  pane.querySelector('#desk-log-species').addEventListener('change', e=>{ st.species = e.target.value; st.shown = 100; deskRenderLogBody(pane, d); });
+  pane.querySelector('#desk-log-blanks').addEventListener('change', e=>{ st.blanks = e.target.checked; st.shown = 100; deskRenderLogBody(pane, d); });
+  pane.querySelector('#desk-log-more').addEventListener('click', ()=>{ st.shown += 100; deskRenderLogBody(pane, d); });
+  pane.querySelectorAll('button[data-sort]').forEach(b=> b.addEventListener('click', ()=>{
+    if(st.sort === b.dataset.sort) st.dir = -st.dir;
+    else{ st.sort = b.dataset.sort; st.dir = st.sort === 'time' || st.sort === 'weight' ? -1 : 1; }
+    deskRenderLogBody(pane, d);
+  }));
+}
+
+function deskRenderRecords(pane, d, me){
+  const caught = d.catches.filter(c=>c.caught);
+  const trophy = getTrophySpeciesFor(me);
+  const others = {};
+  caught.forEach(c=>{ if(c.type && !trophy.includes(c.type)) others[c.type] = (others[c.type] || 0) + 1; });
+  const species = trophy.concat(Object.keys(others).sort((a, b)=> others[b] - others[a]));
+  const stats = species.map(sp=>{
+    const m = caught.filter(c=> c.type === sp);
+    const pb = m.reduce((best, c)=> (!best || (c.weight || 0) > (best.weight || 0)) ? c : best, null);
+    const total = m.reduce((s, c)=> s + (c.weight || 0), 0);
+    return {sp, n: m.length, pb, total, avg: m.length ? total / m.length : 0};
+  }).filter(s=> s.n > 0);
+  if(!stats.length){
+    pane.innerHTML = '<div class="empty">No catches yet. Species appear here as you catch them.</div>';
+    return;
+  }
+  pane.innerHTML = '<div class="desk-records">' + stats.map(s=>{
+    const photo = fishPhotoSrc(s.pb);
+    return `<article class="desk-record">
+      ${photo ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(s.sp)} personal best" loading="lazy" decoding="async" data-pb-catch="${escapeHtml(s.pb.id)}">` : ''}
+      <div class="body">
+        <div class="sp">${escapeHtml(s.sp)}</div>
+        <div class="pb">${escapeHtml(formatWeight(s.pb.weight))}</div>
+        <div class="meta">Personal best, ${escapeHtml(fmtDate(s.pb.time))}<br>${s.n} caught, ${escapeHtml(formatWeight(s.total))} total, ${escapeHtml(formatWeight(s.avg))} average</div>
+      </div>
+    </article>`;
+  }).join('') + '</div>';
+  pane.querySelectorAll('img[data-pb-catch]').forEach(img=> img.addEventListener('click', ()=>{
+    deskOpenPhoto(d.catches.find(c=> c.id === img.dataset.pbCatch));
+  }));
+}
+
+document.querySelectorAll('#desk-nav button').forEach(b=> b.addEventListener('click', ()=> deskShow(b.dataset.desk)));
+document.getElementById('desk-badges').addEventListener('click', ()=>{ const id = getMyFishermanId(); if(id) openBadgeBookcase(id); });
+document.getElementById('desk-to-phone').addEventListener('click', ()=>{ deskSetForcedPhone(true); deskEvaluate(); });
+document.getElementById('desk-return').addEventListener('click', ()=>{ deskSetForcedPhone(false); deskEvaluate(); });
+document.getElementById('desk-bell').addEventListener('click', ()=> document.getElementById('notif-bell').click());
+(function mirrorBellBadge(){
+  const src = document.getElementById('notif-badge');
+  const dst = document.getElementById('desk-bell-badge');
+  if(!src || !dst) return;
+  const sync = ()=>{
+    const hidden = src.style.display === 'none' || !src.textContent.trim();
+    dst.textContent = src.textContent;
+    dst.style.display = hidden ? 'none' : 'flex';
+  };
+  new MutationObserver(sync).observe(src, {childList: true, characterData: true, subtree: true, attributes: true});
+  sync();
+})();
+(deskMq.addEventListener ? deskMq.addEventListener('change', deskEvaluate) : deskMq.addListener(deskEvaluate));
+
 (async function init(){
   if(IS_SPECTATOR){
     document.body.classList.add('spectator-mode');
@@ -13918,6 +14410,7 @@ await loadTackleCategoryOptions();
   // sign-in state (Timers, Insights) have already been resolved.
   // Signed out, the nav is hidden and only the sign-in card should show — don't jump away from it.
   if(document.body.classList.contains('signed-out-view')) return;
+  if(document.body.classList.contains('desk-mode')) return;
   try{
     const lastTab = localStorage.getItem('pk_fishing_active_tab');
     if(lastTab && document.getElementById('panel-'+lastTab)){
