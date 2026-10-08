@@ -8697,6 +8697,51 @@ function buildInsightsHtml(catches, venues, sessions){
   // Only catches logged since moon phase was added have this
   where += statTable('Moon phase', groupStats(c=> c.moonPhase ? [c.moonPhase] : [], {casts:true}));
 
+  // Barometric pressure, from the weather saved with each entry. Judged only
+  // on your own logs, and only once there is enough to say something: a
+  // verdict needs blanks logged too, since otherwise every band looks perfect.
+  (function(){
+    const trendBands = ['Falling fast', 'Falling', 'Steady', 'Rising', 'Rising fast'];
+    const levelBands = ['Under 1012 hPa', '1012–1018 hPa', '1018–1024 hPa', '1024–1030 hPa', '1030 hPa and over'];
+    const trendKey = c=>{
+      const d = c.weather && c.weather.pressureChange;
+      if(d == null) return [];
+      return [d <= -3.5 ? trendBands[0] : d <= -1 ? trendBands[1] : d < 1 ? trendBands[2] : d < 3.5 ? trendBands[3] : trendBands[4]];
+    };
+    const levelKey = c=>{
+      const p = c.weather && c.weather.pressure;
+      if(p == null) return [];
+      return [p < 1012 ? levelBands[0] : p < 1018 ? levelBands[1] : p < 1024 ? levelBands[2] : p < 1030 ? levelBands[3] : levelBands[4]];
+    };
+    const tagged = catches.filter(c=> trendKey(c).length || levelKey(c).length);
+    if(!tagged.length) return;
+    const taggedFish = tagged.filter(c=>c.caught).length;
+    const taggedBlanks = tagged.length - taggedFish;
+    const overall = taggedFish / tagged.length;
+    const pct = r=> Math.round(r * 100) + '%';
+    const lowerFirst = s=> s.charAt(0).toLowerCase() + s.slice(1);
+    const adviceFor = (rows, what, quiet)=>{
+      if(quiet && (tagged.length < 20 || taggedBlanks < 5)) return '';
+      if(tagged.length < 20) return `Needs about 20 logged casts with a pressure reading before it can say anything. You have ${tagged.length} so far.`;
+      if(taggedBlanks < 5) return 'Log "No catch" when a cast comes up empty. Without blanks every band looks perfect, so there is nothing to compare yet.';
+      const usable = rows.filter(r=> r.total >= 5).map(r=> ({r, rate: r.count / r.total}));
+      if(usable.length < 2) return 'Not enough casts in each band yet to compare them. Keep logging.';
+      usable.sort((a,b)=> b.rate - a.rate);
+      const best = usable[0], worst = usable[usable.length - 1];
+      const bits = [];
+      if(best.rate - overall >= 0.15) bits.push(`Your best catch rate has come when ${what} <b>${escapeHtml(lowerFirst(best.r.label))}</b>: ${best.r.count} fish from ${best.r.total} casts (${pct(best.rate)}), against ${pct(overall)} across all your casts with a reading.`);
+      if(overall - worst.rate >= 0.15 && worst !== best) bits.push(`Slowest when it was <b>${escapeHtml(lowerFirst(worst.r.label))}</b>: ${worst.r.count} fish from ${worst.r.total} casts (${pct(worst.rate)}).`);
+      if(!bits.length) return `Nothing stands out yet. Your catch rate is about the same whatever the pressure.`;
+      return bits.join(' ') + ' This comes from your own logs, so it firms up as you log more.';
+    };
+    const trendRows = groupStats(trendKey, {casts:true, order:trendBands});
+    const levelRows = groupStats(levelKey, {casts:true, order:levelBands});
+    where += statTable('Pressure trend', trendRows,
+      'How the pressure moved over the last few hours when you logged the cast. Falling and rising mean 1 hPa or more, fast means 3.5 hPa or more. ' + adviceFor(trendRows, 'the pressure was'));
+    where += statTable('Air pressure', levelRows,
+      'Sea-level pressure at the time of each cast. ' + adviceFor(levelRows, 'the pressure was', true));
+  })();
+
   // Banded, so 42m and 45m group together
   const distBands = ['Under 20m', '20–40m', '40–60m', '60–80m', '80m+'];
   where += statTable('Cast distance', groupStats(c=>{
@@ -8879,7 +8924,7 @@ function buildInsightsHtml(catches, venues, sessions){
 
   return group('overview', 'Overview', 'Your totals, species and time in the water', overview)
     + group('works', 'What works', 'Rigs, hooks, baits and feed', works)
-    + group('where', 'When and where', 'Time of day, moon, distance, rods, spots, venues and pegs', where)
+    + group('where', 'When and where', 'Time of day, moon, pressure, distance, rods, spots, venues and pegs', where)
     + group('trends', 'Over time', 'Seasons and month by month', trends)
     + group('sessions', 'Sessions', 'How each trip went', sessionsHtml);
 }
