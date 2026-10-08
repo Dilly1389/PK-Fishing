@@ -843,7 +843,20 @@
   #desk-pane #tackle-content{display:grid !important;grid-template-columns:minmax(0,3fr) minmax(320px,2fr);gap:0 20px;align-items:start;}
   #desk-pane #tackle-content > *{grid-column:2;min-width:0;}
   #desk-pane #tackle-content > #tackle-help-btn{grid-column:1 / -1;justify-self:start;}
-  #desk-pane #tackle-content > #tackle-list-card{grid-column:1;grid-row:2 / span 8;}
+  #desk-pane #tackle-content > #tackle-list-card{grid-column:1;grid-row:3 / span 8;}
+  #desk-tackle-mode{display:none;}
+  body.desk-mode #desk-tackle-mode{display:flex;}
+  #desk-pane #tackle-content > #desk-tackle-mode{grid-column:1 / -1;grid-row:2;}
+  .desk-build-col{display:contents;}
+  body.desk-mode #build-rig-body,body.desk-mode #my-rigs-body,body.desk-mode #build-combo-body,body.desk-mode #my-combos-body{display:block !important;}
+  body.desk-mode #build-rig-card h2 > button,body.desk-mode #my-rigs-card h2 > button,body.desk-mode #build-combo-card h2 > button,body.desk-mode #my-combos-card h2 > button{display:none;}
+  #desk-pane #tackle-content[data-mode="box"] > .desk-build-col{display:none;}
+  #desk-pane #tackle-content[data-mode="build"]{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+  #desk-pane #tackle-content[data-mode="build"] > #add-tackle-card,
+  #desk-pane #tackle-content[data-mode="build"] > #tackle-share-box-card,
+  #desk-pane #tackle-content[data-mode="build"] > #tackle-list-card{display:none;}
+  #desk-pane #tackle-content[data-mode="build"] > #desk-build-rigs{display:block;grid-column:1;grid-row:3;}
+  #desk-pane #tackle-content[data-mode="build"] > #desk-build-combos{display:block;grid-column:2;grid-row:3;}
   #desk-pane #panel-schedule.active{display:block;column-count:2;column-gap:20px;max-width:1100px;}
   #desk-pane #panel-schedule > *{min-width:0;break-inside:avoid;}
   #desk-pane #panel-schedule > div:first-child{column-span:all;}
@@ -11514,7 +11527,7 @@ function enterTackleTab(){
     makeCardCollapsible('tackle-share-box-card', 'tackle-share-box-body', 'pk_fishing_collapse_sharebox');
     makeCardCollapsible('tackle-list-card', 'tackle-list-body', 'pk_fishing_collapse_tacklelist', true);
   }
-  if(isSignedIn() && document.body.classList.contains('desk-mode')) deskBuildTackleCats();
+  if(isSignedIn() && document.body.classList.contains('desk-mode')){ deskBuildTackleCats(); deskBuildTackleMode(); }
 }
 
 function goToTab(tabName){
@@ -14188,6 +14201,56 @@ function deskBuildInsightsBar(body){
   });
   body.insertBefore(bar, body.firstChild);
   pick(deskInsightsGroup);
+}
+
+let deskTackleMode = 'box';
+
+function deskBuildTackleMode(){
+  const host = document.getElementById('tackle-content');
+  const help = document.getElementById('tackle-help-btn');
+  if(!host || !help) return;
+  if(!document.getElementById('desk-build-rigs')){
+    const mk = (id, ids)=>{
+      const col = document.createElement('div');
+      col.id = id;
+      col.className = 'desk-build-col';
+      const first = document.getElementById(ids[0]);
+      first.parentNode.insertBefore(col, first);
+      ids.forEach(i=> col.appendChild(document.getElementById(i)));
+    };
+    mk('desk-build-rigs', ['build-rig-card', 'my-rigs-card']);
+    mk('desk-build-combos', ['build-combo-card', 'my-combos-card']);
+  }
+  let bar = document.getElementById('desk-tackle-mode');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'desk-tackle-mode';
+    bar.className = 'desk-seg';
+    bar.setAttribute('role', 'group');
+    bar.setAttribute('aria-label', 'Tackle box view');
+    [['box', 'Tackle box'], ['build', 'Build mode']].forEach(([key, label])=>{
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.mode = key;
+      b.textContent = label;
+      b.addEventListener('click', ()=>{ deskTackleMode = key; deskApplyTackleMode(); });
+      bar.appendChild(b);
+    });
+    help.after(bar);
+  }
+  deskApplyTackleMode();
+}
+
+function deskApplyTackleMode(){
+  const host = document.getElementById('tackle-content');
+  const bar = document.getElementById('desk-tackle-mode');
+  if(!host || !bar) return;
+  host.dataset.mode = deskTackleMode;
+  bar.querySelectorAll('button').forEach(b=>{
+    const on = b.dataset.mode === deskTackleMode;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
 }
 
 function deskBuildTackleCats(){
