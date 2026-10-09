@@ -526,6 +526,8 @@
     min-height:44px;display:inline-flex;align-items:center;justify-content:center;
   }
   .mini-btn.danger{color:#c04;}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .mini-btn.danger{color:var(--rust);} }
+  :root[data-theme="dark"] .mini-btn.danger{color:var(--rust);}
   .mini-btn.liked{background:var(--dam);color:#fff;border-color:var(--dam);}
 
   .spec-top{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
