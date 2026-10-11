@@ -5913,12 +5913,17 @@ async function renderTackleBoxSharePicker(){
     return;
   }
   const shared = await loadMyBoxShares();
-  el.innerHTML = friends.map(p=>`
+  el.innerHTML = (isPro() ? '' : '<p class="pc-line muted">🔒 Pro: sharing your whole box with someone new. Single items are free to share, and anyone you already share with keeps access.</p>') + friends.map(p=>`
     <label class="check-row">
       <input type="checkbox" class="box-share-check" data-user="${p.user_id}" ${shared.has(p.user_id) ? 'checked' : ''}> ${escapeHtml(p.name)}
     </label>`).join('');
   el.querySelectorAll('.box-share-check').forEach(cb=>{
     cb.addEventListener('change', async ()=>{
+      if(cb.checked && !isPro()){
+        cb.checked = false;
+        openUpgrade('Sharing your whole tackle box with a friend is part of Pro. You can still share single items, and anyone you already share with keeps access.');
+        return;
+      }
       cb.disabled = true;
       try{
         if(cb.checked){
