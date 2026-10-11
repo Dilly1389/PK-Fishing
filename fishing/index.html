@@ -2365,11 +2365,22 @@
 </dialog>
 
 <dialog id="tackle-choose-modal" closedby="any" aria-label="Choose your active tackle items">
-  <div class="modal-card" style="max-width:min(92vw,460px);text-align:left;">
+  <div class="modal-card" style="max-width:min(94vw,720px);max-height:92vh;text-align:left;">
     <h3 style="margin-top:0;">Choose your active tackle</h3>
     <div class="pc-line muted">The free plan keeps 15 items in use: your own items plus the ones shared with you that you use. Your own items you leave unticked stay saved but locked, and unlock again if you upgrade to Pro. Shared items you leave unticked go back to your Shared with me list. The most used are ticked for you. Once saved, you can change your 15 again after 30 days.</div>
     <div id="tackle-choose-count" style="font-weight:700;margin:10px 0 4px;"></div>
-    <div id="tackle-choose-list" style="max-height:48vh;overflow-y:auto;"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 8px;">
+      <input type="search" id="tackle-choose-search" placeholder="Search by name" aria-label="Search by name" style="flex:2 1 180px;min-width:0;">
+      <select id="tackle-choose-category" aria-label="Category" style="flex:1 1 140px;min-width:0;"></select>
+      <select id="tackle-choose-show" aria-label="Show" style="flex:1 1 140px;min-width:0;">
+        <option value="">All items</option>
+        <option value="mine">My own</option>
+        <option value="shared">Shared with me</option>
+        <option value="ticked">Ticked only</option>
+        <option value="unticked">Unticked only</option>
+      </select>
+    </div>
+    <div id="tackle-choose-list" style="max-height:56vh;overflow-y:auto;"></div>
     <div style="display:flex;gap:8px;margin-top:12px;">
       <button class="primary-btn" id="tackle-choose-save">Save</button>
       <button class="mini-btn" id="tackle-choose-cancel" type="button">Not now</button>
@@ -5182,34 +5193,62 @@ function openTackleChoice(){
   }
   all.sort((a,b)=> (a.category || 'Other').localeCompare(b.category || 'Other') || a.name.localeCompare(b.name));
   const list = document.getElementById('tackle-choose-list');
-  list.innerHTML = all.map(it=>{
-    const n = useOf(it);
-    let who = '';
-    if(!mineIds.has(it.id)){
-      const owner = people.find(p=>p.user_id===it.owner_user_id);
-      who = ', shared by ' + (owner ? owner.name : 'a friend');
-    }
-    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px;">'
-      + '<input type="checkbox" data-choose="' + escapeHtml(it.id) + '" data-mine="' + (mineIds.has(it.id) ? '1' : '0') + '"' + (activeIds.has(it.id) ? ' checked' : '') + '>'
-      + '<span style="flex:1;"><b>' + escapeHtml(it.name) + '</b> <span class="pc-line muted" style="display:inline;">' + escapeHtml(it.category || 'Other') + escapeHtml(who) + (n ? ', used ' + n + (n === 1 ? ' time' : ' times') : '') + '</span></span></label>';
-  }).join('');
+  const searchEl = document.getElementById('tackle-choose-search');
+  const catEl = document.getElementById('tackle-choose-category');
+  const showEl = document.getElementById('tackle-choose-show');
+  const cats = [...new Set(all.map(it=> it.category || 'Other'))].sort((a,b)=> a.localeCompare(b));
+  catEl.innerHTML = '<option value="">All categories</option>' + cats.map(c=> '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>').join('');
+  searchEl.value = '';
+  showEl.value = '';
   const saveBtn = document.getElementById('tackle-choose-save');
   const counter = document.getElementById('tackle-choose-count');
-  const boxes = [...list.querySelectorAll('input[data-choose]')];
   const update = ()=>{
-    const n = boxes.filter(b=>b.checked).length;
+    const n = activeIds.size;
     counter.textContent = n + ' of ' + max + ' selected';
     counter.style.color = n > max ? 'var(--rust)' : '';
     saveBtn.disabled = n > max;
   };
-  boxes.forEach(b=> b.addEventListener('change', update));
+  const renderChoice = ()=>{
+    const q = searchEl.value.trim().toLowerCase();
+    const cat = catEl.value;
+    const show = showEl.value;
+    const rows = all.filter(it=>{
+      if(q && !String(it.name || '').toLowerCase().includes(q)) return false;
+      if(cat && (it.category || 'Other') !== cat) return false;
+      if(show === 'mine' && !mineIds.has(it.id)) return false;
+      if(show === 'shared' && mineIds.has(it.id)) return false;
+      if(show === 'ticked' && !activeIds.has(it.id)) return false;
+      if(show === 'unticked' && activeIds.has(it.id)) return false;
+      return true;
+    });
+    list.innerHTML = rows.length ? rows.map(it=>{
+      const n = useOf(it);
+      let who = '';
+      if(!mineIds.has(it.id)){
+        const owner = people.find(p=>p.user_id===it.owner_user_id);
+        who = ', shared by ' + (owner ? owner.name : 'a friend');
+      }
+      return '<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px;color:var(--ink);">'
+        + '<input type="checkbox" data-choose="' + escapeHtml(it.id) + '"' + (activeIds.has(it.id) ? ' checked' : '') + '>'
+        + '<span style="flex:1;"><b>' + escapeHtml(it.name) + '</b> <span class="pc-line muted" style="display:inline;">' + escapeHtml(it.category || 'Other') + escapeHtml(who) + (n ? ', used ' + n + (n === 1 ? ' time' : ' times') : '') + '</span></span></label>';
+    }).join('') : '<div class="pc-line muted" style="padding:12px 0;">No items match.</div>';
+    list.querySelectorAll('input[data-choose]').forEach(b=> b.addEventListener('change', ()=>{
+      if(b.checked) activeIds.add(b.dataset.choose); else activeIds.delete(b.dataset.choose);
+      update();
+      if(showEl.value === 'ticked' || showEl.value === 'unticked') renderChoice();
+    }));
+  };
+  searchEl.oninput = renderChoice;
+  catEl.onchange = renderChoice;
+  showEl.onchange = renderChoice;
+  renderChoice();
   update();
   document.getElementById('tackle-choose-cancel').onclick = ()=> dlg.close();
   saveBtn.onclick = async ()=>{
     saveBtn.disabled = true;
-    const lockIds = boxes.filter(b=>!b.checked && b.dataset.mine === '1').map(b=>b.dataset.choose);
-    const unuseIds = boxes.filter(b=>!b.checked && b.dataset.mine !== '1').map(b=>b.dataset.choose);
-    const openIds = boxes.filter(b=>b.checked).map(b=>b.dataset.choose);
+    const lockIds = all.filter(it=> !activeIds.has(it.id) && mineIds.has(it.id)).map(it=>it.id);
+    const unuseIds = all.filter(it=> !activeIds.has(it.id) && !mineIds.has(it.id)).map(it=>it.id);
+    const openIds = [...activeIds];
     try{
       await sbRpc('choose_active_tackle', {lock_ids: lockIds, open_ids: openIds, unuse_ids: unuseIds});
       dlg.close();
