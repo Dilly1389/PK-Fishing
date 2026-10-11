@@ -5144,6 +5144,17 @@ function tackleNeedsChoice(){
   if(isPro() || !isSignedIn()) return false;
   return activeTackleItems().length > FREE_LIMITS.tackle.max;
 }
+// A free angler over the limit must pick their baits and dips before starting a session.
+// Reloads the tackle first because the cache is only filled once the Tackle tab has been opened.
+async function tackleChoiceBlocksStart(){
+  if(isPro() || !isSignedIn()) return false;
+  try{
+    tackleItemsCache = await loadTackleItems();
+    const shared = await loadSharedWithMeTackleItemIds();
+    tackleInUseIds = new Set([...shared].filter(([, v])=> v === true).map(([k])=> k));
+  }catch(e){ console.error('tackle check failed', e); return false; }
+  return tackleNeedsChoice();
+}
 const TACKLE_CHOICE_DAYS = 30;
 // When the free plan next lets this angler change their 15; null means they can change now
 function tackleChoiceNextDate(){
@@ -5209,7 +5220,7 @@ function openTackleChoice(){
   const update = ()=>{
     const n = activeIds.size;
     counter.textContent = n + ' of ' + max + ' selected';
-    counter.style.color = n > max ? 'var(--rust)' : '';
+    counter.style.color = n > max ? 'var(--rust)' : 'var(--ink)';
     saveBtn.disabled = n > max;
   };
   const renderChoice = ()=>{
@@ -8176,6 +8187,12 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
   btn.disabled = true;
   st.textContent = 'Starting...';
   try{
+    if(await tackleChoiceBlocksStart()){
+      st.textContent = 'Choose which ' + FREE_LIMITS.tackle.max + ' baits and dips to use before you start a session.';
+      btn.disabled = false;
+      openTackleChoice();
+      return;
+    }
     // Match this venue to a saved one, or create it (with coordinates if available)
     let venueId = null;
     const venues = await loadMyVenues();
