@@ -877,6 +877,8 @@
   .desk-bookcase{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,3fr);gap:28px;align-items:start;max-width:1300px;}
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.48.0/dist/tabler-icons.min.css">
+<script>window.pkCaptchaReady=function(){ if(window.pkRenderCaptchas) window.pkRenderCaptchas(); };</script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=pkCaptchaReady" async defer></script>
 </head>
 <body>
 <div class="app">
@@ -1081,6 +1083,7 @@
               <input type="text" name="username" autocomplete="username" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;" tabindex="-1" aria-hidden="true">
               <input type="password" maxlength="200" class="auth-input" id="signup-password" placeholder="At least 6 characters">
             </div>
+            <div id="captcha-signup" style="margin:12px 0;min-height:65px;"></div>
             <button class="primary-btn" id="signup-btn">Create account</button>
             <div class="status" id="signup-status"></div>
             <p class="pc-line muted" style="margin-top:14px;text-align:center;">
@@ -1106,6 +1109,7 @@
             <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-bottom:14px;">
               <input type="checkbox" id="keep-signed-in" checked> Keep me signed in on this device
             </label>
+            <div id="captcha-signin" style="margin:12px 0;min-height:65px;"></div>
             <button class="primary-btn" id="signin-btn">Sign in</button>
             <div class="status" id="signin-status"></div>
 
@@ -1136,6 +1140,7 @@
               <div class="field">
                 <input type="email" maxlength="120" class="auth-input" id="forgot-password-email" placeholder="you@example.com">
               </div>
+              <div id="captcha-forgot" style="margin:10px 0;min-height:65px;"></div>
               <button class="mini-btn" id="forgot-password-send-btn">Send reset link</button>
               <div class="status" id="forgot-password-status"></div>
             </div>
@@ -4416,24 +4421,59 @@ async function tryRefreshSession(){
   }
 }
 
+// ---------- Bot check (Cloudflare Turnstile) ----------
+// Public site key (safe in the page). Supabase verifies the token with the secret key it holds.
+const TURNSTILE_SITE_KEY = '0x4AAAAAAFT001Ev48WS4Ouz';
+const captchaWidgets = {};   // container id -> widget id
+const captchaTokens = {};    // container id -> latest token
+
+function pkRenderCaptchas(){
+  if(!window.turnstile) return;
+  ['captcha-signup','captcha-signin','captcha-forgot'].forEach(id=>{
+    const el = document.getElementById(id);
+    // Only render where the person can actually see it (a hidden widget can't be completed)
+    if(!el || captchaWidgets[id] !== undefined || el.offsetParent === null) return;
+    captchaWidgets[id] = window.turnstile.render(el, {
+      sitekey: TURNSTILE_SITE_KEY,
+      callback: t=>{ captchaTokens[id] = t; },
+      'expired-callback': ()=>{ captchaTokens[id] = null; },
+      'error-callback': ()=>{ captchaTokens[id] = null; }
+    });
+  });
+}
+window.pkRenderCaptchas = pkRenderCaptchas;
+function captchaToken(id){ return captchaTokens[id] || undefined; }
+// Tokens work once only, so get a fresh one after every attempt
+function resetCaptcha(id){
+  captchaTokens[id] = null;
+  if(window.turnstile && captchaWidgets[id] !== undefined) window.turnstile.reset(captchaWidgets[id]);
+}
+function authErrorMessage(data, fallback){
+  const msg = data.msg || data.error_description || '';
+  if(/captcha/i.test(msg)) return 'Security check failed. Wait for the check to finish (or refresh the page) and try again.';
+  return msg || fallback;
+}
+
 async function authSignUp(email, password){
   const res = await fetch(AUTH_URL + '/signup', {
     method: 'POST',
     headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, gotrue_meta_security: { captcha_token: captchaToken('captcha-signup') } })
   });
   const data = await res.json();
-  if(!res.ok) throw new Error(data.msg || data.error_description || 'Sign up failed');
+  resetCaptcha('captcha-signup');
+  if(!res.ok) throw new Error(authErrorMessage(data, 'Sign up failed'));
   return data; // { access_token, refresh_token, user: {...} } — or just user if email confirmation is required
 }
 async function authSignIn(email, password){
   const res = await fetch(AUTH_URL + '/token?grant_type=password', {
     method: 'POST',
     headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, gotrue_meta_security: { captcha_token: captchaToken('captcha-signin') } })
   });
   const data = await res.json();
-  if(!res.ok) throw new Error(data.msg || data.error_description || 'Sign in failed');
+  resetCaptcha('captcha-signin');
+  if(!res.ok) throw new Error(authErrorMessage(data, 'Sign in failed'));
   return data;
 }
 
@@ -4552,6 +4592,7 @@ function renderAccountArea(){
     wireVenueSuggestions('past-catch-venue', 'venue-suggestion-list-past');
   }else{
     if(authForms) authForms.style.display = 'block';
+    pkRenderCaptchas();
     if(signedInArea) signedInArea.style.display = 'none';
     if(detailsCard) detailsCard.style.display = 'none';
     if(insightsCard) insightsCard.style.display = 'none';
@@ -4701,10 +4742,12 @@ document.getElementById('reel-records-save-btn').addEventListener('click', async
 document.getElementById('show-signup-link').addEventListener('click', ()=>{
   document.getElementById('signup-form').style.display = 'block';
   document.getElementById('signin-form').style.display = 'none';
+  pkRenderCaptchas();
 });
 document.getElementById('show-signin-link').addEventListener('click', ()=>{
   document.getElementById('signup-form').style.display = 'none';
   document.getElementById('signin-form').style.display = 'block';
+  pkRenderCaptchas();
 });
 
 document.getElementById('forgot-password-link').addEventListener('click', ()=>{
@@ -4716,6 +4759,7 @@ document.getElementById('forgot-password-link').addEventListener('click', ()=>{
     const prefill = document.getElementById('signin-email').value.trim();
     if(prefill) emailEl.value = prefill;
     emailEl.focus();
+    pkRenderCaptchas();
   }
 });
 document.getElementById('forgot-password-send-btn').addEventListener('click', async ()=>{
@@ -4728,15 +4772,16 @@ document.getElementById('forgot-password-send-btn').addEventListener('click', as
     const res = await fetch(AUTH_URL + '/recover', {
       method: 'POST',
       headers: { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, redirect_to: window.location.origin + window.location.pathname })
+      body: JSON.stringify({ email, redirect_to: window.location.origin + window.location.pathname, gotrue_meta_security: { captcha_token: captchaToken('captcha-forgot') } })
     });
+    resetCaptcha('captcha-forgot');
     // Supabase intentionally doesn't reveal whether the email exists, to
     // avoid leaking who has an account — so this message is always the same
     if(res.ok){
       st.textContent = 'If that email has an account, a reset link is on its way.';
     }else{
       const data = await res.json().catch(()=>({}));
-      st.textContent = data.msg || data.error_description || 'Could not send reset email right now — try again shortly.';
+      st.textContent = authErrorMessage(data, 'Could not send reset email right now — try again shortly.');
     }
   }catch(e){
     console.error(e);
