@@ -1887,6 +1887,13 @@
               <option value="">Everything I can see</option>
             </select>
           </div>
+          <div class="field">
+            <label>Sort by</label>
+            <select id="tackle-sort">
+              <option value="name" selected>Name (A to Z)</option>
+              <option value="used">Most used</option>
+            </select>
+          </div>
           <div class="field" id="tackle-filter-sharedby-wrap" style="display:none;">
             <label>Shared by</label>
             <select id="tackle-filter-sharedby">
@@ -6349,6 +6356,34 @@ document.getElementById('tackle-filter-baittype').addEventListener('change', ren
 document.getElementById('tackle-filter-visibility').addEventListener('change', renderTackleList);
 document.getElementById('tackle-filter-sharedby').addEventListener('change', renderTackleList);
 document.getElementById('tackle-filter-brand').addEventListener('change', renderTackleList);
+document.getElementById('tackle-sort').addEventListener('change', renderTackleList);
+
+// How often each of my baits and dips was logged. Catches store the baits as
+// comma-separated names, so this matches by name (ignoring capitals); it is a
+// good guide rather than an exact count. One catch counts once per item.
+async function loadTackleUseCounts(){
+  const counts = new Map();
+  const myId = getMyFishermanId();
+  if(!isSignedIn() || !myId) return counts;
+  try{
+    const cols = ['bom','hook1_note','hook2_note','hook3_note','hook4_note','hook5_note','hook6_note','feed_contents'];
+    const rows = await sbGet('catches?select=' + cols.join(',') + '&fisherman_id=eq.' + encodeURIComponent(myId) + '&limit=5000');
+    rows.forEach(r=>{
+      const seen = new Set();
+      const texts = cols.filter(c=> c !== 'feed_contents').map(c=> r[c]);
+      const feed = unpackFeedContents(r.feed_contents, {});
+      FEED_CONTENT_KEYS.forEach(k=> texts.push(feed[k]));
+      texts.forEach(txt=>{
+        String(txt || '').split(',').forEach(part=>{
+          const k = part.trim().toLowerCase();
+          if(k) seen.add(k);
+        });
+      });
+      seen.forEach(k=> counts.set(k, (counts.get(k) || 0) + 1));
+    });
+  }catch(e){ console.error('tackle use counts failed', e); }
+  return counts;
+}
 
 let tackleItemsCache = [];
 
@@ -6380,6 +6415,8 @@ async function renderTackleList(){
   tackleItemsCache = await loadTackleItems();
   renderTackleNameSuggestions();
   const sharedWithMeIds = await loadSharedWithMeTackleItemIds();
+  const useCounts = await loadTackleUseCounts();
+  const usedCount = (it)=> useCounts.get(String(it.name || '').trim().toLowerCase()) || 0;
   // Whose whole box is shared with me — affects how items get labelled
   let boxSharedOwners = new Set();
   if(isSignedIn()){
@@ -6467,8 +6504,9 @@ async function renderTackleList(){
     byCategory[cat].push(it);
   });
   const catNames = Object.keys(byCategory).sort((a,b)=>a.localeCompare(b));
+  const sortByUsed = document.getElementById('tackle-sort').value === 'used';
   catNames.forEach(cat=>{
-    byCategory[cat].sort((a,b)=> a.name.localeCompare(b.name));
+    byCategory[cat].sort((a,b)=> (sortByUsed ? usedCount(b) - usedCount(a) : 0) || a.name.localeCompare(b.name));
   });
   const catHtml = catNames.map(cat=>{
     const rows = byCategory[cat].map(it=>{
@@ -6520,6 +6558,7 @@ async function renderTackleList(){
           ${baitTag}
           ${flavourTag}
           ${sharedTag}
+          ${(isMine && isConsumable) ? `<span class="pill" style="opacity:0.85;">${usedCount(it) ? 'Used ' + usedCount(it) + (usedCount(it) === 1 ? ' time' : ' times') : 'Not used yet'}</span>` : ''}
         </div>
         ${useToggleHtml}
         <div class="actions">
@@ -8915,6 +8954,35 @@ function buildInsightsHtml(catches, venues, sessions){
     return baitsOnAnyHook(c).map(b=> rigLabels[rk] + ' + ' + b);
   }})) : insLocked('Rig + bait pairings');
 
+  // Everything that was out there on a cast: bait on any hook plus whatever
+  // went in the PVA bag, mesh, stringer or bait boat
+  const allBaitsOut = c=>{
+    const out = baitsOnAnyHook(c);
+    FEED_CONTENT_KEYS.forEach(k=> out.push(...contentItems(c[k])));
+    return [...new Set(out)];
+  };
+  if(isPro()){
+    const usedRows = groupStats(catchingBaits, {casts:true, castKeyFn:allBaitsOut})
+      .sort((a, b)=> b.total - a.total || b.count - a.count);
+    works += statTable('Most used baits and dips', usedRows,
+      'Ranked by how many casts they were out on, with the fish they caught.');
+
+    const usedNames = new Set();
+    catches.forEach(c=> allBaitsOut(c).forEach(b=> usedNames.add(b.toLowerCase())));
+    const unused = (isSignedIn() ? tackleItemsCache : [])
+      .filter(it=> it.owner_user_id === session.user.id && (it.category === 'Bait' || it.category === 'Dips') && !usedNames.has(String(it.name || '').trim().toLowerCase()))
+      .map(it=> it.name)
+      .sort((a, b)=> a.localeCompare(b));
+    if(unused.length){
+      const shown = unused.slice(0, 40);
+      works += `<div class="ins-sec"><p class="sub-heading">Baits and dips you have not used</p>
+        <p class="ins-sub" style="margin:-4px 0 8px;">In your tackle box, but not on any logged cast yet (${unused.length}). A good place to start when you want to clear space.</p>
+        <p class="ins-sub">${shown.map(escapeHtml).join(', ')}${unused.length > shown.length ? ' and ' + (unused.length - shown.length) + ' more' : ''}</p></div>`;
+    }
+  }else{
+    works += insLocked('Most used baits and dips');
+  }
+
   // The delivery method is fixed by the rig's own design, so it's read off
   // the rig that was fished rather than stored on each catch
   works += statTable('Feed methods', groupStats(c=>{
@@ -9521,6 +9589,7 @@ async function openInsights(){
   await loadAllRigHookLabels();
   const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
   const myCatches = rec && rec.catches ? rec.catches : [];
+  try{ tackleItemsCache = await loadTackleItems(); }catch(e){ console.error('tackle for insights failed', e); }
   body.innerHTML = buildInsightsHtml(myCatches, venues, sessions);
   body.querySelectorAll('[data-ins-upgrade]').forEach(btn=>{
     btn.addEventListener('click', ()=> openUpgrade(btn.dataset.insUpgrade + ' is part of Pro Insights.'));
