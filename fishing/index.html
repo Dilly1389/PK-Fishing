@@ -2367,7 +2367,7 @@
 <dialog id="tackle-choose-modal" closedby="any" aria-label="Choose your active tackle items">
   <div class="modal-card" style="max-width:min(92vw,460px);text-align:left;">
     <h3 style="margin-top:0;">Choose your active tackle</h3>
-    <div class="pc-line muted">The free plan keeps 15 items active. Items you leave unticked stay saved but locked, and unlock again if you upgrade to Pro. The most used are ticked for you.</div>
+    <div class="pc-line muted">The free plan keeps 15 items active. Items you leave unticked stay saved but locked, and unlock again if you upgrade to Pro. The most used are ticked for you. Once saved, you can change your 15 again after 30 days.</div>
     <div id="tackle-choose-count" style="font-weight:700;margin:10px 0 4px;"></div>
     <div id="tackle-choose-list" style="max-height:48vh;overflow-y:auto;"></div>
     <div style="display:flex;gap:8px;margin-top:12px;">
@@ -5102,7 +5102,7 @@ async function loadMyPlan(){
     }catch(e){ limitsActive = false; }
     const mine = (session && session.user) ? people.find(p=>p.user_id===session.user.id) : null;
     if(!mine){ myPlan = null; return; }
-    const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(mine.id) + '&select=plan,pro_until,founder,trial_started_at');
+    const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(mine.id) + '&select=plan,pro_until,founder,trial_started_at,tackle_choice_at');
     myPlan = rows[0] || null;
   }catch(e){ console.error('loadMyPlan failed', e); }
   refreshRodChoices();
@@ -5121,6 +5121,13 @@ function tackleNeedsChoice(){
   if(isPro() || !isSignedIn()) return false;
   return ownTackleItems().filter(it=> !it.inactive).length > FREE_LIMITS.tackle.max;
 }
+const TACKLE_CHOICE_DAYS = 30;
+// When the free plan next lets this angler change their 15; null means they can change now
+function tackleChoiceNextDate(){
+  if(tackleNeedsChoice() || !myPlan || !myPlan.tackle_choice_at) return null;
+  const next = new Date(new Date(myPlan.tackle_choice_at).getTime() + TACKLE_CHOICE_DAYS*86400000);
+  return next > new Date() ? next : null;
+}
 let tackleChoicePrompted = false;
 let tackleUseCountsCache = new Map();
 function renderTackleActiveBanner(){
@@ -5134,9 +5141,11 @@ function renderTackleActiveBanner(){
   el.innerHTML = tackleNeedsChoice()
     ? '<div class="pc-head">You have ' + own.length + ' tackle items</div><div class="pc-line muted">The free plan keeps ' + max + ' active. Choose which ' + max + ' to keep; the rest stay saved and unlock again if you upgrade to Pro.</div>'
     : '<div class="pc-head">' + (own.length - locked) + ' active, ' + locked + ' locked</div><div class="pc-line muted">Locked items stay saved and unlock again if you upgrade to Pro.</div>';
+  const wait = tackleChoiceNextDate();
   el.innerHTML += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
-    + '<button type="button" class="mini-btn" id="tackle-choose-btn">' + (tackleNeedsChoice() ? 'Choose my ' + max : 'Change my ' + max) + '</button>'
-    + '<button type="button" class="mini-btn" id="tackle-banner-upgrade">Upgrade to Pro</button></div>';
+    + '<button type="button" class="mini-btn" id="tackle-choose-btn"' + (wait ? ' disabled' : '') + '>' + (tackleNeedsChoice() ? 'Choose my ' + max : 'Change my ' + max) + '</button>'
+    + '<button type="button" class="mini-btn" id="tackle-banner-upgrade">Upgrade to Pro</button></div>'
+    + (wait ? '<div class="pc-line muted" style="margin-top:6px;">You can change your ' + max + ' again on ' + wait.toLocaleDateString(undefined, {day:'numeric', month:'long', year:'numeric'}) + '.</div>' : '');
   document.getElementById('tackle-choose-btn').addEventListener('click', openTackleChoice);
   document.getElementById('tackle-banner-upgrade').addEventListener('click', ()=> openUpgrade('Pro keeps all your tackle items active.'));
 }
@@ -5177,9 +5186,9 @@ function openTackleChoice(){
     const lockIds = boxes.filter(b=>!b.checked).map(b=>b.dataset.choose);
     const openIds = boxes.filter(b=>b.checked).map(b=>b.dataset.choose);
     try{
-      if(lockIds.length) await sbPatch('tackle_items', 'id=in.(' + lockIds.join(',') + ')', {inactive: true});
-      if(openIds.length) await sbPatch('tackle_items', 'id=in.(' + openIds.join(',') + ')', {inactive: false});
+      await sbRpc('choose_active_tackle', {lock_ids: lockIds, open_ids: openIds});
       dlg.close();
+      await loadMyPlan();
       await loadGearOptions();
       await loadTackleCategoryOptions();
       if(currentPerson) renderAll();
