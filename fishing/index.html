@@ -1533,6 +1533,21 @@
           </div>
           <div id="admin-user-actions" style="display:none;">
             <button class="mini-btn" id="admin-user-view-btn">View / edit profile</button>
+            <div id="admin-plan-box" style="margin-top:14px;">
+              <div id="admin-plan-status" style="font-size:13px;color:var(--muted);margin-bottom:8px;"></div>
+              <div class="field">
+                <label>Plan</label>
+                <select id="admin-plan-select"><option value="pro">Pro</option><option value="free">Free</option></select>
+              </div>
+              <div class="field">
+                <label><input type="checkbox" id="admin-plan-founder" style="width:auto;margin-right:6px;">Founder (Pro for life)</label>
+              </div>
+              <div class="field" id="admin-plan-until-field">
+                <label>Pro until (blank means no end date)</label>
+                <input type="date" id="admin-plan-until">
+              </div>
+              <button class="mini-btn" id="admin-plan-save-btn">Save plan</button>
+            </div>
           </div>
         </div>
       </section>
@@ -5001,6 +5016,7 @@ document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
   knownRodGear = [];
   knownReelGear = [];
   followedIds = new Set();
+  myPlan = null;
   pkReset();
   renderAccountArea();
   await setActivePerson(null);
@@ -5027,6 +5043,32 @@ async function loadPeople(){
       showDbError('Could not reach Supabase. Check the project URL and anon key.');
     }
   }
+  loadMyPlan();
+}
+
+// ---------- Plan (free / Pro) ----------
+// Stage 1: the plan is loaded and exposed through isPro(), but nothing is limited yet.
+// An unknown plan counts as Pro so a failed lookup never locks anyone out.
+let myPlan = null;
+async function loadMyPlan(){
+  try{
+    const mine = (session && session.user) ? people.find(p=>p.user_id===session.user.id) : null;
+    if(!mine){ myPlan = null; return; }
+    const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(mine.id) + '&select=plan,pro_until,founder,trial_started_at');
+    myPlan = rows[0] || null;
+  }catch(e){ console.error('loadMyPlan failed', e); }
+}
+const TRIAL_DAYS = 7;
+function trialEnd(p){
+  if(!p || !p.trial_started_at) return null;
+  return new Date(new Date(p.trial_started_at).getTime() + TRIAL_DAYS*86400000);
+}
+function isPro(){
+  const p = myPlan;
+  if(!p) return true;
+  if(p.plan === 'pro' && (!p.pro_until || new Date(p.pro_until) > new Date())) return true;
+  const te = trialEnd(p);
+  return !!(te && te > new Date());
 }
 
 // ---------- Tackle box (signed-in only) ----------
@@ -13782,8 +13824,57 @@ document.getElementById('admin-tackle-category-filter').addEventListener('change
 document.getElementById('admin-tackle-sharing-filter').addEventListener('change', renderAdminTackleList);
 document.getElementById('admin-tackle-photo-filter').addEventListener('change', renderAdminTackleList);
 document.getElementById('admin-tackle-search').addEventListener('input', renderAdminTackleList);
+function describePlan(p){
+  if(!p) return 'No plan record yet';
+  if(p.plan === 'free'){
+    const te = trialEnd(p);
+    if(!te) return 'Plan: Free (trial not started)';
+    return te > new Date() ? 'Plan: Free, on a Pro trial until ' + te.toLocaleDateString() : 'Plan: Free (trial used)';
+  }
+  if(p.founder) return 'Plan: Pro (Founder, for life)';
+  if(!p.pro_until) return 'Plan: Pro (no end date)';
+  const d = new Date(p.pro_until);
+  return 'Plan: ' + (d > new Date() ? 'Pro until ' : 'Pro ended ') + d.toLocaleDateString();
+}
+function syncAdminPlanFields(){
+  const founder = document.getElementById('admin-plan-founder').checked;
+  document.getElementById('admin-plan-select').disabled = founder;
+  document.getElementById('admin-plan-until-field').style.display = founder ? 'none' : 'block';
+}
+async function loadAdminPlan(id){
+  const statusEl = document.getElementById('admin-plan-status');
+  statusEl.textContent = 'Loading plan...';
+  try{
+    const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(id) + '&select=plan,pro_until,founder,trial_started_at');
+    const p = rows[0] || null;
+    statusEl.textContent = describePlan(p);
+    document.getElementById('admin-plan-select').value = p ? p.plan : 'pro';
+    document.getElementById('admin-plan-founder').checked = !!(p && p.founder);
+    document.getElementById('admin-plan-until').value = p && p.pro_until ? p.pro_until.slice(0,10) : '';
+    syncAdminPlanFields();
+  }catch(e){
+    console.error(e);
+    statusEl.textContent = 'Could not load the plan.';
+  }
+}
+document.getElementById('admin-plan-founder').addEventListener('change', syncAdminPlanFields);
+document.getElementById('admin-plan-save-btn').addEventListener('click', async ()=>{
+  const id = document.getElementById('admin-user-select').value;
+  if(!id) return;
+  const founder = document.getElementById('admin-plan-founder').checked;
+  const plan = founder ? 'pro' : document.getElementById('admin-plan-select').value;
+  const untilVal = document.getElementById('admin-plan-until').value;
+  const until = (founder || !untilVal) ? null : new Date(untilVal + 'T23:59:59').toISOString();
+  try{
+    await sbRpc('admin_set_plan', {p_fisherman_id: id, p_plan: plan, p_pro_until: until, p_founder: founder, p_note: null});
+    await loadAdminPlan(id);
+  }catch(e){
+    alert('Could not save the plan: ' + (e.message || 'unknown error'));
+  }
+});
 document.getElementById('admin-user-select').addEventListener('change', (e)=>{
   document.getElementById('admin-user-actions').style.display = e.target.value ? 'block' : 'none';
+  if(e.target.value) loadAdminPlan(e.target.value);
 });
 document.getElementById('admin-user-view-btn').addEventListener('click', ()=>{
   const id = document.getElementById('admin-user-select').value;
