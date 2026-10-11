@@ -1493,6 +1493,7 @@
         <div id="competition-angler-search-results"></div>
         <div id="competition-selected-anglers" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
         <p class="sub-heading">Proof for each catch</p>
+        <p class="pc-line muted" id="competition-photo-pro-note" style="display:none;">Compulsory photos are a Pro organiser tool.</p>
         <label class="check-row"><input type="checkbox" id="competition-require-fish" checked> Photo of the fish is compulsory</label>
         <label class="check-row"><input type="checkbox" id="competition-require-scale"> Photo of the scale is compulsory</label>
         <label class="check-row"><input type="checkbox" id="competition-creator-fishing" checked> I'm fishing this one too</label>
@@ -2337,6 +2338,23 @@
   </div>
 </dialog>
 
+<dialog id="upgrade-modal" closedby="any" aria-label="Upgrade to Pro">
+  <div class="modal-card">
+    <h3 style="margin-top:0;"><i class="ti ti-crown" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>Upgrade to Pro</h3>
+    <div class="pc-line" id="upgrade-reason"></div>
+    <div class="profile-catch">
+      <div class="pc-head">Pro gives you</div>
+      <div class="pc-line muted">Unlimited rods, tackle, rigs and bait combinations, sharing your whole tackle box, deeper Insights, all badges, bigger competitions with organiser tools, and CSV export.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Price</div>
+      <div class="pc-line muted">R49 a month or R399 a year. Online payment opens soon.</div>
+    </div>
+    <div id="upgrade-trial-area" style="margin-top:10px;"></div>
+    <button class="mini-btn" id="upgrade-close" style="margin-top:12px;">Not now</button>
+  </div>
+</dialog>
+
 <dialog id="competitions-help-modal" closedby="any" aria-label="How Competitions work">
   <div class="modal-card">
     <h3 style="margin-top:0;"><i class="ti ti-trophy" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How Competitions work</h3>
@@ -2901,9 +2919,11 @@ function updateRodSetupVisibility(rod){
 
 function rodsOptionsHtml(selected){
   let html = '';
-  for(let i=1; i<=MAX_RODS; i++){
+  const allowed = isPro() ? MAX_RODS : Math.max(FREE_RODS, selected);
+  for(let i=1; i<=allowed; i++){
     html += `<option value="${i}" ${i===selected?'selected':''}>${i} rod${i>1?'s':''}</option>`;
   }
+  if(allowed < MAX_RODS) html += `<option disabled>More rods: Pro</option>`;
   return html;
 }
 function hookCountOptionsHtml(selected){
@@ -3420,6 +3440,7 @@ document.getElementById('combo-create-btn').addEventListener('click', async ()=>
   if(!name){ st.textContent = 'Enter a name.'; return; }
   if(!rigSel.value){ st.textContent = 'Select a rig.'; return; }
   if(!isSignedIn()){ st.textContent = 'You need to be signed in.'; return; }
+  if(!(await checkLimit('combos'))) return;
   const rigDef = findRigDef(rigSel.value, selectedRigId(rigSel));
   const hookBaits = {};
   if(rigDef){
@@ -5047,16 +5068,106 @@ async function loadPeople(){
 }
 
 // ---------- Plan (free / Pro) ----------
-// Stage 1: the plan is loaded and exposed through isPro(), but nothing is limited yet.
-// An unknown plan counts as Pro so a failed lookup never locks anyone out.
+// Limits only apply once the launch switch (app_flags.limits_active) is 'true'.
+// An unknown plan or switch counts as Pro/off so a failed lookup never locks anyone out.
 let myPlan = null;
+let limitsActive = false;
 async function loadMyPlan(){
   try{
+    try{
+      const f = await sbGet('app_flags?key=eq.limits_active&select=value');
+      limitsActive = !!(f[0] && f[0].value === 'true');
+    }catch(e){ limitsActive = false; }
     const mine = (session && session.user) ? people.find(p=>p.user_id===session.user.id) : null;
     if(!mine){ myPlan = null; return; }
     const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(mine.id) + '&select=plan,pro_until,founder,trial_started_at');
     myPlan = rows[0] || null;
   }catch(e){ console.error('loadMyPlan failed', e); }
+  refreshRodChoices();
+  refreshCompetitionForm();
+}
+const FREE_COMP_ANGLERS = 10;
+function refreshCompetitionForm(){
+  const pro = isPro();
+  const note = document.getElementById('competition-photo-pro-note');
+  if(note) note.style.display = pro ? 'none' : 'block';
+  ['competition-require-fish','competition-require-scale'].forEach(id=>{
+    const cb = document.getElementById(id);
+    if(!cb) return;
+    cb.disabled = !pro;
+    if(!pro) cb.checked = false;
+  });
+}
+const PRO_BADGE_KEYS = ['windmaster','pressure_shift','rainmaker','heatwave','frosty','stormchaser','night_owl','full_moon','grand_slam','rare_catch'];
+function isMyFishermanId(id){
+  const mine = (session && session.user) ? people.find(p=>p.user_id===session.user.id) : null;
+  return !!(mine && id && mine.id === id);
+}
+// Free accounts still earn Pro badges; they just can't display them until they upgrade
+function proBadgesLocked(personId){ return !isPro() && isMyFishermanId(personId); }
+function insLocked(title){
+  return '<div class="ins-sec"><p class="sub-heading">' + escapeHtml(title) + '</p>'
+    + '<button type="button" class="mini-btn" data-ins-upgrade="' + escapeHtml(title) + '">🔒 Pro: tap to unlock</button></div>';
+}
+const FREE_RODS = 2;
+const FREE_LIMITS = {
+  tackle: {max:15, table:'tackle_items', col:'owner_user_id', label:'tackle items'},
+  rigs:   {max:3,  table:'rigs', col:'creator_user_id', label:'rigs'},
+  combos: {max:3,  table:'bait_combinations', col:'owner_user_id', label:'bait combinations'}
+};
+const TRIAL_CATCHES_NEEDED = 10;
+// True when this angler may add one more of that kind; otherwise shows the upgrade screen
+async function checkLimit(kind){
+  if(isPro() || !isSignedIn()) return true;
+  const L = FREE_LIMITS[kind];
+  try{
+    const rows = await sbGet(L.table + '?' + L.col + '=eq.' + encodeURIComponent(session.user.id) + '&select=id&limit=' + L.max);
+    if(rows.length < L.max) return true;
+  }catch(e){ console.error('checkLimit failed', e); return true; }
+  openUpgrade('The free plan holds up to ' + L.max + ' ' + L.label + '. Upgrade to Pro for unlimited.');
+  return false;
+}
+function refreshRodChoices(){
+  const startSel = document.getElementById('session-rods');
+  if(startSel && startSel.options.length) startSel.innerHTML = rodsOptionsHtml(Math.min(parseInt(startSel.value,10)||1, isPro()?MAX_RODS:FREE_RODS));
+  const liveSel = document.getElementById('session-active-rods');
+  if(liveSel && liveSel.options.length) liveSel.innerHTML = rodsOptionsHtml(parseInt(liveSel.value,10)||1);
+}
+async function openUpgrade(reason){
+  const dlg = document.getElementById('upgrade-modal');
+  if(!dlg) return;
+  document.getElementById('upgrade-reason').textContent = reason || '';
+  const area = document.getElementById('upgrade-trial-area');
+  area.innerHTML = '';
+  const mine = (session && session.user) ? people.find(p=>p.user_id===session.user.id) : null;
+  if(mine && myPlan){
+    if(myPlan.trial_started_at){
+      area.innerHTML = '<div class="pc-line muted">Your free 7-day trial has been used.</div>';
+    }else{
+      let n = 0;
+      try{ n = (await sbGet('catches?fisherman_id=eq.' + encodeURIComponent(mine.id) + '&caught=eq.true&select=id&limit=' + TRIAL_CATCHES_NEEDED)).length; }catch(e){}
+      if(n >= TRIAL_CATCHES_NEEDED){
+        area.innerHTML = '<button class="primary-btn" id="upgrade-trial-btn">Start my free 7-day trial</button><div class="pc-line muted" style="margin-top:6px;">One time only. Everything in Pro unlocks for 7 days.</div>';
+        document.getElementById('upgrade-trial-btn').addEventListener('click', async (ev)=>{
+          ev.target.disabled = true;
+          try{
+            await sbRpc('start_my_trial', {});
+            await loadMyPlan();
+            dlg.close();
+            renderAll();
+            alert('Your 7-day Pro trial has started.');
+          }catch(e){
+            ev.target.disabled = false;
+            alert('Could not start the trial: ' + (e.message || 'unknown error'));
+          }
+        });
+      }else{
+        const left = TRIAL_CATCHES_NEEDED - n;
+        area.innerHTML = '<div class="pc-line muted">Log ' + left + ' more caught fish to unlock a free 7-day Pro trial.</div>';
+      }
+    }
+  }
+  dlg.showModal();
 }
 const TRIAL_DAYS = 7;
 function trialEnd(p){
@@ -5065,6 +5176,7 @@ function trialEnd(p){
 }
 function isPro(){
   const p = myPlan;
+  if(!limitsActive) return true;
   if(!p) return true;
   if(p.plan === 'pro' && (!p.pro_until || new Date(p.pro_until) > new Date())) return true;
   const te = trialEnd(p);
@@ -5987,6 +6099,7 @@ async function renderRigsList(){
     btn.addEventListener('click', async ()=>{
       const source = rigs.find(x=>x.id===btn.dataset.rigCopy);
       if(!source) return;
+      if(!(await checkLimit('rigs'))) return;
       btn.disabled = true;
       btn.textContent = 'Adding...';
       try{
@@ -6168,6 +6281,7 @@ document.getElementById('rig-create-btn').addEventListener('click', async ()=>{
   const st = document.getElementById('rig-create-status');
   const name = nameEl.value.trim();
   if(!name){ st.textContent = 'Enter a type of rig.'; return; }
+  if(!(await checkLimit('rigs'))) return;
   const feedMethods = readFeedMethodChecks('rig-feed');
   st.textContent = 'Creating...';
   try{
@@ -6582,6 +6696,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   if(!name){ st.textContent = 'Enter a name.'; return; }
   if(!catEl.value){ st.textContent = 'Select a category.'; return; }
   if(!isSignedIn()){ st.textContent = 'You need to be signed in.'; return; }
+  if(!(await checkLimit('tackle'))) return;
   st.textContent = 'Adding...';
   try{
     let photo = null;
@@ -8768,7 +8883,7 @@ function buildInsightsHtml(catches, venues, sessions){
   };
   works += statTable('Baits on the hook that caught', groupStats(catchingBaits, {casts:true, castKeyFn:baitsOnAnyHook}),
     'Casts count every bait that was on any hook, so a bait on a spare hook shares the casts but not the fish.');
-  works += statTable('Rig + bait pairings', groupStats(c=>{
+  works += isPro() ? statTable('Rig + bait pairings', groupStats(c=>{
     const rk = rigKey(c);
     if(!rk) return [];
     return catchingBaits(c).map(b=> rigLabels[rk] + ' + ' + b);
@@ -8776,7 +8891,7 @@ function buildInsightsHtml(catches, venues, sessions){
     const rk = rigKey(c);
     if(!rk) return [];
     return baitsOnAnyHook(c).map(b=> rigLabels[rk] + ' + ' + b);
-  }}));
+  }})) : insLocked('Rig + bait pairings');
 
   // The delivery method is fixed by the rig's own design, so it's read off
   // the rig that was fished rather than stored on each catch
@@ -8849,10 +8964,14 @@ function buildInsightsHtml(catches, venues, sessions){
     };
     const trendRows = groupStats(trendKey, {casts:true, order:trendBands});
     const levelRows = groupStats(levelKey, {casts:true, order:levelBands});
-    where += statTable('Pressure trend', trendRows,
-      'How the pressure moved over the last few hours when you logged the cast. Falling and rising mean 1 hPa or more, fast means 3.5 hPa or more. ' + adviceFor(trendRows, 'the pressure was'));
-    where += statTable('Air pressure', levelRows,
-      'Sea-level pressure at the time of each cast. ' + adviceFor(levelRows, 'the pressure was', true));
+    if(!isPro()){
+      where += insLocked('Pressure trend and advice');
+    }else{
+      where += statTable('Pressure trend', trendRows,
+        'How the pressure moved over the last few hours when you logged the cast. Falling and rising mean 1 hPa or more, fast means 3.5 hPa or more. ' + adviceFor(trendRows, 'the pressure was'));
+      where += statTable('Air pressure', levelRows,
+        'Sea-level pressure at the time of each cast. ' + adviceFor(levelRows, 'the pressure was', true));
+    }
   })();
 
   // Banded, so 42m and 45m group together
@@ -8876,15 +8995,17 @@ function buildInsightsHtml(catches, venues, sessions){
   const rodLabels = {};
   catches.forEach(c=>{ if(c.rod) rodLabels[c.rod] = rodNames[c.rod] || RID_LABEL[c.rod] || 'Rod'; });
   const rodRows = groupStats(c=> c.rod ? [c.rod] : [], {casts:true, labels:rodLabels});
-  if(rodRows.length > 1) where += statTable('Rods', rodRows);
+  if(rodRows.length > 1) where += isPro() ? statTable('Rods', rodRows) : insLocked('Rods');
 
   // Where the rod was put, from the free-text spot note on Timers. Written by
   // hand, so "Margin" and "margin " count as the same spot.
   const spotKey = c=> String(c.rodNote || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const spotLabels = {};
   catches.forEach(c=>{ const k = spotKey(c); if(k && !spotLabels[k]) spotLabels[k] = String(c.rodNote).trim().replace(/\s+/g, ' '); });
-  where += statTable('Rod spots', groupStats(c=>{ const k = spotKey(c); return k ? [k] : []; }, {casts:true, labels:spotLabels}),
-    'Taken from the note you type on each rod, like "margin" or "near the reeds".');
+  where += isPro()
+    ? statTable('Rod spots', groupStats(c=>{ const k = spotKey(c); return k ? [k] : []; }, {casts:true, labels:spotLabels}),
+        'Taken from the note you type on each rod, like "margin" or "near the reeds".')
+    : insLocked('Rod spots');
 
   // Venues — private to you, never shown anywhere else in the app
   const venueNames = {};
@@ -8940,7 +9061,9 @@ function buildInsightsHtml(catches, venues, sessions){
     pegs.sort((a,b)=> b.perSession - a.perSession || b.fish - a.fish || b.sessions - a.sessions);
     return {label: v.label, pegs, sessions: pegs.reduce((n,p)=>n+p.sessions,0)};
   }).sort((a,b)=> b.sessions - a.sessions);
-  if(pegVenueList.length){
+  if(pegVenueList.length && !isPro()){
+    where += insLocked('Pegs and stands');
+  }else if(pegVenueList.length){
     where += `<div class="ins-sec"><p class="sub-heading">Pegs and stands</p>
       <p class="ins-sub" style="margin:-4px 0 8px;">Fish per session on each peg, for planning your next trip. A peg you've only fished once doesn't tell you much yet.</p>`;
     pegVenueList.forEach(v=>{
@@ -8973,7 +9096,7 @@ function buildInsightsHtml(catches, venues, sessions){
   const seasonOf = m => (m === 11 || m <= 1) ? 'Summer (Dec–Feb)' : m <= 4 ? 'Autumn (Mar–May)' : m <= 7 ? 'Winter (Jun–Aug)' : 'Spring (Sep–Nov)';
   const seasonOrder = ['Summer (Dec–Feb)', 'Autumn (Mar–May)', 'Winter (Jun–Aug)', 'Spring (Sep–Nov)'];
   const seasonRows = groupStats(c=> [seasonOf(new Date(c.time).getMonth())], {casts:true, order:seasonOrder});
-  if(seasonRows.length > 1) trends += statTable('Seasons', seasonRows, 'Every catch counts, whatever the year.');
+  if(seasonRows.length > 1) trends += isPro() ? statTable('Seasons', seasonRows, 'Every catch counts, whatever the year.') : insLocked('Seasons');
   const monthKey = c=>{ const d = new Date(c.time); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0'); };
   const monthLabels = {};
   catches.forEach(c=>{
@@ -8982,7 +9105,7 @@ function buildInsightsHtml(catches, venues, sessions){
   });
   const monthOrder = Object.keys(monthLabels).sort().reverse();
   const monthRows = groupStats(c=>[monthKey(c)], {casts:true, labels:monthLabels, order:monthOrder});
-  if(monthRows.length > 1) trends += statTable('Month by month', monthRows, 'Newest first, so you can see whether your catch rate is climbing.', 12);
+  if(monthRows.length > 1) trends += isPro() ? statTable('Month by month', monthRows, 'Newest first, so you can see whether your catch rate is climbing.', 12) : insLocked('Month by month');
 
   // ===== Sessions =====
   let sessionsHtml = '';
@@ -9377,6 +9500,9 @@ async function openInsights(){
   const [rec, venues, sessions] = await Promise.all([loadPerson(myId), loadMyVenues(), loadMySessions()]);
   const myCatches = rec && rec.catches ? rec.catches : [];
   body.innerHTML = buildInsightsHtml(myCatches, venues, sessions);
+  body.querySelectorAll('[data-ins-upgrade]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openUpgrade(btn.dataset.insUpgrade + ' is part of Pro Insights.'));
+  });
 
   // Remember which groups are open. The map can only size itself while its
   // group is visible, so it's built the first time "When and where" opens.
@@ -9800,6 +9926,9 @@ document.getElementById('insights-help-close').addEventListener('click', ()=>{
 });
 document.getElementById('competitions-help-btn').addEventListener('click', ()=>{
   document.getElementById('competitions-help-modal').showModal();
+});
+document.getElementById('upgrade-close').addEventListener('click', ()=>{
+  document.getElementById('upgrade-modal').close();
 });
 document.getElementById('competitions-help-close').addEventListener('click', ()=>{
   document.getElementById('competitions-help-modal').close();
@@ -10397,6 +10526,9 @@ async function loadBookcaseData(personId){
 
   const byKey = {};
   earned.forEach(e=>{ byKey[e.badge_key] = e; });
+  if(proBadgesLocked(personId)){
+    PRO_BADGE_KEYS.forEach(k=>{ if(byKey[k]) byKey[k] = {locked:true}; });
+  }
 
   // Competition badges arrive one row per win — fold them into the same
   // {count, when} shape the cabinet builder already understands, keeping
@@ -10447,7 +10579,15 @@ function renderCabinet(el, defs, byKey, title, personId, isComp, opts){
     const e = byKey[b.key];
     const borderR = (i % perRow === perRow - 1) ? '' : 'border-right:1px solid rgba(0,0,0,.62);';
     let inner;
-    if(e){
+    if(e && e.locked){
+      inner = '<div style="position:relative;width:' + px + 'px;margin:0 auto;"><img src="' + badgeImageSrc(b.key) + '?v=' + BADGE_ASSET_VERSION + '" alt="" '
+        + 'style="width:' + px + 'px;height:auto;display:block;filter:grayscale(1) brightness(.55);opacity:.55;">'
+        + '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;">🔒</span></div>'
+        + '<div style="margin-top:6px;font-size:' + fs + 'px;line-height:1.2;text-align:center;color:#a88e6a;min-height:' + nameH + 'px;">' + escapeHtml(b.name) + '</div>';
+      cells += '<div style="height:100%;' + borderR + '"><button type="button" class="bookcase-locked" data-badge-name="' + escapeHtml(b.name) + '" '
+        + 'style="display:block;width:100%;height:100%;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;">'
+        + shellOpen(false) + inner + '</div></button></div>';
+    }else if(e){
       earnedCount++;
       const count = isComp ? e.count : (e.earn_count || 1);
       const whenSrc = isComp ? e.latest : e.earned_at;
@@ -10540,6 +10680,11 @@ function renderCabinet(el, defs, byKey, title, personId, isComp, opts){
     shelves.appendChild(b);
   }
 
+  shelves.querySelectorAll('.bookcase-locked').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      openUpgrade('You earned the ' + btn.dataset.badgeName + ' badge. Pro badges are shown again as soon as you upgrade.');
+    });
+  });
   shelves.querySelectorAll('.bookcase-badge').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const pool = btn.dataset.badgeComp ? COMPETITION_BADGE_DEFS : BADGE_DEFS;
@@ -10639,7 +10784,8 @@ async function openProfile(personId, focusCatchId){
   // link through to the full collection. Sorted by whichever is more
   // recent between first-earned and last-re-earned, so a badge someone
   // just earned again bubbles back up even if they got it ages ago too.
-  const earnedBadges = await loadBadgesFor(p.id);
+  let earnedBadges = await loadBadgesFor(p.id);
+  if(proBadgesLocked(p.id)) earnedBadges = earnedBadges.filter(b=> !PRO_BADGE_KEYS.includes(b.badge_key));
   if(!earnedBadges.length){
     html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin:4px 0 8px;">
       <p class="sub-heading" style="margin:0;">Fins of Fame</p>
@@ -13223,8 +13369,9 @@ function renderCompetitionEditForm(comp, containerEl){
       </select>
     </div>
     <p class="sub-heading">Proof for each catch</p>
-    <label class="check-row"><input type="checkbox" class="comp-edit-require-fish" ${comp.require_fish_photo ? 'checked' : ''}> Photo of the fish is compulsory</label>
-    <label class="check-row"><input type="checkbox" class="comp-edit-require-scale" ${comp.require_scale_photo ? 'checked' : ''}> Photo of the scale is compulsory</label>
+    ${isPro() ? '' : '<p class="pc-line muted">Compulsory photos are a Pro organiser tool. Existing rules stay as they are.</p>'}
+    <label class="check-row"><input type="checkbox" class="comp-edit-require-fish" ${comp.require_fish_photo ? 'checked' : ''} ${isPro() ? '' : 'disabled'}> Photo of the fish is compulsory</label>
+    <label class="check-row"><input type="checkbox" class="comp-edit-require-scale" ${comp.require_scale_photo ? 'checked' : ''} ${isPro() ? '' : 'disabled'}> Photo of the scale is compulsory</label>
     <button class="primary-btn comp-edit-save">Save changes</button>
     <div class="status comp-edit-status"></div>
   `;
@@ -13546,7 +13693,7 @@ async function openCompetitionDetail(comp, anglerId){
         const photos = (c.photos||[]).length ? `<div class="comp-catch-photos">${c.photos.map((src,i)=>`
             <figure><img class="pc-photo" src="${src}" alt="${labels[i]==='scale' ? 'Scale photo' : 'Catch photo'}" data-catch-id="${c.id}" data-photo-index="${i}" loading="lazy" decoding="async">
             <figcaption>${labels[i]==='scale' ? 'Scale' : (labels[i]==='fish' ? 'Fish' : 'Photo')}</figcaption></figure>`).join('')}</div>` : '';
-        const buttons = canVerify ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        const buttons = (canVerify && !isPro()) ? `<div style="margin-top:10px;"><button type="button" class="mini-btn" data-comp-upgrade="Confirming and rejecting catches is a Pro organiser tool.">🔒 Pro: Confirm or Reject</button></div>` : canVerify ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
             ${status !== 'confirmed' ? `<button type="button" class="mini-btn" data-verify="confirmed" data-catch="${c.id}">Confirm</button>` : ''}
             ${status !== 'rejected' ? `<button type="button" class="mini-btn danger" data-verify="rejected" data-catch="${c.id}">Reject</button>` : ''}
             ${status !== 'pending' ? `<button type="button" class="mini-btn" data-verify="pending" data-catch="${c.id}">Undo</button>` : ''}
@@ -13563,6 +13710,9 @@ async function openCompetitionDetail(comp, anglerId){
          <p class="pc-line muted" style="text-align:left;margin-bottom:10px;">${counted.length} counted · ${formatWeight(total)} total · biggest ${formatWeight(biggest)}</p>` +
         (list || '<div class="empty">No catches in this competition.</div>');
       document.getElementById('comp-detail-back').addEventListener('click', showBoard);
+      body.querySelectorAll('[data-comp-upgrade]').forEach(btn=>{
+        btn.addEventListener('click', ()=> openUpgrade(btn.dataset.compUpgrade));
+      });
       body.querySelectorAll('[data-verify]').forEach(btn=>{
         btn.addEventListener('click', async ()=>{
           const status = btn.dataset.verify;
@@ -13990,6 +14140,22 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
   if(!name){ st.textContent = 'Enter a name.'; return; }
   if(!startEl.value || !endEl.value){ st.textContent = 'Pick a start and end date.'; return; }
   const selectedIds = [...competitionSelectedIds];
+  if(!isPro()){
+    const meId = getMyFishermanId();
+    const fishing = document.getElementById('competition-creator-fishing').checked && meId && !selectedIds.includes(meId);
+    if(selectedIds.length + (fishing ? 1 : 0) > FREE_COMP_ANGLERS){
+      openUpgrade('Free competitions hold up to ' + FREE_COMP_ANGLERS + ' anglers. Pro allows bigger competitions.');
+      return;
+    }
+    try{
+      const mineComps = await sbGet('competitions?creator_user_id=eq.' + encodeURIComponent(session.user.id) + '&select=end_date,end_time');
+      const now = new Date();
+      if(mineComps.some(r=> new Date(r.end_date + 'T' + (r.end_time || '23:59')) > now)){
+        openUpgrade('On the free plan you can run one competition at a time. Pro allows several.');
+        return;
+      }
+    }catch(e){ console.error('competition limit check failed', e); }
+  }
   st.textContent = 'Creating...';
   try{
     const id = uid();
@@ -13998,8 +14164,8 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
       start_date: startEl.value, end_date: endEl.value,
       start_time: startTimeEl.value || '00:00', end_time: endTimeEl.value || '23:59',
       metric: metricEl.value, fish_type_filter: fishtypeEl.value || null,
-      require_fish_photo: document.getElementById('competition-require-fish').checked,
-      require_scale_photo: document.getElementById('competition-require-scale').checked,
+      require_fish_photo: isPro() && document.getElementById('competition-require-fish').checked,
+      require_scale_photo: isPro() && document.getElementById('competition-require-scale').checked,
       creator_user_id: session.user.id
     };
     await insertCompetition(newComp);
