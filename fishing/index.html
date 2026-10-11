@@ -3975,6 +3975,22 @@ document.addEventListener('click', (e)=>{
   else{ input.removeAttribute('capture'); }
   input.click();
 });
+// Photos taken with the in-app Take photo button never reach the gallery (the app
+// only gets the file), so keep a full-quality copy by downloading the untouched original.
+document.addEventListener('change', (e)=>{
+  const inp = e.target;
+  if(!inp.matches || !inp.matches('input[type="file"][capture]')) return;
+  const f = inp.files && inp.files[0];
+  if(!f || !/^image\//.test(f.type)) return;
+  try{
+    const ext = (f.type.split('/')[1] || 'jpg').replace('jpeg','jpg');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(f);
+    a.download = 'PK-Fishing-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.' + ext;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 10000);
+  }catch(_){}
+});
 document.addEventListener('change', (e)=>{
   if(e.target.matches('input[type="file"][id]')){
     const label = document.querySelector('.photo-filename[data-target="'+e.target.id+'"]');
