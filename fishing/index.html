@@ -2364,10 +2364,10 @@
   </div>
 </dialog>
 
-<dialog id="tackle-choose-modal" closedby="any" aria-label="Choose your active tackle items">
+<dialog id="tackle-choose-modal" closedby="any" aria-label="Choose your active baits and dips">
   <div class="modal-card" style="max-width:min(94vw,720px);max-height:92vh;text-align:left;">
-    <h3 style="margin-top:0;">Choose your active tackle</h3>
-    <div class="pc-line muted">The free plan keeps 15 items in use: your own items plus the ones shared with you that you use. Your own items you leave unticked stay saved but locked, and unlock again if you upgrade to Pro. Shared items you leave unticked go back to your Shared with me list. The most used are ticked for you. Once saved, you can change your 15 again after 30 days.</div>
+    <h3 style="margin-top:0;">Choose your active baits and dips</h3>
+    <div class="pc-line muted">The free plan keeps 15 baits and dips in use: your own plus the ones shared with you that you use. Rods, reels and all other tackle are not limited. Your own items you leave unticked stay saved but locked, and unlock again if you upgrade to Pro. Shared items you leave unticked go back to your Shared with me list. The most used are ticked for you. Once saved, you can change your 15 again after 30 days.</div>
     <div id="tackle-choose-count" style="font-weight:700;margin:10px 0 4px;"></div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 8px;">
       <input type="search" id="tackle-choose-search" placeholder="Search by name" aria-label="Search by name" style="flex:2 1 180px;min-width:0;">
@@ -5122,16 +5122,20 @@ async function loadMyPlan(){
 }
 // A free account over the tackle limit picks which items stay active; the rest
 // are locked (kept, read-only, hidden from the pickers) until it upgrades.
+// Only baits and dips are capped on the free plan; every other kind of tackle is unlimited
+function isCappedTackle(it){
+  return !!it && (it.category === 'Bait' || it.category === 'Dips');
+}
 function tackleLocked(it){
-  return !!(it && it.inactive === true && !isPro() && isSignedIn() && it.owner_user_id === session.user.id);
+  return !!(it && isCappedTackle(it) && it.inactive === true && !isPro() && isSignedIn() && it.owner_user_id === session.user.id);
 }
 function ownTackleItems(){
-  return isSignedIn() ? tackleItemsCache.filter(it=> it.owner_user_id === session.user.id) : [];
+  return isSignedIn() ? tackleItemsCache.filter(it=> it.owner_user_id === session.user.id && isCappedTackle(it)) : [];
 }
 // Shared-with-me items I have ticked "Use" on; they count towards the free 15 like my own
 let tackleInUseIds = new Set();
 function sharedInUseItems(){
-  return isSignedIn() ? tackleItemsCache.filter(it=> it.owner_user_id !== session.user.id && tackleInUseIds.has(it.id)) : [];
+  return isSignedIn() ? tackleItemsCache.filter(it=> it.owner_user_id !== session.user.id && isCappedTackle(it) && tackleInUseIds.has(it.id)) : [];
 }
 function activeTackleItems(){
   return ownTackleItems().filter(it=> !it.inactive).concat(sharedInUseItems());
@@ -5160,7 +5164,7 @@ function renderTackleActiveBanner(){
   const active = own.length - locked + shared.length;
   el.style.display = 'block';
   el.innerHTML = tackleNeedsChoice()
-    ? '<div class="pc-head">You are using ' + active + ' tackle items</div><div class="pc-line muted">That counts your own items plus ' + shared.length + ' shared with you that you use. The free plan keeps ' + max + ' in use. Choose which ' + max + ' to keep; your own items stay saved and unlock again if you upgrade to Pro, and shared ones go back to the Shared with me list.</div>'
+    ? '<div class="pc-head">You are using ' + active + ' baits and dips</div><div class="pc-line muted">That counts your own items plus ' + shared.length + ' shared with you that you use. The free plan keeps ' + max + ' in use. Choose which ' + max + ' to keep; your own items stay saved and unlock again if you upgrade to Pro, and shared ones go back to the Shared with me list.</div>'
     : '<div class="pc-head">' + active + ' in use, ' + locked + ' locked</div><div class="pc-line muted">Locked items stay saved and unlock again if you upgrade to Pro.</div>';
   const wait = tackleChoiceNextDate();
   el.innerHTML += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
@@ -5168,14 +5172,14 @@ function renderTackleActiveBanner(){
     + '<button type="button" class="mini-btn" id="tackle-banner-upgrade">Upgrade to Pro</button></div>'
     + (wait ? '<div class="pc-line muted" style="margin-top:6px;">You can change your ' + max + ' again on ' + wait.toLocaleDateString(undefined, {day:'numeric', month:'long', year:'numeric'}) + '.</div>' : '');
   document.getElementById('tackle-choose-btn').addEventListener('click', openTackleChoice);
-  document.getElementById('tackle-banner-upgrade').addEventListener('click', ()=> openUpgrade('Pro keeps all your tackle items in use.'));
+  document.getElementById('tackle-banner-upgrade').addEventListener('click', ()=> openUpgrade('Pro keeps all your baits and dips in use.'));
 }
 // Free accounts: true when one more shared item may be ticked "Use"; otherwise explains why not
 function canUseMoreShared(howMany){
   if(isPro() || !isSignedIn()) return true;
   const max = FREE_LIMITS.tackle.max;
   if(activeTackleItems().length + (howMany || 1) <= max) return true;
-  openUpgrade('The free plan keeps ' + max + ' tackle items in use, counting your own and the ones shared with you. Untick one with Change my ' + max + ' first, or upgrade to Pro for unlimited.');
+  openUpgrade('The free plan keeps ' + max + ' baits and dips in use, counting your own and the ones shared with you. Untick one with Change my ' + max + ' first, or upgrade to Pro for unlimited.');
   return false;
 }
 function openTackleChoice(){
@@ -5290,7 +5294,7 @@ function insLocked(title){
 }
 const FREE_RODS = 2;
 const FREE_LIMITS = {
-  tackle: {max:15, table:'tackle_items', col:'owner_user_id', label:'tackle items'},
+  tackle: {max:15, table:'tackle_items', col:'owner_user_id', label:'baits and dips', extra:'&category=in.(Bait,Dips)'},
   rigs:   {max:3,  table:'rigs', col:'creator_user_id', label:'rigs'},
   combos: {max:3,  table:'bait_combinations', col:'owner_user_id', label:'bait combinations'}
 };
@@ -5300,7 +5304,7 @@ async function checkLimit(kind){
   if(isPro() || !isSignedIn()) return true;
   const L = FREE_LIMITS[kind];
   try{
-    const rows = await sbGet(L.table + '?' + L.col + '=eq.' + encodeURIComponent(session.user.id) + '&select=id&limit=' + L.max);
+    const rows = await sbGet(L.table + '?' + L.col + '=eq.' + encodeURIComponent(session.user.id) + (L.extra || '') + '&select=id&limit=' + L.max);
     if(rows.length < L.max) return true;
   }catch(e){ console.error('checkLimit failed', e); return true; }
   openUpgrade('The free plan holds up to ' + L.max + ' ' + L.label + '. Upgrade to Pro for unlimited.');
@@ -6788,7 +6792,7 @@ async function renderTackleList(){
   if(useAllBtn){
     useAllBtn.addEventListener('click', async ()=>{
       const notYetInUse = items.filter(it=> sharedWithMeIds.get(it.id) !== true);
-      if(!canUseMoreShared(notYetInUse.length)) return;
+      if(!canUseMoreShared(notYetInUse.filter(isCappedTackle).length)) return;
       useAllBtn.disabled = true;
       useAllBtn.textContent = 'Adding...';
       let failed = 0;
@@ -6879,7 +6883,7 @@ await loadTackleCategoryOptions();
   });
   el.querySelectorAll('.tackle-use-toggle').forEach(cb=>{
     cb.addEventListener('change', async ()=>{
-      if(cb.checked && !canUseMoreShared(1)){ cb.checked = false; return; }
+      if(cb.checked && isCappedTackle(tackleItemsCache.find(t=> t.id === cb.dataset.item)) && !canUseMoreShared(1)){ cb.checked = false; return; }
       cb.disabled = true;
       const itemId = cb.dataset.item;
       try{
@@ -6923,7 +6927,7 @@ document.getElementById('tackle-add-btn').addEventListener('click', async ()=>{
   if(!name){ st.textContent = 'Enter a name.'; return; }
   if(!catEl.value){ st.textContent = 'Select a category.'; return; }
   if(!isSignedIn()){ st.textContent = 'You need to be signed in.'; return; }
-  if(!(await checkLimit('tackle'))) return;
+  if((catEl.value === 'Bait' || catEl.value === 'Dips') && !(await checkLimit('tackle'))) return;
   st.textContent = 'Adding...';
   try{
     let photo = null;
