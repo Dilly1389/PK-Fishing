@@ -2367,7 +2367,7 @@
 <dialog id="tackle-choose-modal" closedby="any" aria-label="Choose your active tackle items">
   <div class="modal-card" style="max-width:min(92vw,460px);text-align:left;">
     <h3 style="margin-top:0;">Choose your active tackle</h3>
-    <div class="pc-line muted">The free plan keeps 15 items active. Items you leave unticked stay saved but locked, and unlock again if you upgrade to Pro. The most used are ticked for you. Once saved, you can change your 15 again after 30 days.</div>
+    <div class="pc-line muted">The free plan keeps 15 items in use: your own items plus the ones shared with you that you use. Your own items you leave unticked stay saved but locked, and unlock again if you upgrade to Pro. Shared items you leave unticked go back to your Shared with me list. The most used are ticked for you. Once saved, you can change your 15 again after 30 days.</div>
     <div id="tackle-choose-count" style="font-weight:700;margin:10px 0 4px;"></div>
     <div id="tackle-choose-list" style="max-height:48vh;overflow-y:auto;"></div>
     <div style="display:flex;gap:8px;margin-top:12px;">
@@ -5117,9 +5117,17 @@ function tackleLocked(it){
 function ownTackleItems(){
   return isSignedIn() ? tackleItemsCache.filter(it=> it.owner_user_id === session.user.id) : [];
 }
+// Shared-with-me items I have ticked "Use" on; they count towards the free 15 like my own
+let tackleInUseIds = new Set();
+function sharedInUseItems(){
+  return isSignedIn() ? tackleItemsCache.filter(it=> it.owner_user_id !== session.user.id && tackleInUseIds.has(it.id)) : [];
+}
+function activeTackleItems(){
+  return ownTackleItems().filter(it=> !it.inactive).concat(sharedInUseItems());
+}
 function tackleNeedsChoice(){
   if(isPro() || !isSignedIn()) return false;
-  return ownTackleItems().filter(it=> !it.inactive).length > FREE_LIMITS.tackle.max;
+  return activeTackleItems().length > FREE_LIMITS.tackle.max;
 }
 const TACKLE_CHOICE_DAYS = 30;
 // When the free plan next lets this angler change their 15; null means they can change now
@@ -5134,40 +5142,56 @@ function renderTackleActiveBanner(){
   const el = document.getElementById('tackle-active-banner');
   if(!el) return;
   const own = ownTackleItems();
+  const shared = sharedInUseItems();
   const max = FREE_LIMITS.tackle.max;
-  if(isPro() || own.length <= max){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  if(isPro() || own.length + shared.length <= max){ el.style.display = 'none'; el.innerHTML = ''; return; }
   const locked = own.filter(it=> it.inactive).length;
+  const active = own.length - locked + shared.length;
   el.style.display = 'block';
   el.innerHTML = tackleNeedsChoice()
-    ? '<div class="pc-head">You have ' + own.length + ' tackle items</div><div class="pc-line muted">The free plan keeps ' + max + ' active. Choose which ' + max + ' to keep; the rest stay saved and unlock again if you upgrade to Pro.</div>'
-    : '<div class="pc-head">' + (own.length - locked) + ' active, ' + locked + ' locked</div><div class="pc-line muted">Locked items stay saved and unlock again if you upgrade to Pro.</div>';
+    ? '<div class="pc-head">You are using ' + active + ' tackle items</div><div class="pc-line muted">That counts your own items plus ' + shared.length + ' shared with you that you use. The free plan keeps ' + max + ' in use. Choose which ' + max + ' to keep; your own items stay saved and unlock again if you upgrade to Pro, and shared ones go back to the Shared with me list.</div>'
+    : '<div class="pc-head">' + active + ' in use, ' + locked + ' locked</div><div class="pc-line muted">Locked items stay saved and unlock again if you upgrade to Pro.</div>';
   const wait = tackleChoiceNextDate();
   el.innerHTML += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
     + '<button type="button" class="mini-btn" id="tackle-choose-btn"' + (wait ? ' disabled' : '') + '>' + (tackleNeedsChoice() ? 'Choose my ' + max : 'Change my ' + max) + '</button>'
     + '<button type="button" class="mini-btn" id="tackle-banner-upgrade">Upgrade to Pro</button></div>'
     + (wait ? '<div class="pc-line muted" style="margin-top:6px;">You can change your ' + max + ' again on ' + wait.toLocaleDateString(undefined, {day:'numeric', month:'long', year:'numeric'}) + '.</div>' : '');
   document.getElementById('tackle-choose-btn').addEventListener('click', openTackleChoice);
-  document.getElementById('tackle-banner-upgrade').addEventListener('click', ()=> openUpgrade('Pro keeps all your tackle items active.'));
+  document.getElementById('tackle-banner-upgrade').addEventListener('click', ()=> openUpgrade('Pro keeps all your tackle items in use.'));
+}
+// Free accounts: true when one more shared item may be ticked "Use"; otherwise explains why not
+function canUseMoreShared(howMany){
+  if(isPro() || !isSignedIn()) return true;
+  const max = FREE_LIMITS.tackle.max;
+  if(activeTackleItems().length + (howMany || 1) <= max) return true;
+  openUpgrade('The free plan keeps ' + max + ' tackle items in use, counting your own and the ones shared with you. Untick one with Change my ' + max + ' first, or upgrade to Pro for unlimited.');
+  return false;
 }
 function openTackleChoice(){
   const dlg = document.getElementById('tackle-choose-modal');
   if(!dlg) return;
   const max = FREE_LIMITS.tackle.max;
-  const own = ownTackleItems().slice();
+  const mineIds = new Set(ownTackleItems().map(it=>it.id));
+  const all = ownTackleItems().concat(sharedInUseItems());
   const useOf = it => tackleUseCountsCache.get(String(it.name || '').trim().toLowerCase()) || 0;
   let activeIds;
   if(tackleNeedsChoice()){
-    activeIds = new Set(own.slice().sort((a,b)=> useOf(b) - useOf(a) || a.name.localeCompare(b.name)).slice(0, max).map(it=>it.id));
+    activeIds = new Set(all.slice().sort((a,b)=> useOf(b) - useOf(a) || a.name.localeCompare(b.name)).slice(0, max).map(it=>it.id));
   }else{
-    activeIds = new Set(own.filter(it=> !it.inactive).map(it=>it.id));
+    activeIds = new Set(activeTackleItems().map(it=>it.id));
   }
-  own.sort((a,b)=> (a.category || 'Other').localeCompare(b.category || 'Other') || a.name.localeCompare(b.name));
+  all.sort((a,b)=> (a.category || 'Other').localeCompare(b.category || 'Other') || a.name.localeCompare(b.name));
   const list = document.getElementById('tackle-choose-list');
-  list.innerHTML = own.map(it=>{
+  list.innerHTML = all.map(it=>{
     const n = useOf(it);
+    let who = '';
+    if(!mineIds.has(it.id)){
+      const owner = people.find(p=>p.user_id===it.owner_user_id);
+      who = ', shared by ' + (owner ? owner.name : 'a friend');
+    }
     return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px;">'
-      + '<input type="checkbox" data-choose="' + escapeHtml(it.id) + '"' + (activeIds.has(it.id) ? ' checked' : '') + '>'
-      + '<span style="flex:1;"><b>' + escapeHtml(it.name) + '</b> <span class="pc-line muted" style="display:inline;">' + escapeHtml(it.category || 'Other') + (n ? ', used ' + n + (n === 1 ? ' time' : ' times') : '') + '</span></span></label>';
+      + '<input type="checkbox" data-choose="' + escapeHtml(it.id) + '" data-mine="' + (mineIds.has(it.id) ? '1' : '0') + '"' + (activeIds.has(it.id) ? ' checked' : '') + '>'
+      + '<span style="flex:1;"><b>' + escapeHtml(it.name) + '</b> <span class="pc-line muted" style="display:inline;">' + escapeHtml(it.category || 'Other') + escapeHtml(who) + (n ? ', used ' + n + (n === 1 ? ' time' : ' times') : '') + '</span></span></label>';
   }).join('');
   const saveBtn = document.getElementById('tackle-choose-save');
   const counter = document.getElementById('tackle-choose-count');
@@ -5183,10 +5207,11 @@ function openTackleChoice(){
   document.getElementById('tackle-choose-cancel').onclick = ()=> dlg.close();
   saveBtn.onclick = async ()=>{
     saveBtn.disabled = true;
-    const lockIds = boxes.filter(b=>!b.checked).map(b=>b.dataset.choose);
+    const lockIds = boxes.filter(b=>!b.checked && b.dataset.mine === '1').map(b=>b.dataset.choose);
+    const unuseIds = boxes.filter(b=>!b.checked && b.dataset.mine !== '1').map(b=>b.dataset.choose);
     const openIds = boxes.filter(b=>b.checked).map(b=>b.dataset.choose);
     try{
-      await sbRpc('choose_active_tackle', {lock_ids: lockIds, open_ids: openIds});
+      await sbRpc('choose_active_tackle', {lock_ids: lockIds, open_ids: openIds, unuse_ids: unuseIds});
       dlg.close();
       await loadMyPlan();
       await loadGearOptions();
@@ -6523,6 +6548,7 @@ async function renderTackleList(){
   tackleItemsCache = await loadTackleItems();
   renderTackleNameSuggestions();
   const sharedWithMeIds = await loadSharedWithMeTackleItemIds();
+  tackleInUseIds = new Set([...sharedWithMeIds].filter(([, v])=> v === true).map(([k])=> k));
   const useCounts = await loadTackleUseCounts();
   tackleUseCountsCache = useCounts;
   const usedCount = (it)=> useCounts.get(String(it.name || '').trim().toLowerCase()) || 0;
@@ -6722,9 +6748,10 @@ async function renderTackleList(){
   const useAllBtn = document.getElementById('tackle-use-all-btn');
   if(useAllBtn){
     useAllBtn.addEventListener('click', async ()=>{
+      const notYetInUse = items.filter(it=> sharedWithMeIds.get(it.id) !== true);
+      if(!canUseMoreShared(notYetInUse.length)) return;
       useAllBtn.disabled = true;
       useAllBtn.textContent = 'Adding...';
-      const notYetInUse = items.filter(it=> sharedWithMeIds.get(it.id) !== true);
       let failed = 0;
       for(const it of notYetInUse){
         try{
@@ -6813,6 +6840,7 @@ await loadTackleCategoryOptions();
   });
   el.querySelectorAll('.tackle-use-toggle').forEach(cb=>{
     cb.addEventListener('change', async ()=>{
+      if(cb.checked && !canUseMoreShared(1)){ cb.checked = false; return; }
       cb.disabled = true;
       const itemId = cb.dataset.item;
       try{
