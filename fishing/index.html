@@ -7197,12 +7197,28 @@ async function getCompetitionRules(compId){
   return null;
 }
 
+// Whether the competition's organiser has Pro (net weight, invite links and the
+// full spectator page depend on it). A failed lookup counts as Pro so nobody
+// is locked out by a network or server hiccup.
+const competitionProCache = {};
+async function competitionIsPro(compId){
+  if(!compId) return true;
+  if(competitionProCache[compId] !== undefined) return competitionProCache[compId];
+  try{
+    const r = await sbRpc('competition_is_pro', {p_comp_id: compId});
+    if(typeof r === 'boolean'){ competitionProCache[compId] = r; return r; }
+  }catch(e){ console.error('competition plan lookup failed', e); }
+  return true;
+}
+
 // Net weight only makes sense for a competition catch, and the photo labels
 // say which photos the organiser has made compulsory
 async function applyCompetitionCatchRules(rod){
   const compId = activeSession && activeSession.competition_id;
   const netField = document.querySelector('.catch-net-field[data-rod="'+rod+'"]');
-  if(netField) netField.style.display = compId ? 'block' : 'none';
+  if(netField) netField.style.display = 'none';
+  const compPro = compId ? await competitionIsPro(compId) : false;
+  if(netField && compId && compPro) netField.style.display = 'block';
   const rules = (compId && await getCompetitionRules(compId)) || {};
   [['fish','Fish photo'], ['scale','Scale photo']].forEach(([slot, text])=>{
     const label = document.querySelector('.photo-slot-label[data-rod="'+rod+'"][data-slot="'+slot+'"]');
@@ -8361,7 +8377,8 @@ function buildCatchEntry(rod){
   // In a competition the scale reading includes the net, so the fish's own
   // weight is the reading minus the net
   const scaleWeight = (caught && weightEl) ? (parseFloat(weightEl.value) || 0) : 0;
-  const netWeight = (caught && netEl && activeSession && activeSession.competition_id) ? (parseFloat(netEl.value) || 0) : 0;
+  const netShown = netEl && netEl.closest('.catch-net-field') && netEl.closest('.catch-net-field').style.display !== 'none';
+  const netWeight = (caught && netShown && activeSession && activeSession.competition_id) ? (parseFloat(netEl.value) || 0) : 0;
   const entry = {
     id: uid(),
     caught,
@@ -12950,6 +12967,12 @@ async function handleCompetitionInvite(){
       return;
     }
 
+    if(!(await competitionIsPro(compId))){
+      alert('"' + (comp.name || 'This competition') + '" is not taking join requests from invite links. Ask the organiser to add you.');
+      clearJoinParam();
+      return;
+    }
+
     // Check both states — approved means they're in, pending means they've
     // already asked and are waiting. Neither should create a second row.
     const [existing, pending] = await Promise.all([
@@ -13564,6 +13587,12 @@ async function renderCompetitions(){
 
   el.querySelectorAll('[data-competition-invite]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
+      if(!(await competitionIsPro(btn.dataset.competitionInvite))){
+        const c = comps.find(x=>x.id===btn.dataset.competitionInvite);
+        if(c && isSignedIn() && session.user.id === c.creator_user_id) openUpgrade('Invite links, where people ask to join and you approve them, are part of Pro.');
+        else alert('Invite links are only available when the organiser has Pro. Ask the organiser to add people directly.');
+        return;
+      }
       const url = competitionInviteLink(btn.dataset.competitionInvite);
       try{
         if(navigator.share){
@@ -14218,7 +14247,7 @@ const SPECTATOR_COMP_ID = new URLSearchParams(window.location.search).get('comp'
 
 // Live page for one competition, shown to anyone with the link. Only what is
 // safe for the public: standings, catches and photos, never locations or tackle.
-const specState = {comp: null, updatedAt: 0, open: null, catches: []};
+const specState = {comp: null, updatedAt: 0, open: null, catches: [], full: true};
 
 function specSpan(ms){
   const m = Math.max(0, Math.floor(ms / 60000));
@@ -14262,14 +14291,15 @@ function specRowHtml(comp, s, rank){
     if(metricKey !== 'biggest') parts.push('biggest ' + formatWeight(s.biggest));
     if(metricKey !== 'totalWeight' && s.count > 1) parts.push('total ' + formatWeight(s.totalWeight));
   }
-  const open = s.count && specState.open === s.id;
+  const clickable = s.count && specState.full;
+  const open = clickable && specState.open === s.id;
   return `
-    <div class="lb-item${rank === 1 && s.count ? ' spec-leader' : ''}${s.count ? ' spec-click' : ''}"${s.count ? ` data-fid="${escapeHtml(s.id)}" role="button" tabindex="0" aria-expanded="${open ? 'true' : 'false'}"` : ''}>
+    <div class="lb-item${rank === 1 && s.count ? ' spec-leader' : ''}${clickable ? ' spec-click' : ''}"${clickable ? ` data-fid="${escapeHtml(s.id)}" role="button" tabindex="0" aria-expanded="${open ? 'true' : 'false'}"` : ''}>
       <div class="lb-rank">${s.count ? rank : '–'}</div>
       <div style="flex:1;min-width:0;"><b class="lb-name">${escapeHtml(s.name)}</b><div class="lb-dam">${escapeHtml(parts.join(' · '))}</div></div>
       <div class="lb-stats"><b>${s.count ? escapeHtml(main) : ''}</b></div>
-      ${s.count ? '<span class="spec-chev' + (open ? ' open' : '') + '" aria-hidden="true">›</span>' : ''}
-    </div>${s.count ? `<div class="spec-detail" data-detail="${escapeHtml(s.id)}"></div>` : ''}`;
+      ${clickable ? '<span class="spec-chev' + (open ? ' open' : '') + '" aria-hidden="true">›</span>' : ''}
+    </div>${clickable ? `<div class="spec-detail" data-detail="${escapeHtml(s.id)}"></div>` : ''}`;
 }
 
 function renderSpectatorDetails(){
@@ -14319,6 +14349,7 @@ function specCatchRowHtml(c, hideName){
 async function renderSpectatorCatches(comp){
   const recentEl = document.getElementById('spec-recent'), bigEl = document.getElementById('spec-biggest');
   if(!recentEl || !bigEl) return;
+  if(!specState.full){ recentEl.innerHTML = ''; bigEl.innerHTML = ''; return; }
   try{
     let rows = await sbGet('catches?select=id,fisherman_id,fish_type,weight,time,has_known_time,verification_status,photos,photo_labels&caught=eq.true&competition_id=eq.' + comp.id + '&order=time.desc');
     rows = rows.filter(c => c.verification_status !== 'rejected');
@@ -14366,6 +14397,7 @@ async function renderSpectatorCompetition(compId){
       .sort((a, b) => a.name.localeCompare(b.name));
 
     specState.comp = comp;
+    specState.full = await competitionIsPro(comp.id);
     specState.updatedAt = Date.now();
 
     const heading = document.querySelector('#panel-leaderboard h2');
