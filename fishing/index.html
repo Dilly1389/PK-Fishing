@@ -1149,7 +1149,8 @@
         </div>
 
         <div id="account-signed-in" style="display:none;">
-          <p class="pc-line" id="signed-in-as" style="margin-bottom:12px;"></p>
+          <p class="pc-line" id="signed-in-as" style="margin-bottom:4px;"></p>
+          <p class="pc-line" id="account-plan-line" style="margin-bottom:12px;"></p>
           <button class="mini-btn" id="view-my-profile-btn">View my profile</button>
           <button class="mini-btn danger" id="sign-out-btn">Sign out</button>
         </div>
@@ -4658,6 +4659,7 @@ function renderAccountArea(){
     if(signedInArea) signedInArea.style.display = 'block';
     const label = document.getElementById('signed-in-as');
     if(label) label.textContent = 'Signed in as ' + session.user.email;
+    renderAccountPlanLine();
     if(detailsCard) detailsCard.style.display = 'block';
     if(insightsCard) insightsCard.style.display = 'block';
     if(pastCatchCard){
@@ -5116,6 +5118,7 @@ async function loadMyPlan(){
     const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(mine.id) + '&select=plan,pro_until,founder,trial_started_at,tackle_choice_at');
     myPlan = rows[0] || null;
   }catch(e){ console.error('loadMyPlan failed', e); }
+  renderAccountPlanLine();
   refreshRodChoices();
   refreshCompetitionForm();
   if(isSignedIn() && !isPro()){ loadGearOptions(); loadTackleCategoryOptions(); }
@@ -5367,6 +5370,18 @@ const TRIAL_DAYS = 7;
 function trialEnd(p){
   if(!p || !p.trial_started_at) return null;
   return new Date(new Date(p.trial_started_at).getTime() + TRIAL_DAYS*86400000);
+}
+function renderAccountPlanLine(){
+  const el = document.getElementById('account-plan-line');
+  if(!el) return;
+  const p = myPlan;
+  const fmtDate = d => d.toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+  const te = trialEnd(p);
+  let text = 'Free';
+  if(p && p.founder) text = 'Founder (Pro for life)';
+  else if(p && p.plan === 'pro' && (!p.pro_until || new Date(p.pro_until) > new Date())) text = p.pro_until ? 'Pro, until ' + fmtDate(new Date(p.pro_until)) : 'Pro';
+  else if(te && te > new Date()) text = 'Pro trial, ends ' + fmtDate(te);
+  el.innerHTML = 'Account type: <b>' + escapeHtml(text) + '</b>';
 }
 function isPro(){
   const p = myPlan;
@@ -11215,7 +11230,9 @@ async function openProfile(personId, focusCatchId){
   // through — a handful of entries doesn't need a filter bar cluttering
   // the page above them
   const speciesPresent = [...new Set(catches.filter(c=>c.caught).map(c=>c.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  if(catches.length > 5){
+  // Other anglers' profiles show catches only; the owner still sees their blanks
+  const listCatches = canEditCatches ? catches : caughtOnly;
+  if(listCatches.length > 5){
     html += `<div class="row2" style="margin-bottom:10px;">
       <div class="field" style="margin-bottom:0;">
         <input type="text" maxlength="100" id="profile-catch-search" placeholder="Search species or venue..." autocomplete="pk-profile-search" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
@@ -11244,7 +11261,7 @@ async function openProfile(personId, focusCatchId){
     const query = searchEl ? searchEl.value.trim().toLowerCase() : '';
     const speciesFilter = speciesEl ? speciesEl.value : '';
 
-    let filtered = catches;
+    let filtered = listCatches;
     if(speciesFilter) filtered = filtered.filter(c=> c.type === speciesFilter);
     if(query){
       filtered = filtered.filter(c=>{
@@ -11255,7 +11272,7 @@ async function openProfile(personId, focusCatchId){
 
     container.innerHTML = filtered.length
       ? filtered.map(c=>catchDetailHtml(c, canEditCatches && c.caught, canEditCatches, true)).join('')
-      : (catches.length ? '<div class="empty">Nothing matches that search.</div>' : '<div class="empty">No entries logged yet — catches and blanks will show here once logged.</div>');
+      : (listCatches.length ? '<div class="empty">Nothing matches that search.</div>' : '<div class="empty">' + (canEditCatches ? 'No entries logged yet — catches and blanks will show here once logged.' : 'No catches logged yet.') + '</div>');
 
     container.querySelectorAll('.profile-edit-catch').forEach(btn=>{
       btn.addEventListener('click', ()=>{
