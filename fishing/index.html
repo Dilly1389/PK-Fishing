@@ -1968,6 +1968,7 @@
       <button type="button" data-desk="log"><i class="ti ti-table" aria-hidden="true"></i>Catch log</button>
       <button type="button" data-desk="records"><i class="ti ti-fish" aria-hidden="true"></i>Reel Records</button>
       <button type="button" data-desk="insights"><i class="ti ti-chart-bar" aria-hidden="true"></i>Insights</button>
+      <button type="button" data-desk="plan"><i class="ti ti-compass" aria-hidden="true"></i>Plan</button>
       <button type="button" data-desk="competitions"><i class="ti ti-trophy" aria-hidden="true"></i>Competitions</button>
       <button type="button" data-desk="feed"><i class="ti ti-users" aria-hidden="true"></i>Feed</button>
       <button type="button" data-desk="badges"><i class="ti ti-medal" aria-hidden="true"></i>Fins of Fame</button>
@@ -15174,8 +15175,8 @@ async function renderSpectatorCompetition(compId){
 // moving them into the dashboard, so they stay a single copy of the code.
 const DESK_MIN_WIDTH = 1100;
 const deskMq = window.matchMedia('(min-width:' + DESK_MIN_WIDTH + 'px)');
-const DESK_TITLES = {overview:'Overview', log:'Catch log', records:'Reel Records', insights:'Insights', competitions:'Competitions', badges:'Fins of Fame', feed:'Feed', tackle:'Tackle box', profile:'Profile'};
-const DESK_PANELS = {insights:'insights', competitions:'competitions', feed:'feed', tackle:'tackle', profile:'schedule'};
+const DESK_TITLES = {overview:'Overview', log:'Catch log', records:'Reel Records', insights:'Insights', plan:'Plan your next trip', competitions:'Competitions', badges:'Fins of Fame', feed:'Feed', tackle:'Tackle box', profile:'Profile'};
+const DESK_PANELS = {insights:'insights', plan:'plan', competitions:'competitions', feed:'feed', tackle:'tackle', profile:'schedule'};
 let deskInsightsGroup = 'overview';
 let deskOn = false;
 let deskSection = 'overview';
@@ -15265,6 +15266,7 @@ async function deskShow(section){
     pane.appendChild(panel);
     panel.classList.add('active');
     if(section === 'insights') openInsights();
+    else if(section === 'plan') renderPlanTab();
     else if(section === 'competitions') renderCompetitions();
     else if(section === 'tackle') enterTackleTab();
     else if(section === 'feed') renderFeed(true);
