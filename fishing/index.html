@@ -76,6 +76,11 @@
 </script>
 <style>
   :root{
+    /* Tells native form chrome (date pickers, checkboxes, select arrows)
+       which palette to use - without it, a date input on the dark theme
+       keeps rendering its own text in light-scheme black, invisible on
+       our dark --card-bg. */
+    color-scheme:light;
     --dam:#B3121F;
     --dam-deep:#7A0611;
     --khaki:#F1B9B9;
@@ -101,6 +106,7 @@
   /* Dark palette, shared by the system preference and the manual toggle */
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
+      color-scheme:dark;
       --dam:#7A0F1A;
       --dam-deep:#4A0810;
       --khaki:#E8AFAF;
@@ -116,6 +122,7 @@
     }
   }
   :root[data-theme="dark"]{
+    color-scheme:dark;
     --dam:#7A0F1A;
     --dam-deep:#4A0810;
     --khaki:#E8AFAF;
@@ -699,6 +706,29 @@
   .modal-card p b{color:var(--ink);}
   .modal-card .primary-btn{margin-top:18px;}
   .modal-card.wide{max-width:440px;max-height:82vh;overflow-y:auto;text-align:left;}
+  /* The trip-plan dialog specifically gets much more room on desktop - this
+     screen is genuinely about laying things out and comparing them, not a
+     quick glance, so the phone-oriented 440px cap would waste most of a
+     wide monitor. Other .modal-card.wide dialogs are untouched. */
+  body.desk-mode dialog#plan-detail-modal .modal-card.wide{max-width:min(90vw,900px);max-height:86vh;}
+  /* The global desk-mode rule a few hundred lines below strips .ins-group's
+     summary/chrome entirely, because Insights replaces it with a segmented
+     bar on desktop (see deskBuildInsightsBar). This dialog never calls that,
+     so it needs its collapsible sections kept exactly as on phone - the ID
+     selector here outranks the class-only desk-mode rule regardless of
+     which one comes first in the file. */
+  dialog#plan-detail-modal .ins-group > summary{display:flex;}
+  dialog#plan-detail-modal .ins-group{border:1px solid var(--line);background:var(--card-bg);margin:0 0 12px;}
+  dialog#plan-detail-modal .ins-group-body{padding:2px 16px 14px;}
+  /* .ins-group-body holds the kit categories' rows directly; Tackle box
+     nests one more level (.plan-item-group per gear category) - both get
+     the same tiling treatment so items use the extra width in columns
+     instead of one per line. */
+  body.desk-mode dialog#plan-detail-modal .ins-group-body,
+  body.desk-mode dialog#plan-detail-modal .plan-item-group{display:flex;flex-wrap:wrap;gap:0 18px;}
+  body.desk-mode dialog#plan-detail-modal .plan-item-row{flex:1 1 230px;}
+  body.desk-mode dialog#plan-detail-modal .plan-item-group{flex:1 1 320px;align-content:flex-start;}
+  body.desk-mode dialog#plan-detail-modal .plan-item-group .pc-head{flex:1 1 100%;}
   .profile-summary{
     display:flex;gap:16px;margin:10px 0 16px;padding-bottom:12px;
     border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted);
@@ -907,7 +937,6 @@
     <button data-tab="schedule"><span class="tab-icon">👤</span><span class="tab-label">Profile</span></button>
     <button data-tab="timers" id="timers-tab-btn" style="display:none;"><span class="tab-icon">⏱</span><span class="tab-label">Timers</span></button>
     <button data-tab="insights" id="insights-tab-btn" style="display:none;"><span class="tab-icon">📊</span><span class="tab-label">Insights</span></button>
-    <button data-tab="plan" id="plan-tab-btn" style="display:none;"><span class="tab-icon">🧭</span><span class="tab-label">Plan</span></button>
     <button data-tab="more"><span class="tab-icon">☰</span><span class="tab-label">More</span></button>
   </nav>
 
@@ -942,6 +971,10 @@
       <button type="button" class="more-link" data-goto="competitions">
         <span class="more-icon"><i class="ti ti-trophy" aria-hidden="true"></i></span>
         <span><b>Competitions</b><br><span class="pc-line muted">Create, join and follow live standings</span></span>
+      </button>
+      <button type="button" class="more-link" data-goto="plan">
+        <span class="more-icon"><i class="ti ti-compass" aria-hidden="true"></i></span>
+        <span><b>Plan your next trip</b><br><span class="pc-line muted">Packing list, last-trip recap and the forecast</span></span>
       </button>
       <button type="button" class="more-link" data-goto="admin" id="more-admin-link" style="display:none;">
         <span class="more-icon"><i class="ti ti-settings" aria-hidden="true"></i></span>
@@ -1002,8 +1035,13 @@
             <div id="venue-suggestion-list-plan" style="display:none;border:1px solid var(--line);border-radius:8px;margin-top:4px;overflow:hidden;"></div>
           </div>
           <div class="field">
-            <label>Date</label>
+            <label>Start date</label>
             <input type="date" id="plan-date" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Return date (optional)</label>
+            <input type="date" id="plan-return-date" autocomplete="off">
+            <span class="pc-line muted">Leave blank for a single-day trip.</span>
           </div>
           <button class="primary-btn" id="plan-create-btn">Plan this trip</button>
           <div class="status" id="plan-create-status"></div>
@@ -4776,21 +4814,10 @@ function renderAccountArea(){
   if(moreAdminLink) moreAdminLink.style.display = isSuperUser() ? 'flex' : 'none';
   const insightsTabBtn = document.getElementById('insights-tab-btn');
   if(insightsTabBtn) insightsTabBtn.style.display = isSignedIn() ? '' : 'none';
-  const planTabBtn = document.getElementById('plan-tab-btn');
-  if(planTabBtn) planTabBtn.style.display = isSignedIn() ? '' : 'none';
   const planGate = document.getElementById('plan-signin-required');
   const planContent = document.getElementById('plan-content');
   if(planGate) planGate.style.display = isSignedIn() ? 'none' : 'block';
   if(planContent) planContent.style.display = isSignedIn() ? 'block' : 'none';
-  // If Plan was open when signing out, bounce back to Profile instead of leaving a dead tab active
-  if(!isSignedIn() && planTabBtn && planTabBtn.classList.contains('active')){
-    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-    const scheduleBtn2 = document.querySelector('nav.tabs button[data-tab="schedule"]');
-    if(scheduleBtn2) scheduleBtn2.classList.add('active');
-    const schedulePanel2 = document.getElementById('panel-schedule');
-    if(schedulePanel2) schedulePanel2.classList.add('active');
-  }
   refreshNotifBadge();
 
   // Signed out, not spectating a shared link: strip everything down to just
@@ -8798,15 +8825,143 @@ function renderPlanChecklistHtml(items, ticks){
   return cats.map(c=>{
     const rows = byCat[c].slice().sort((a,b)=> a.name.localeCompare(b.name)).map(it=>{
       const checked = ticks.has(it.id) ? ticks.get(it.id) : false;
-      return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
+      return '<label class="plan-item-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
         + '<input type="checkbox" class="plan-pack-check" data-item-id="' + escapeHtml(it.id) + '"' + (checked ? ' checked' : '') + '>'
         + '<span>' + escapeHtml(it.name) + (it.brand ? ' <span class="pc-line muted">(' + escapeHtml(it.brand) + ')</span>' : '') + '</span></label>';
     }).join('');
-    return '<div class="profile-catch"><div class="pc-head">' + escapeHtml(c) + '</div>' + rows + '</div>';
+    return '<div class="profile-catch plan-item-group"><div class="pc-head">' + escapeHtml(c) + '</div>' + rows + '</div>';
   }).join('');
 }
 
-let planDetailCurrent = null; // {plan, items, ticks} for whichever plan is open in the dialog
+// The non-tackle side of the packing list: fixed default items, free to
+// tick, with Pro able to add its own on top. Lives in code rather than a
+// table, same as FREE_TACKLE_CAPS and the badge definitions - Ruan edits
+// these by asking for a code change, not through an admin screen.
+const KIT_CATEGORIES = [
+  {key:'safety', label:'Safety & essentials', items:[
+    {key:'first_aid', label:'First aid kit'},
+    {key:'sun_protection', label:'Sun protection (hat, sunscreen)'},
+    {key:'insect_repellent', label:'Insect repellent'},
+    {key:'water', label:'Enough drinking water'},
+    {key:'phone_power', label:'Phone charged / power bank'},
+    {key:'head_torch', label:'Head torch'}
+  ]},
+  {key:'comfort', label:'Clothing & comfort', items:[
+    {key:'rain_jacket', label:'Rain jacket'},
+    {key:'warm_layer', label:'Warm layer'},
+    {key:'chair', label:'Chair'},
+    {key:'shade', label:'Shade / umbrella'}
+  ]},
+  {key:'tools', label:'Tools & accessories', items:[
+    {key:'landing_net', label:'Landing net'},
+    {key:'unhooking_mat', label:'Unhooking mat'},
+    {key:'scale', label:'Scale'},
+    {key:'forceps', label:'Forceps / disgorger'},
+    {key:'batteries', label:'Spare batteries'}
+  ]},
+  // Only worth asking about on a multi-day trip - on a day trip nobody ticks these anyway
+  {key:'food', label:'Food & drink', multiDayOnly:true, items:[
+    {key:'cooler', label:'Cooler box with ice'},
+    {key:'food', label:'Food for the session'},
+    {key:'extra_drinks', label:'Extra water/drinks'}
+  ]}
+];
+
+async function loadKitRows(planId){
+  try{
+    return await sbGet('trip_plan_kit_items?select=*&trip_plan_id=eq.'+planId);
+  }catch(e){ console.error('loadKitRows failed', e); return []; }
+}
+
+async function setKitTick(planId, itemKey, category, ticked, label){
+  try{
+    await sbUpsert('trip_plan_kit_items', {trip_plan_id: planId, item_key: itemKey, category, ticked, label: label || null}, 'trip_plan_id,item_key');
+  }catch(e){ console.error('setKitTick failed', e); }
+}
+
+async function deleteKitItem(planId, itemKey){
+  try{ await sbDelete('trip_plan_kit_items', 'trip_plan_id=eq.'+planId+'&item_key=eq.'+encodeURIComponent(itemKey)); }
+  catch(e){ console.error('deleteKitItem failed', e); }
+}
+
+// A trip is multi-day whenever a return date was set and it's after the
+// start date - derived rather than stored, so there's only one place that
+// can disagree with itself.
+function isMultiDay(plan){
+  return !!(plan && plan.return_date && plan.return_date > plan.trip_date);
+}
+
+function planDateRangeLabel(plan){
+  const start = new Date(plan.trip_date + 'T00:00').toLocaleDateString(dateLocale(), {day:'numeric', month:'long', year:'numeric'});
+  if(!isMultiDay(plan)) return start;
+  const end = new Date(plan.return_date + 'T00:00').toLocaleDateString(dateLocale(), {day:'numeric', month:'long', year:'numeric'});
+  return start + ' – ' + end;
+}
+
+function renderKitSectionsHtml(plan, kitRows){
+  const byKey = new Map(kitRows.map(r=>[r.item_key, r]));
+  return KIT_CATEGORIES.filter(cat=> !cat.multiDayOnly || isMultiDay(plan)).map(cat=>{
+    const defaultRows = cat.items.map(it=>{
+      const fullKey = cat.key + ':' + it.key;
+      const row = byKey.get(fullKey);
+      const checked = row ? row.ticked : true; // defaults start ticked until you say otherwise
+      return '<label class="plan-item-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
+        + '<input type="checkbox" class="plan-kit-check" data-item-key="' + escapeHtml(fullKey) + '" data-category="' + escapeHtml(cat.key) + '"' + (checked ? ' checked' : '') + '>'
+        + '<span>' + escapeHtml(it.label) + '</span></label>';
+    }).join('');
+    const customRows = kitRows.filter(r=> r.category === cat.key && r.label).map(r=>
+      '<label class="plan-item-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
+        + '<input type="checkbox" class="plan-kit-check" data-item-key="' + escapeHtml(r.item_key) + '" data-category="' + escapeHtml(cat.key) + '" data-label="' + escapeHtml(r.label) + '"' + (r.ticked ? ' checked' : '') + '>'
+        + '<span>' + escapeHtml(r.label) + '</span>'
+        + '<button type="button" class="mini-btn plan-kit-remove" data-item-key="' + escapeHtml(r.item_key) + '" style="margin-left:auto;padding:2px 8px;">Remove</button></label>'
+    ).join('');
+    const addBtn = isPro()
+      ? '<button type="button" class="mini-btn plan-kit-add" data-category="' + escapeHtml(cat.key) + '" style="margin-top:4px;">+ Add item</button>'
+      : '<button type="button" class="mini-btn plan-kit-upgrade" style="margin-top:4px;">+ Add item (Pro)</button>';
+    return '<details class="ins-group" data-plan-group="' + escapeHtml(cat.key) + '" open>'
+      + '<summary><span class="ins-group-title">' + escapeHtml(cat.label) + '</span></summary>'
+      + '<div class="ins-group-body">' + defaultRows + customRows + addBtn + '</div></details>';
+  }).join('');
+}
+
+function wireKitSectionEvents(){
+  const planId = planDetailCurrent.plan.id;
+  const kitBody = document.getElementById('plan-kit-body');
+  kitBody.querySelectorAll('.plan-kit-check').forEach(cb=>{
+    // Only a custom item carries data-label; a default item's label always
+    // lives in KIT_CATEGORIES, never in the row, so it never gets written here -
+    // otherwise ticking a default would make it look like a custom item too.
+    cb.addEventListener('change', ()=> setKitTick(planId, cb.dataset.itemKey, cb.dataset.category, cb.checked, cb.dataset.label || null));
+  });
+  kitBody.querySelectorAll('.plan-kit-add').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const cat = KIT_CATEGORIES.find(c=>c.key===btn.dataset.category);
+      const label = (prompt('Add an item to ' + (cat ? cat.label : 'this list') + ':') || '').trim();
+      if(!label) return;
+      const itemKey = btn.dataset.category + ':custom:' + uid();
+      await setKitTick(planId, itemKey, btn.dataset.category, true, label);
+      await refreshKitSection();
+    });
+  });
+  kitBody.querySelectorAll('.plan-kit-upgrade').forEach(btn=>{
+    btn.addEventListener('click', ()=> openUpgrade('Adding your own kit items is a Pro feature.'));
+  });
+  kitBody.querySelectorAll('.plan-kit-remove').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      await deleteKitItem(planId, btn.dataset.itemKey);
+      await refreshKitSection();
+    });
+  });
+}
+
+async function refreshKitSection(){
+  if(!planDetailCurrent) return;
+  const kitRows = await loadKitRows(planDetailCurrent.plan.id);
+  document.getElementById('plan-kit-body').innerHTML = renderKitSectionsHtml(planDetailCurrent.plan, kitRows);
+  wireKitSectionEvents();
+}
+
+let planDetailCurrent = null; // {plan, items} for whichever plan is open in the dialog
 
 async function openPlanDetail(planId){
   const modal = document.getElementById('plan-detail-modal');
@@ -8820,8 +8975,7 @@ async function openPlanDetail(planId){
     plan = rows[0];
   }catch(e){ console.error(e); }
   if(!plan){ body.innerHTML = '<div class="empty">Could not load this plan.</div>'; return; }
-  const when = new Date(plan.trip_date + 'T00:00').toLocaleDateString(dateLocale(), {weekday:'long', day:'numeric', month:'long', year:'numeric'});
-  title.textContent = plan.venue_name + ' — ' + when;
+  title.textContent = plan.venue_name + ' — ' + planDateRangeLabel(plan);
 
   tackleItemsCache = await loadTackleItems();
   const shared = await loadSharedWithMeTackleItemIds();
@@ -8830,10 +8984,11 @@ async function openPlanDetail(planId){
   const venues = await loadMyVenues();
   const venue = venues.find(v=>v.id===plan.venue_id) || null;
 
-  const [recap, forecastHtml, existingTicks] = await Promise.all([
+  const [recap, forecastHtml, existingTicks, kitRows] = await Promise.all([
     loadVenueLastTrip(plan.venue_id),
     renderPlanForecastHtml(venue, plan.trip_date),
-    loadPlanTicks(plan.id)
+    loadPlanTicks(plan.id),
+    loadKitRows(plan.id)
   ]);
 
   const items = activeTackleItems();
@@ -8843,12 +8998,39 @@ async function openPlanDetail(planId){
 
   planDetailCurrent = {plan, items};
 
-  body.innerHTML = renderPlanRecapHtml(recap) + forecastHtml
-    + '<div class="profile-catch"><div class="pc-head">Packing list</div>' + renderPlanChecklistHtml(items, ticks) + '</div>';
+  body.innerHTML = '<div class="profile-catch"><div class="row2">'
+      + '<div class="field"><label>Start date</label><input type="date" id="plan-detail-start" value="' + escapeHtml(plan.trip_date) + '"></div>'
+      + '<div class="field"><label>Return date (optional)</label><input type="date" id="plan-detail-return" value="' + escapeHtml(plan.return_date || '') + '"></div>'
+      + '</div><div class="status" id="plan-detail-date-status"></div></div>'
+    + renderPlanRecapHtml(recap) + forecastHtml
+    + '<details class="ins-group" data-plan-group="tackle" open><summary><span class="ins-group-title">Tackle box</span></summary>'
+      + '<div class="ins-group-body">' + renderPlanChecklistHtml(items, ticks) + '</div></details>'
+    + '<div id="plan-kit-body">' + renderKitSectionsHtml(plan, kitRows) + '</div>';
 
   body.querySelectorAll('.plan-pack-check').forEach(cb=>{
     cb.addEventListener('change', ()=> setPlanTick(plan.id, cb.dataset.itemId, cb.checked));
   });
+  wireKitSectionEvents();
+  const onDateChange = async ()=>{
+    const st2 = document.getElementById('plan-detail-date-status');
+    const newStart = document.getElementById('plan-detail-start').value;
+    const newReturn = document.getElementById('plan-detail-return').value || null;
+    if(!newStart){ st2.textContent = 'Start date is required.'; return; }
+    if(newReturn && newReturn < newStart){ st2.textContent = 'Return date is before the start date.'; return; }
+    try{
+      await sbPatch('trip_plans', 'id=eq.'+plan.id, {trip_date: newStart, return_date: newReturn});
+      planDetailCurrent.plan.trip_date = newStart;
+      planDetailCurrent.plan.return_date = newReturn;
+      title.textContent = plan.venue_name + ' — ' + planDateRangeLabel(planDetailCurrent.plan);
+      st2.textContent = '';
+      refreshKitSection();
+    }catch(err){
+      console.error(err);
+      st2.textContent = 'Could not save: ' + (err.message || 'unknown error');
+    }
+  };
+  document.getElementById('plan-detail-start').addEventListener('change', onDateChange);
+  document.getElementById('plan-detail-return').addEventListener('change', onDateChange);
 }
 
 async function deleteTripPlanPrompt(){
@@ -8868,7 +9050,7 @@ async function deleteTripPlanPrompt(){
 function renderPlanListHtml(plans){
   if(!plans.length) return '<div class="empty">No trips planned yet — add one above.</div>';
   return '<ul class="people-list">' + plans.map(p=>{
-    const when = new Date(p.trip_date + 'T00:00').toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+    const when = planDateRangeLabel(p);
     return '<li class="plan-list-row" data-plan-id="' + escapeHtml(p.id) + '" style="cursor:pointer;">'
       + '<div class="who"><b>' + escapeHtml(p.venue_name) + '</b><div class="pc-line muted">' + escapeHtml(when) + (p.session_id ? ' · fished' : '') + '</div></div>'
       + '</li>';
@@ -8882,8 +9064,10 @@ async function renderPlanTab(){
   list.innerHTML = '<div class="empty">Loading...</div>';
   const plans = await loadTripPlans();
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = plans.filter(p=> p.trip_date >= today);
-  const past = plans.filter(p=> p.trip_date < today);
+  // "Upcoming" lasts until the trip is fully over - a multi-day trip that
+  // started yesterday but returns tomorrow shouldn't drop into Past early.
+  const upcoming = plans.filter(p=> (p.return_date || p.trip_date) >= today);
+  const past = plans.filter(p=> (p.return_date || p.trip_date) < today);
   list.innerHTML = renderPlanListHtml(upcoming);
   if(past.length){
     pastCard.style.display = 'block';
@@ -8902,16 +9086,19 @@ document.getElementById('plan-create-btn').addEventListener('click', async ()=>{
   const st = document.getElementById('plan-create-status');
   const venueName = document.getElementById('plan-venue').value.trim();
   const tripDate = document.getElementById('plan-date').value;
+  const returnDate = document.getElementById('plan-return-date').value || null;
   if(!venueName){ st.textContent = 'Enter a venue.'; return; }
-  if(!tripDate){ st.textContent = 'Pick a date.'; return; }
+  if(!tripDate){ st.textContent = 'Pick a start date.'; return; }
+  if(returnDate && returnDate < tripDate){ st.textContent = 'Return date is before the start date.'; return; }
   btn.disabled = true;
   st.textContent = 'Saving...';
   try{
     const venue = await resolveTripVenue(venueName);
-    const plan = {id: uid(), owner_user_id: session.user.id, venue_id: venue.id, venue_name: venue.name, trip_date: tripDate, session_id: null};
+    const plan = {id: uid(), owner_user_id: session.user.id, venue_id: venue.id, venue_name: venue.name, trip_date: tripDate, return_date: returnDate, session_id: null};
     await sbPost('trip_plans', plan);
     document.getElementById('plan-venue').value = '';
     document.getElementById('plan-date').value = '';
+    document.getElementById('plan-return-date').value = '';
     st.textContent = 'Saved.';
     pkTrack('trip_plan_created');
     setTimeout(()=> st.textContent = '', 1200);
@@ -8935,12 +9122,16 @@ document.getElementById('plan-help-close').addEventListener('click', ()=> docume
 async function linkTripPlanToSession(venueId, sessionId){
   if(!venueId) return;
   try{
-    const candidates = await sbGet('trip_plans?select=id,trip_date&owner_user_id=eq.'+session.user.id+'&venue_id=eq.'+venueId+'&session_id=is.null');
+    const candidates = await sbGet('trip_plans?select=id,trip_date,return_date&owner_user_id=eq.'+session.user.id+'&venue_id=eq.'+venueId+'&session_id=is.null');
     if(!candidates.length) return;
     const now = new Date();
     let best = null, bestDiff = Infinity;
     candidates.forEach(c=>{
-      const diff = Math.abs(new Date(c.trip_date + 'T00:00') - now);
+      const start = new Date(c.trip_date + 'T00:00');
+      const end = new Date((c.return_date || c.trip_date) + 'T23:59');
+      // Inside the trip's own date range (start through return date) always wins;
+      // otherwise fall back to "close enough to the start date" for a single day.
+      const diff = (now >= start && now <= end) ? 0 : Math.min(Math.abs(now - start), Math.abs(now - end));
       if(diff < bestDiff && diff <= 86400000 * 1.5){ best = c; bestDiff = diff; }
     });
     if(best) await sbPatch('trip_plans', 'id=eq.'+best.id, {session_id: sessionId});
@@ -12547,7 +12738,7 @@ function renderSessionFeed(){
 // Tabs. Panels reachable from the More menu (feed, tackle, competitions,
 // admin) have no bottom-bar button of their own, so the More tab stays
 // highlighted while you're in them.
-const MORE_TABS = ['feed','tackle','competitions','admin','whatsnew','privacy','terms'];
+const MORE_TABS = ['feed','tackle','competitions','plan','admin','whatsnew','privacy','terms'];
 
 function enterTackleTab(){
   updateTackleVisibility();
