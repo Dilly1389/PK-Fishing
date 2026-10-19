@@ -642,14 +642,16 @@
   dialog#session-edit-modal, dialog#session-recap-modal, dialog#recast-confirm-modal, dialog#pin-drop-modal, dialog#badge-bookcase-modal,
   dialog#badge-detail-modal, dialog#follow-list-modal, dialog#profile-modal, dialog#notif-modal,
   dialog#onboarding-modal, dialog#reset-password-modal, dialog#timers-help-modal, dialog#profile-help-modal,
-  dialog#tackle-help-modal, dialog#insights-help-modal, dialog#competitions-help-modal, dialog#photo-modal, dialog#edit-catch-modal, dialog#competition-detail-modal{
+  dialog#tackle-help-modal, dialog#insights-help-modal, dialog#competitions-help-modal, dialog#photo-modal, dialog#edit-catch-modal, dialog#competition-detail-modal,
+  dialog#plan-detail-modal, dialog#plan-help-modal{
     border:none;padding:0;background:transparent;margin:auto;
     max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);
   }
   /* The "How it works" walkthroughs are long reads, so they use more of a wide screen */
   dialog#onboarding-modal .modal-card, dialog#timers-help-modal .modal-card,
   dialog#profile-help-modal .modal-card, dialog#tackle-help-modal .modal-card,
-  dialog#insights-help-modal .modal-card, dialog#competitions-help-modal .modal-card{
+  dialog#insights-help-modal .modal-card, dialog#competitions-help-modal .modal-card,
+  dialog#plan-help-modal .modal-card{
     max-width:min(92vw,560px);max-height:88vh;
   }
   dialog#confirm-modal::backdrop, dialog#forecast-modal::backdrop, dialog#venue-catches-modal::backdrop,
@@ -659,7 +661,8 @@
   dialog#onboarding-modal::backdrop, dialog#reset-password-modal::backdrop, dialog#timers-help-modal::backdrop,
   dialog#profile-help-modal::backdrop, dialog#tackle-help-modal::backdrop, dialog#insights-help-modal::backdrop,
   dialog#competitions-help-modal::backdrop, dialog#photo-modal::backdrop,
-  dialog#edit-catch-modal::backdrop, dialog#competition-detail-modal::backdrop{
+  dialog#edit-catch-modal::backdrop, dialog#competition-detail-modal::backdrop,
+  dialog#plan-detail-modal::backdrop, dialog#plan-help-modal::backdrop{
     background:rgba(0,0,0,0.55);
   }
   dialog#competition-detail-modal .modal-card{max-width:min(92vw,560px);max-height:88vh;}
@@ -904,6 +907,7 @@
     <button data-tab="schedule"><span class="tab-icon">👤</span><span class="tab-label">Profile</span></button>
     <button data-tab="timers" id="timers-tab-btn" style="display:none;"><span class="tab-icon">⏱</span><span class="tab-label">Timers</span></button>
     <button data-tab="insights" id="insights-tab-btn" style="display:none;"><span class="tab-icon">📊</span><span class="tab-label">Insights</span></button>
+    <button data-tab="plan" id="plan-tab-btn" style="display:none;"><span class="tab-icon">🧭</span><span class="tab-label">Plan</span></button>
     <button data-tab="more"><span class="tab-icon">☰</span><span class="tab-label">More</span></button>
   </nav>
 
@@ -979,6 +983,42 @@
     <div class="panel" id="panel-insights">
       <button type="button" class="mini-btn" id="insights-help-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How Insights works</button>
       <div id="insights-body"><div class="empty">Loading...</div></div>
+    </div>
+
+    <!-- PLAN YOUR NEXT TRIP -->
+    <div class="panel" id="panel-plan">
+      <section class="card" id="plan-signin-required">
+        <h2>Plan your next trip</h2>
+        <p class="pc-line muted">Sign in from the Profile tab to plan a trip.</p>
+      </section>
+      <div id="plan-content" style="display:none;">
+        <button type="button" class="mini-btn" id="plan-help-btn" style="margin-bottom:14px;"><i class="ti ti-help-circle" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>How Plan your next trip works</button>
+
+        <section class="card" id="plan-new-card">
+          <h2>Plan a trip</h2>
+          <div class="field">
+            <label>Venue</label>
+            <input type="text" maxlength="100" id="plan-venue" placeholder="Where are you headed?" autocomplete="pk-venue-plan" name="pk-venue-field-plan" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+            <div id="venue-suggestion-list-plan" style="display:none;border:1px solid var(--line);border-radius:8px;margin-top:4px;overflow:hidden;"></div>
+          </div>
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="plan-date" autocomplete="off">
+          </div>
+          <button class="primary-btn" id="plan-create-btn">Plan this trip</button>
+          <div class="status" id="plan-create-status"></div>
+        </section>
+
+        <section class="card" id="plan-list-card">
+          <h2>Upcoming trips</h2>
+          <div id="plan-list"><div class="empty">No trips planned yet — add one above.</div></div>
+        </section>
+
+        <section class="card" id="plan-past-card" style="display:none;">
+          <h2>Past plans</h2>
+          <div id="plan-past-list"></div>
+        </section>
+      </div>
     </div>
 
     <div class="panel" id="panel-timers">
@@ -2062,6 +2102,40 @@
     <button type="button" id="forecast-modal-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <h3 style="margin-top:0;">Forecast</h3>
     <div id="forecast-body"></div>
+  </div>
+</dialog>
+
+<dialog id="plan-detail-modal" closedby="any" aria-label="Trip plan">
+  <div class="modal-card wide" style="position:relative;">
+    <button type="button" id="plan-detail-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <h3 style="margin-top:0;" id="plan-detail-title">Trip plan</h3>
+    <div id="plan-detail-body"></div>
+    <div style="margin-top:14px;text-align:right;">
+      <button type="button" class="mini-btn danger" id="plan-detail-delete">Delete this plan</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="plan-help-modal" closedby="any" aria-label="How Plan your next trip works">
+  <div class="modal-card">
+    <h3 style="margin-top:0;"><i class="ti ti-compass" style="vertical-align:-2px;margin-right:6px;" aria-hidden="true"></i>How Plan your next trip works</h3>
+    <div class="profile-catch">
+      <div class="pc-head">Pick a venue and a date</div>
+      <div class="pc-line muted">Give it a venue and the date you're going. If you've fished there before, you'll see how your last trip went; if you have a packing list from last time, it starts pre-ticked.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Your packing list</div>
+      <div class="pc-line muted">Built from your Tackle Box, grouped the same way as Choose my tackle. Tick off what you're bringing — it's saved, so you can leave and come back to it before you go.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Weather for the day</div>
+      <div class="pc-line muted">Once your trip is within a week away, you'll see that day's forecast for the venue. Needs the venue to have a saved location — add one from Edit venue if it's missing.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Starting the session</div>
+      <div class="pc-line muted">When you start a session at the same venue around the planned date, this plan links to it automatically — nothing to do on your end.</div>
+    </div>
+    <button class="primary-btn" id="plan-help-close">Got it</button>
   </div>
 </dialog>
 
@@ -4683,6 +4757,7 @@ function renderAccountArea(){
     refreshVenueSuggestions();
     wireVenueSuggestions('session-venue', 'venue-suggestion-list');
     wireVenueSuggestions('past-catch-venue', 'venue-suggestion-list-past');
+    wireVenueSuggestions('plan-venue', 'venue-suggestion-list-plan');
   }else{
     if(authForms) authForms.style.display = 'block';
     pkRenderCaptchas();
@@ -4700,6 +4775,21 @@ function renderAccountArea(){
   if(moreAdminLink) moreAdminLink.style.display = isSuperUser() ? 'flex' : 'none';
   const insightsTabBtn = document.getElementById('insights-tab-btn');
   if(insightsTabBtn) insightsTabBtn.style.display = isSignedIn() ? '' : 'none';
+  const planTabBtn = document.getElementById('plan-tab-btn');
+  if(planTabBtn) planTabBtn.style.display = isSignedIn() ? '' : 'none';
+  const planGate = document.getElementById('plan-signin-required');
+  const planContent = document.getElementById('plan-content');
+  if(planGate) planGate.style.display = isSignedIn() ? 'none' : 'block';
+  if(planContent) planContent.style.display = isSignedIn() ? 'block' : 'none';
+  // If Plan was open when signing out, bounce back to Profile instead of leaving a dead tab active
+  if(!isSignedIn() && planTabBtn && planTabBtn.classList.contains('active')){
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    const scheduleBtn2 = document.querySelector('nav.tabs button[data-tab="schedule"]');
+    if(scheduleBtn2) scheduleBtn2.classList.add('active');
+    const schedulePanel2 = document.getElementById('panel-schedule');
+    if(schedulePanel2) schedulePanel2.classList.add('active');
+  }
   refreshNotifBadge();
 
   // Signed out, not spectating a shared link: strip everything down to just
@@ -8303,7 +8393,10 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
     };
     if(peg) sessionRecord.peg = peg;
     if(navigator.onLine){
-      try{ await sbPost('sessions', sessionRecord); }
+      try{
+        await sbPost('sessions', sessionRecord);
+        linkTripPlanToSession(venueId, sessionId);
+      }
       catch(e){ console.error(e); await offlinePut(OFFLINE_SESSION_STORE, {id: sessionId, record: sessionRecord}); }
     }else{
       await offlinePut(OFFLINE_SESSION_STORE, {id: sessionId, record: sessionRecord});
@@ -8544,13 +8637,15 @@ async function cleanOrphanVenues(){
   try{
     const venues = await sbGet('venues?select=id&owner_user_id=eq.'+session.user.id);
     if(!venues.length) return;
-    const [sessions, catches] = await Promise.all([
+    const [sessions, catches, tripPlans] = await Promise.all([
       sbGet('sessions?select=venue_id'),
-      sbGet('catches?select=venue_id')
+      sbGet('catches?select=venue_id'),
+      sbGet('trip_plans?select=venue_id&owner_user_id=eq.'+session.user.id)
     ]);
     const inUse = new Set([
       ...sessions.map(s=>s.venue_id),
-      ...catches.map(c=>c.venue_id)
+      ...catches.map(c=>c.venue_id),
+      ...tripPlans.map(t=>t.venue_id)
     ].filter(Boolean));
 
     for(const v of venues){
@@ -8560,6 +8655,295 @@ async function cleanOrphanVenues(){
       }
     }
   }catch(e){ console.error('cleanOrphanVenues failed', e); }
+}
+
+// ---------- Plan your next trip ----------
+// A lighter venue resolver for planning ahead of time, away from the water:
+// matches an existing venue by name, otherwise creates one with no
+// coordinates (no GPS prompt here - you're not standing at the venue yet).
+// A venue created this way gets coordinates the normal way, the next time
+// a session is started there, or via Edit venue.
+async function resolveTripVenue(venueName){
+  const venues = await loadMyVenues();
+  const existing = findVenueByName(venues, venueName);
+  if(existing) return existing;
+  const venueId = uid();
+  const venueRecord = {id: venueId, owner_user_id: session.user.id, name: venueName, latitude: null, longitude: null};
+  try{ await sbPost('venues', venueRecord); }
+  catch(e){ console.error(e); await offlinePut(OFFLINE_VENUE_STORE, {id: venueId, record: venueRecord}); }
+  return venueRecord;
+}
+
+async function loadTripPlans(){
+  if(!isSignedIn()) return [];
+  try{
+    return await sbGet('trip_plans?select=*&owner_user_id=eq.'+session.user.id+'&order=trip_date.asc');
+  }catch(e){ console.error('loadTripPlans failed', e); return []; }
+}
+
+// Names (lowercased) of every bait/dip mentioned on a session's catches -
+// read straight off the catch rows rather than any rig/combo record, since
+// that's what was actually tied on at the time, combo or not.
+function baitNamesFromCatches(catchRows){
+  const names = new Set();
+  const fields = ['bom','hook1_note','hook2_note','hook3_note','hook4_note','hook5_note','hook6_note'];
+  catchRows.forEach(c=>{
+    fields.forEach(f=>{
+      String(c[f] || '').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean).forEach(n=> names.add(n));
+    });
+  });
+  return names;
+}
+
+// Your own last session at this venue, for the recap and for the packing
+// list's pre-tick. Returns null if you've never fished there.
+async function loadVenueLastTrip(venueId){
+  if(!venueId) return null;
+  const myId = getMyFishermanId();
+  if(!myId) return null;
+  try{
+    const sessRows = await sbGet('sessions?select=*&venue_id=eq.'+venueId+'&fisherman_id=eq.'+myId+'&order=started_at.desc&limit=1');
+    const sess = sessRows[0];
+    if(!sess) return null;
+    const catchRows = await sbGet('catches?select=*&session_id=eq.'+sess.id);
+    const caught = catchRows.filter(c=>c.caught);
+    const totalWeight = caught.reduce((s,c)=> s + (Number(c.weight) || 0), 0);
+    let best = null;
+    caught.forEach(c=>{ if(!best || (Number(c.weight) || 0) > (Number(best.weight) || 0)) best = c; });
+    return {session: sess, catchCount: caught.length, castCount: catchRows.length, totalWeight, best, baitNames: baitNamesFromCatches(catchRows)};
+  }catch(e){ console.error('loadVenueLastTrip failed', e); return null; }
+}
+
+function fmtKg(w){
+  return (Math.round((Number(w) || 0) * 100) / 100) + 'kg';
+}
+
+function renderPlanRecapHtml(recap){
+  if(!recap){
+    return '<div class="profile-catch"><div class="pc-head">First time here</div><div class="pc-line muted">No previous trip logged at this venue yet.</div></div>';
+  }
+  const sess = recap.session;
+  const when = new Date(sess.started_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'long', year:'numeric'});
+  let html = '<div class="profile-catch"><div class="pc-head">Last trip here — ' + escapeHtml(when) + '</div>';
+  html += '<div class="pc-line muted">' + recap.catchCount + ' fish from ' + recap.castCount + ' casts'
+    + (recap.totalWeight ? ', ' + fmtKg(recap.totalWeight) + ' total' : '')
+    + (sess.peg ? ', peg ' + escapeHtml(sess.peg) : '') + '.</div>';
+  if(recap.best){
+    html += '<div class="pc-line muted">Best: ' + escapeHtml(recap.best.fish_type || 'fish') + (recap.best.weight ? ' at ' + fmtKg(recap.best.weight) : '') + '.</div>';
+  }
+  if(sess.session_log){
+    html += '<div class="pc-line muted">Session log: "' + escapeHtml(sess.session_log) + '"</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+async function renderPlanForecastHtml(venue, tripDateStr){
+  if(!venue || venue.latitude == null || venue.longitude == null){
+    return '<div class="profile-catch"><div class="pc-head">Weather</div><div class="pc-line muted">This venue has no saved location yet, so there\'s no forecast to show. Add one from Edit venue once you\'re there, or from Insights &rarr; your venues.</div></div>';
+  }
+  const daysOut = Math.round((new Date(tripDateStr + 'T00:00') - new Date(new Date().toDateString())) / 86400000);
+  if(daysOut < 0 || daysOut > 6){
+    return '<div class="profile-catch"><div class="pc-head">Weather</div><div class="pc-line muted">The forecast opens up once your trip is within a week away.</div></div>';
+  }
+  const data = await fetchForecast(venue.latitude, venue.longitude);
+  const idx = data && data.daily && data.daily.time ? data.daily.time.indexOf(tripDateStr) : -1;
+  if(idx < 0){
+    return '<div class="profile-catch"><div class="pc-head">Weather</div><div class="pc-line muted">Could not load the forecast right now.</div></div>';
+  }
+  const max = data.daily.temperature_2m_max?.[idx], min = data.daily.temperature_2m_min?.[idx];
+  const rain = data.daily.precipitation_probability_max?.[idx], wind = data.daily.wind_speed_10m_max?.[idx];
+  return '<div class="profile-catch"><div class="pc-head">Weather for the day</div><div class="pc-line muted">'
+    + (max != null ? fmtTemp(max) + ' / ' + fmtTemp(min) : '—')
+    + (wind != null ? ', wind up to ' + fmtWind(wind) : '')
+    + (rain != null ? ', ' + Math.round(rain) + '% rain chance' : '') + '.</div></div>';
+}
+
+// What to pre-tick on a brand new plan: baits/dips actually used last time
+// at this venue (by name - the app has no other link from a past catch back
+// to a tackle item), and everything else currently active, since a free
+// account's rod/reel/line/etc. caps usually leave only one of each anyway.
+function defaultPackingTicks(recap){
+  const ticked = new Set();
+  activeTackleItems().forEach(it=>{
+    const cat = tackleCat(it);
+    if(cat === 'Bait' || cat === 'Dips'){
+      if(recap && recap.baitNames.has(String(it.name || '').trim().toLowerCase())) ticked.add(it.id);
+    }else{
+      ticked.add(it.id);
+    }
+  });
+  return ticked;
+}
+
+async function loadPlanTicks(planId){
+  try{
+    const rows = await sbGet('trip_plan_items?select=tackle_item_id,ticked&trip_plan_id=eq.'+planId);
+    return new Map(rows.map(r=>[r.tackle_item_id, !!r.ticked]));
+  }catch(e){ console.error('loadPlanTicks failed', e); return new Map(); }
+}
+
+async function setPlanTick(planId, tackleItemId, ticked){
+  try{
+    await sbUpsert('trip_plan_items', {trip_plan_id: planId, tackle_item_id: tackleItemId, ticked}, 'trip_plan_id,tackle_item_id');
+  }catch(e){ console.error('setPlanTick failed', e); }
+}
+
+function renderPlanChecklistHtml(items, ticks){
+  const byCat = {};
+  items.forEach(it=>{ const c = tackleCat(it); (byCat[c] = byCat[c] || []).push(it); });
+  const cats = Object.keys(byCat).sort((a,b)=> a.localeCompare(b));
+  if(!cats.length) return '<div class="empty">Your Tackle Box is empty - add some gear first.</div>';
+  return cats.map(c=>{
+    const rows = byCat[c].slice().sort((a,b)=> a.name.localeCompare(b.name)).map(it=>{
+      const checked = ticks.has(it.id) ? ticks.get(it.id) : false;
+      return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
+        + '<input type="checkbox" class="plan-pack-check" data-item-id="' + escapeHtml(it.id) + '"' + (checked ? ' checked' : '') + '>'
+        + '<span>' + escapeHtml(it.name) + (it.brand ? ' <span class="pc-line muted">(' + escapeHtml(it.brand) + ')</span>' : '') + '</span></label>';
+    }).join('');
+    return '<div class="profile-catch"><div class="pc-head">' + escapeHtml(c) + '</div>' + rows + '</div>';
+  }).join('');
+}
+
+let planDetailCurrent = null; // {plan, items, ticks} for whichever plan is open in the dialog
+
+async function openPlanDetail(planId){
+  const modal = document.getElementById('plan-detail-modal');
+  const body = document.getElementById('plan-detail-body');
+  const title = document.getElementById('plan-detail-title');
+  modal.showModal();
+  body.innerHTML = '<div class="empty">Loading...</div>';
+  let plan;
+  try{
+    const rows = await sbGet('trip_plans?id=eq.'+planId+'&select=*');
+    plan = rows[0];
+  }catch(e){ console.error(e); }
+  if(!plan){ body.innerHTML = '<div class="empty">Could not load this plan.</div>'; return; }
+  const when = new Date(plan.trip_date + 'T00:00').toLocaleDateString(dateLocale(), {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  title.textContent = plan.venue_name + ' — ' + when;
+
+  tackleItemsCache = await loadTackleItems();
+  const shared = await loadSharedWithMeTackleItemIds();
+  tackleInUseIds = new Set([...shared].filter(([, v])=> v === true).map(([k])=> k));
+
+  const venues = await loadMyVenues();
+  const venue = venues.find(v=>v.id===plan.venue_id) || null;
+
+  const [recap, forecastHtml, existingTicks] = await Promise.all([
+    loadVenueLastTrip(plan.venue_id),
+    renderPlanForecastHtml(venue, plan.trip_date),
+    loadPlanTicks(plan.id)
+  ]);
+
+  const items = activeTackleItems();
+  // A brand new plan with no saved ticks yet starts from the smart default;
+  // once anything has been saved, that's respected as-is, even if it's all unticked.
+  const ticks = existingTicks.size ? existingTicks : new Map([...defaultPackingTicks(recap)].map(id=>[id, true]));
+
+  planDetailCurrent = {plan, items};
+
+  body.innerHTML = renderPlanRecapHtml(recap) + forecastHtml
+    + '<div class="profile-catch"><div class="pc-head">Packing list</div>' + renderPlanChecklistHtml(items, ticks) + '</div>';
+
+  body.querySelectorAll('.plan-pack-check').forEach(cb=>{
+    cb.addEventListener('change', ()=> setPlanTick(plan.id, cb.dataset.itemId, cb.checked));
+  });
+}
+
+async function deleteTripPlanPrompt(){
+  if(!planDetailCurrent) return;
+  if(!window.confirm('Delete this trip plan?\n\nThis cannot be undone.')) return;
+  try{
+    await sbDelete('trip_plan_items', 'trip_plan_id=eq.'+planDetailCurrent.plan.id);
+    await sbDelete('trip_plans', 'id=eq.'+planDetailCurrent.plan.id);
+    document.getElementById('plan-detail-modal').close();
+    renderPlanTab();
+  }catch(e){
+    console.error(e);
+    alert('Could not delete: ' + (e.message || 'unknown error'));
+  }
+}
+
+function renderPlanListHtml(plans){
+  if(!plans.length) return '<div class="empty">No trips planned yet — add one above.</div>';
+  return '<ul class="people-list">' + plans.map(p=>{
+    const when = new Date(p.trip_date + 'T00:00').toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+    return '<li class="plan-list-row" data-plan-id="' + escapeHtml(p.id) + '" style="cursor:pointer;">'
+      + '<div class="who"><b>' + escapeHtml(p.venue_name) + '</b><div class="pc-line muted">' + escapeHtml(when) + (p.session_id ? ' · fished' : '') + '</div></div>'
+      + '</li>';
+  }).join('') + '</ul>';
+}
+
+async function renderPlanTab(){
+  const list = document.getElementById('plan-list');
+  const pastCard = document.getElementById('plan-past-card');
+  const pastList = document.getElementById('plan-past-list');
+  list.innerHTML = '<div class="empty">Loading...</div>';
+  const plans = await loadTripPlans();
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = plans.filter(p=> p.trip_date >= today);
+  const past = plans.filter(p=> p.trip_date < today);
+  list.innerHTML = renderPlanListHtml(upcoming);
+  if(past.length){
+    pastCard.style.display = 'block';
+    pastList.innerHTML = renderPlanListHtml(past.slice().reverse());
+  }else{
+    pastCard.style.display = 'none';
+  }
+  document.querySelectorAll('.plan-list-row').forEach(row=>{
+    row.addEventListener('click', ()=> openPlanDetail(row.dataset.planId));
+  });
+}
+
+document.getElementById('plan-create-btn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('plan-create-btn');
+  if(btn.disabled) return;
+  const st = document.getElementById('plan-create-status');
+  const venueName = document.getElementById('plan-venue').value.trim();
+  const tripDate = document.getElementById('plan-date').value;
+  if(!venueName){ st.textContent = 'Enter a venue.'; return; }
+  if(!tripDate){ st.textContent = 'Pick a date.'; return; }
+  btn.disabled = true;
+  st.textContent = 'Saving...';
+  try{
+    const venue = await resolveTripVenue(venueName);
+    const plan = {id: uid(), owner_user_id: session.user.id, venue_id: venue.id, venue_name: venue.name, trip_date: tripDate, session_id: null};
+    await sbPost('trip_plans', plan);
+    document.getElementById('plan-venue').value = '';
+    document.getElementById('plan-date').value = '';
+    st.textContent = 'Saved.';
+    pkTrack('trip_plan_created');
+    setTimeout(()=> st.textContent = '', 1200);
+    renderPlanTab();
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('plan-detail-x').addEventListener('click', ()=> document.getElementById('plan-detail-modal').close());
+document.getElementById('plan-detail-delete').addEventListener('click', deleteTripPlanPrompt);
+document.getElementById('plan-help-btn').addEventListener('click', ()=> document.getElementById('plan-help-modal').showModal());
+document.getElementById('plan-help-close').addEventListener('click', ()=> document.getElementById('plan-help-modal').close());
+
+// Starting a session at the same venue, within a day either side of a
+// still-open plan's date, links the two - closest date wins if there's more
+// than one candidate. Best-effort: a session should never fail to start over this.
+async function linkTripPlanToSession(venueId, sessionId){
+  if(!venueId) return;
+  try{
+    const candidates = await sbGet('trip_plans?select=id,trip_date&owner_user_id=eq.'+session.user.id+'&venue_id=eq.'+venueId+'&session_id=is.null');
+    if(!candidates.length) return;
+    const now = new Date();
+    let best = null, bestDiff = Infinity;
+    candidates.forEach(c=>{
+      const diff = Math.abs(new Date(c.trip_date + 'T00:00') - now);
+      if(diff < bestDiff && diff <= 86400000 * 1.5){ best = c; bestDiff = diff; }
+    });
+    if(best) await sbPatch('trip_plans', 'id=eq.'+best.id, {session_id: sessionId});
+  }catch(e){ console.error('linkTripPlanToSession failed', e); }
 }
 
 async function loadMyVenues(){
@@ -12210,6 +12594,7 @@ function goToTab(tabName){
   if(tabName==='privacy') renderPrivacy();
   if(tabName==='terms') renderTerms();
   if(tabName==='insights' && isSignedIn()) openInsights();
+  if(tabName==='plan' && isSignedIn()) renderPlanTab();
   if(tabName==='timers'){
     updateTimersVisibility();
     loadKnownRigs().then(()=>{ if(currentPerson) renderAll(); });
