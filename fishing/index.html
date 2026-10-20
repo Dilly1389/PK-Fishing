@@ -1447,6 +1447,13 @@
         </div>
       </section>
 
+      <section class="card" id="export-csv-card" style="display:none;">
+        <h2>Export my catches</h2>
+        <p class="pc-line muted">Downloads every catch and blank you've logged as a CSV file, for your own records or to open in a spreadsheet.</p>
+        <button class="mini-btn" id="export-csv-btn">🔒 Export as CSV</button>
+        <div class="status" id="export-csv-status"></div>
+      </section>
+
       <section class="card" id="danger-zone-card" style="display:none;">
         <h2>Delete my data</h2>
         <p class="pc-line muted">Permanently removes your angler profile, every catch you've logged, your rod timers, sessions, venues, and tackle box items. This cannot be undone.</p>
@@ -4764,6 +4771,7 @@ function renderAccountArea(){
   const detailsCard = document.getElementById('my-details-card');
   const insightsCard = document.getElementById('my-insights-card');
   const dangerCard = document.getElementById('danger-zone-card');
+  const exportCsvCard = document.getElementById('export-csv-card');
   const reelRecordsCard = document.getElementById('reel-records-settings-card');
   const pastCatchCard = document.getElementById('past-catch-card');
   const notificationsCard = document.getElementById('notifications-card');
@@ -4787,6 +4795,10 @@ function renderAccountArea(){
       }
     }
     if(dangerCard) dangerCard.style.display = 'block';
+    if(exportCsvCard){
+      exportCsvCard.style.display = 'block';
+      refreshExportCsvButton();
+    }
     if(reelRecordsCard) reelRecordsCard.style.display = 'block';
     if(notificationsCard) notificationsCard.style.display = 'block';
     populateMyDetails();
@@ -4805,6 +4817,7 @@ function renderAccountArea(){
     if(insightsCard) insightsCard.style.display = 'none';
     if(pastCatchCard) pastCatchCard.style.display = 'none';
     if(dangerCard) dangerCard.style.display = 'none';
+    if(exportCsvCard) exportCsvCard.style.display = 'none';
     if(reelRecordsCard) reelRecordsCard.style.display = 'none';
     if(notificationsCard) notificationsCard.style.display = 'none';
   }
@@ -5239,7 +5252,12 @@ async function loadMyPlan(){
   renderAccountPlanLine();
   refreshRodChoices();
   refreshCompetitionForm();
+  refreshExportCsvButton();
   if(isSignedIn() && !isPro()){ loadGearOptions(); loadTackleCategoryOptions(); }
+}
+function refreshExportCsvButton(){
+  const btn = document.getElementById('export-csv-btn');
+  if(btn) btn.textContent = isPro() ? 'Export as CSV' : '🔒 Export as CSV';
 }
 // A free account over a tackle limit picks which items stay active; the rest
 // are locked (kept, read-only, hidden from the pickers) until it upgrades.
@@ -5580,7 +5598,8 @@ const PRO_FEATURE_LABELS = {
   insights_pro: 'A Pro Insights section',
   competition_pro_tools: 'Advanced competition tools',
   tackle_box_share_all: 'Sharing the whole tackle box',
-  unlimited_trip_plans: 'More than one planned trip at a time'
+  unlimited_trip_plans: 'More than one planned trip at a time',
+  csv_export: 'Exporting catches as CSV'
 };
 async function markProFeatureUsed(featureKey){
   const myId = getMyFishermanId();
@@ -10732,6 +10751,70 @@ async function renderVenueMap(venues, allCatches){
   // ago — this makes Leaflet re-measure it now that it actually does
   setTimeout(()=>{ if(venueMapInstance) venueMapInstance.invalidateSize(); }, 100);
 }
+
+// ---------- CSV export (Pro) ----------
+function catchesToCsv(catches, venueNames){
+  const headers = ['Date','Time','Caught','Species','Weight (kg)','Net weight (kg)','Venue','Rig','Baits','Cast distance (m)','Rod note','Temp (C)','Wind (km/h)','Pressure (hPa)','Moon phase'];
+  const esc = v=>{
+    const s = String(v ?? '');
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  };
+  const rows = catches.map(c=>{
+    const d = new Date(c.time);
+    const baits = [c.bom, c.hook1, c.hook2, c.hook3, c.hook4, c.hook5, c.hook6].filter(Boolean).join('; ');
+    return [
+      d.toLocaleDateString('en-ZA'),
+      c.hasKnownTime ? d.toLocaleTimeString('en-ZA', {hour:'2-digit', minute:'2-digit'}) : '',
+      c.caught ? 'Yes' : 'No',
+      c.type || '',
+      c.caught ? c.weight : '',
+      c.netWeight ?? '',
+      (c.venueId && venueNames[c.venueId]) || '',
+      c.rig || '',
+      baits,
+      c.castDistance ?? '',
+      c.rodNote || '',
+      c.weather ? (c.weather.temp ?? '') : '',
+      c.weather ? (c.weather.windSpeed ?? '') : '',
+      c.weather ? (c.weather.pressure ?? '') : '',
+      c.moonPhase || ''
+    ];
+  });
+  // \r\n line endings and a UTF-8 BOM (added where this is written to a
+  // Blob, not here) - what Excel expects, so accents in notes don't mangle.
+  return [headers, ...rows].map(r=> r.map(esc).join(',')).join('\r\n');
+}
+function downloadTextFile(filename, text, mimeType){
+  const blob = new Blob(['﻿' + text], {type: mimeType + ';charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+document.getElementById('export-csv-btn').addEventListener('click', async ()=>{
+  if(!isPro()){ openUpgrade('Exporting your catches as a CSV file is a Pro feature.'); return; }
+  const st = document.getElementById('export-csv-status');
+  const myId = getMyFishermanId();
+  if(!myId) return;
+  st.textContent = 'Preparing...';
+  try{
+    const [person, venues] = await Promise.all([loadPerson(myId), loadMyVenues()]);
+    const venueNames = {};
+    venues.forEach(v=> venueNames[v.id] = v.name);
+    const csv = catchesToCsv(person ? person.catches : [], venueNames);
+    downloadTextFile('pk-fishing-catches-' + new Date().toISOString().slice(0,10) + '.csv', csv, 'text/csv');
+    markProFeatureUsed('csv_export');
+    pkTrack('csv_export');
+    st.textContent = 'Downloaded.';
+    setTimeout(()=> st.textContent = '', 1500);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not export: ' + (e.message || 'unknown error');
+  }
+});
 
 document.getElementById('delete-account-btn').addEventListener('click', ()=>{
   document.getElementById('delete-account-confirm').style.display = 'block';
