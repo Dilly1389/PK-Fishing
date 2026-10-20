@@ -2561,6 +2561,10 @@
     </div>
     <div id="photo-modal-when" style="display:none;font-size:13px;font-weight:600;color:var(--ink);margin-top:8px;"></div>
     <div style="font-size:11px;color:var(--muted);margin-top:6px;">Pinch or double-tap to zoom</div>
+    <div id="photo-modal-share-wrap" style="display:none;margin-top:8px;">
+      <button type="button" class="mini-btn" id="photo-modal-share-btn">🔒 Share this catch</button>
+      <div class="status" id="photo-modal-share-status"></div>
+    </div>
     <div id="photo-modal-nav" style="display:none;justify-content:space-between;align-items:center;margin-top:8px;">
       <button type="button" id="photo-prev-btn" class="mini-btn">‹ Prev</button>
       <span id="photo-modal-counter" style="font-size:12px;color:var(--muted);"></span>
@@ -5599,7 +5603,8 @@ const PRO_FEATURE_LABELS = {
   competition_pro_tools: 'Advanced competition tools',
   tackle_box_share_all: 'Sharing the whole tackle box',
   unlimited_trip_plans: 'More than one planned trip at a time',
-  csv_export: 'Exporting catches as CSV'
+  csv_export: 'Exporting catches as CSV',
+  record_images: 'Sharing a record image (venue board, catch card, or personal bests)'
 };
 async function markProFeatureUsed(featureKey){
   const myId = getMyFishermanId();
@@ -10649,9 +10654,48 @@ function openVenueCatches(venue, venueCatches){
       <div><b>${formatWeight(total)}</b>total</div>
       <div><b>${formatWeight(avg)}</b>average</div>
     </div>`;
+  html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 14px;">
+      <button type="button" class="mini-btn" id="venue-board-share-app">${isPro() ? '' : '🔒 '}Share record board</button>
+      <button type="button" class="mini-btn" id="venue-board-share-rustic">${isPro() ? '' : '🔒 '}Share (rustic style)</button>
+    </div><div class="status" id="venue-board-share-status"></div>`;
   html += sorted.map(c=>catchDetailHtml(c, false, false, true)).join('');
   body.innerHTML = html;
   document.getElementById('venue-catches-modal').showModal();
+
+  const shareBoard = async (style)=>{
+    if(!isPro()){ openUpgrade('Sharing a venue record board is a Pro feature.'); return; }
+    const st = document.getElementById('venue-board-share-status');
+    st.textContent = 'Preparing...';
+    try{
+      const rows = venueRecordRows(venueCatches);
+      const canvas = style === 'rustic'
+        ? await drawVenueBoardRustic(venue.name, rows)
+        : await drawRecordListImage({
+            title: venue.name, subtitle: 'Record Board · updated ' + new Date().toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
+            rows, footerLeft: 'Verified from logged catches'
+          });
+      shareOrDownloadCanvas(canvas, 'pk-fishing-' + venue.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') + '-records.png',
+        venue.name + ' record board', 'My ' + venue.name + ' record board from PK Fishing',
+        (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
+      markProFeatureUsed('record_images');
+      pkTrack('record_image_shared', {kind: 'venue_board_' + style});
+    }catch(e){
+      console.error(e);
+      st.textContent = 'Could not create the image: ' + (e.message || 'unknown error');
+    }
+  };
+  document.getElementById('venue-board-share-app').onclick = ()=> shareBoard('app');
+  document.getElementById('venue-board-share-rustic').onclick = ()=> shareBoard('rustic');
+}
+// {species, metaLine, weightText} rows, biggest first, for the venue record
+// board - your own best per species logged at this one venue.
+function venueRecordRows(venueCatches){
+  const bySpecies = bestPerSpeciesMap(venueCatches);
+  return Object.values(bySpecies).sort((a,b)=> (b.weight||0) - (a.weight||0)).map(c=>({
+    species: c.type,
+    metaLine: new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
+    weightText: formatWeight(c.weight)
+  }));
 }
 
 async function renderVenueMap(venues, allCatches){
@@ -10750,6 +10794,416 @@ async function renderVenueMap(venues, allCatches){
   // The modal was just made visible, so the container had no size a moment
   // ago — this makes Leaflet re-measure it now that it actually does
   setTimeout(()=>{ if(venueMapInstance) venueMapInstance.invalidateSize(); }, 100);
+}
+
+// ---------- Record images (Pro) ----------
+// Drawn with plain Canvas 2D rather than an HTML-to-image library - more
+// code, but no cross-browser foreignObject/flex quirks to worry about on
+// real phones, which is what this actually needs to work on.
+const RECORD_IMG_W = 600, RECORD_IMG_H = 750;
+
+function rrPath(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h);
+  ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y+r);
+  ctx.arcTo(x, y, x+r, y, r);
+  ctx.closePath();
+}
+function fitText(ctx, text, maxWidth){
+  text = String(text || '');
+  if(ctx.measureText(text).width <= maxWidth) return text;
+  let t = text;
+  while(t.length > 1 && ctx.measureText(t+'…').width > maxWidth) t = t.slice(0, -1);
+  return t + '…';
+}
+let _recordLogoImg;
+function loadRecordLogo(){
+  if(_recordLogoImg !== undefined) return Promise.resolve(_recordLogoImg);
+  return new Promise(resolve=>{
+    const img = new Image();
+    img.onload = ()=>{ _recordLogoImg = img; resolve(img); };
+    img.onerror = ()=>{ _recordLogoImg = null; resolve(null); };
+    img.src = 'logo-small.webp';
+  });
+}
+// A photo for canvas use - crossOrigin so toBlob() doesn't taint on export;
+// resolves null rather than rejecting, so a missing/blocked photo degrades
+// to the placeholder instead of breaking the whole share.
+function loadImageSafe(src){
+  return new Promise(resolve=>{
+    if(!src){ resolve(null); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=> resolve(img);
+    img.onerror = ()=> resolve(null);
+    img.src = src;
+  });
+}
+function drawLogo(ctx, img, x, y, h){
+  if(!img) return 0;
+  const w = (img.naturalWidth && img.naturalHeight) ? (img.naturalWidth / img.naturalHeight) * h : h;
+  ctx.drawImage(img, x, y, w, h);
+  return w;
+}
+// Best (heaviest) catch per species from a set of catches - the shared data
+// shape behind every record image (Reel Records computes its own version of
+// this inline for its own display; this is the standalone version for export).
+function bestPerSpeciesMap(catches){
+  const map = {};
+  (catches || []).forEach(c=>{
+    if(!c.caught || !c.type) return;
+    const cur = map[c.type];
+    if(!cur || (c.weight||0) > (cur.weight||0)) map[c.type] = c;
+  });
+  return map;
+}
+// The venue record board (app style) and the personal bests list are
+// structurally identical in the mockups - same shell, different title/
+// subtitle/row-meta/footer text - so one renderer covers both.
+async function drawRecordListImage(opts){
+  const canvas = document.createElement('canvas');
+  canvas.width = RECORD_IMG_W; canvas.height = RECORD_IMG_H;
+  const ctx = canvas.getContext('2d');
+  const logo = await loadRecordLogo();
+  const padX = 44;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, RECORD_IMG_W, RECORD_IMG_H);
+
+  const headerH = 150;
+  ctx.fillStyle = '#B3121F';
+  ctx.fillRect(0, 0, RECORD_IMG_W, headerH);
+
+  let hy = 34;
+  const logoH = 26;
+  const logoW = drawLogo(ctx, logo, padX, hy - 2, logoH);
+  ctx.fillStyle = '#F1B9B9';
+  ctx.font = '700 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('PK FISHING', padX + logoW + 8, hy + logoH/2 - 1);
+  ctx.textBaseline = 'alphabetic';
+
+  hy += logoH + 20;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 34px Rockwell,"Roboto Slab",Georgia,serif';
+  ctx.fillText(fitText(ctx, opts.title, RECORD_IMG_W - padX*2), padX, hy);
+
+  hy += 24;
+  ctx.fillStyle = '#F1B9B9';
+  ctx.font = '400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.fillText(opts.subtitle, padX, hy);
+
+  const footerH = 70;
+  const bodyTop = headerH + 20;
+  const bodyBottom = RECORD_IMG_H - footerH;
+  const bodyH = bodyBottom - bodyTop;
+  const rows = (opts.rows || []).slice(0, 8);
+  const rowH = rows.length ? Math.max(50, Math.min(76, bodyH / rows.length)) : bodyH;
+  const scale = Math.min(1, rowH / 76);
+
+  rows.forEach((row, i)=>{
+    const ry = bodyTop + i * rowH;
+    if(i > 0){
+      ctx.strokeStyle = '#F0D6D6';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padX, ry);
+      ctx.lineTo(RECORD_IMG_W - padX, ry);
+      ctx.stroke();
+    }
+    const textY = ry + rowH/2;
+    ctx.fillStyle = '#2A1414';
+    ctx.font = '700 ' + Math.round(21*scale) + 'px Rockwell,"Roboto Slab",Georgia,serif';
+    ctx.fillText(fitText(ctx, row.species, 320), padX, textY - 3*scale);
+    ctx.fillStyle = '#9C6B6B';
+    ctx.font = '400 ' + Math.round(12.5*scale) + 'px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillText(fitText(ctx, row.metaLine, 320), padX, textY + 15*scale);
+    ctx.fillStyle = '#B3121F';
+    ctx.font = '700 ' + Math.round(26*scale) + 'px "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(row.weightText, RECORD_IMG_W - padX, textY + 6*scale);
+    ctx.textAlign = 'left';
+  });
+  if(!rows.length){
+    ctx.fillStyle = '#9C6B6B';
+    ctx.font = '400 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No catches logged yet', RECORD_IMG_W/2, bodyTop + bodyH/2);
+    ctx.textAlign = 'left';
+  }
+
+  ctx.strokeStyle = '#F0D6D6';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padX, bodyBottom + 20);
+  ctx.lineTo(RECORD_IMG_W - padX, bodyBottom + 20);
+  ctx.stroke();
+
+  ctx.fillStyle = '#9C6B6B';
+  ctx.font = '400 11.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.fillText(opts.footerLeft || '', padX, RECORD_IMG_H - 28);
+  ctx.font = '700 11.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('pksport.co.za/fishing', RECORD_IMG_W - padX, RECORD_IMG_H - 28);
+  ctx.textAlign = 'left';
+
+  return canvas;
+}
+// The rustic wood-sign skin of the venue record board - same row data as
+// drawRecordListImage, different chrome throughout.
+async function drawVenueBoardRustic(venueName, rows){
+  const canvas = document.createElement('canvas');
+  canvas.width = RECORD_IMG_W; canvas.height = RECORD_IMG_H;
+  const ctx = canvas.getContext('2d');
+  const logo = await loadRecordLogo();
+  const padX = 30;
+  const cx = RECORD_IMG_W / 2;
+
+  for(let y = 0; y < RECORD_IMG_H; y += 6){
+    ctx.fillStyle = (Math.floor(y/6) % 2 === 0) ? '#6B4226' : '#623B22';
+    ctx.fillRect(0, y, RECORD_IMG_W, 6);
+  }
+
+  let y = 28;
+  const signH = 92;
+  ctx.fillStyle = '#4A2E1D';
+  rrPath(ctx, padX, y, RECORD_IMG_W - padX*2, signH, 6);
+  ctx.fill();
+  ctx.strokeStyle = '#2E1B0F';
+  ctx.lineWidth = 2;
+  rrPath(ctx, padX, y, RECORD_IMG_W - padX*2, signH, 6);
+  ctx.stroke();
+
+  let sy = y + 28;
+  const logoH = 22;
+  ctx.font = '700 11px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  const label = 'PK FISHING';
+  const labelW = ctx.measureText(label).width;
+  const logoW = logo ? (logo.naturalWidth/logo.naturalHeight)*logoH : 0;
+  let lx = cx - (logoW + (logo?7:0) + labelW)/2;
+  if(logo){ ctx.drawImage(logo, lx, sy - logoH + 4, logoW, logoH); lx += logoW + 7; }
+  ctx.fillStyle = '#D9A441';
+  ctx.textAlign = 'left';
+  ctx.fillText(label, lx, sy);
+
+  sy += 34;
+  ctx.fillStyle = '#F5E6C8';
+  ctx.font = '700 30px Rockwell,"Roboto Slab",Georgia,serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(fitText(ctx, venueName, RECORD_IMG_W - padX*2 - 20), cx, sy);
+
+  y += signH + 18;
+  ctx.save();
+  ctx.translate(cx - 60, y);
+  ctx.strokeStyle = '#D9A441';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(11, 11, 9, 6, 0, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(20, 11); ctx.lineTo(27, 6); ctx.lineTo(27, 16); ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = '#F5E6C8';
+  ctx.font = '700 16px Rockwell,"Roboto Slab",Georgia,serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('Record Board', cx - 18, y + 16);
+
+  y += 36;
+  const footH = 90;
+  const panelH = RECORD_IMG_H - y - footH;
+  ctx.fillStyle = '#C9A876';
+  rrPath(ctx, padX, y, RECORD_IMG_W - padX*2, panelH, 6);
+  ctx.fill();
+  ctx.strokeStyle = '#8A6A42';
+  ctx.lineWidth = 2;
+  rrPath(ctx, padX, y, RECORD_IMG_W - padX*2, panelH, 6);
+  ctx.stroke();
+
+  const rowPadX = padX + 22;
+  const rowAreaW = RECORD_IMG_W - rowPadX*2;
+  const innerRows = (rows || []).slice(0, 8);
+  const rowH = innerRows.length ? Math.max(40, Math.min(70, (panelH - 16) / innerRows.length)) : panelH;
+  const scale = Math.min(1, rowH / 70);
+
+  innerRows.forEach((row, i)=>{
+    const ry = y + 8 + i*rowH;
+    if(i > 0){
+      ctx.strokeStyle = '#8A6A42';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rowPadX, ry);
+      ctx.lineTo(RECORD_IMG_W - rowPadX, ry);
+      ctx.stroke();
+    }
+    const textY = ry + rowH/2;
+    ctx.fillStyle = '#3A2512';
+    ctx.font = '700 ' + Math.round(20*scale) + 'px Rockwell,"Roboto Slab",Georgia,serif';
+    ctx.fillText(fitText(ctx, row.species, rowAreaW*0.6), rowPadX, textY - 2*scale);
+    ctx.fillStyle = '#6B5234';
+    ctx.font = '400 ' + Math.round(12*scale) + 'px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillText(fitText(ctx, row.metaLine, rowAreaW*0.6), rowPadX, textY + 14*scale);
+    ctx.fillStyle = '#8A2A12';
+    ctx.font = '700 ' + Math.round(24*scale) + 'px "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(row.weightText, RECORD_IMG_W - rowPadX, textY + 5*scale);
+    ctx.textAlign = 'left';
+  });
+  if(!innerRows.length){
+    ctx.fillStyle = '#6B5234';
+    ctx.font = '400 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No catches logged yet', cx, y + panelH/2);
+    ctx.textAlign = 'left';
+  }
+
+  y += panelH + 16;
+  ctx.textAlign = 'center';
+  const pillText = 'Verified from logged catches';
+  ctx.font = '700 13px Rockwell,"Roboto Slab",Georgia,serif';
+  const pillW = ctx.measureText(pillText).width + 44, pillH = 32;
+  ctx.fillStyle = '#8A2A12';
+  rrPath(ctx, cx - pillW/2, y, pillW, pillH, pillH/2);
+  ctx.fill();
+  ctx.fillStyle = '#F5E6C8';
+  ctx.fillText(pillText, cx, y + 21);
+
+  y += pillH + 14;
+  ctx.fillStyle = '#D9A441';
+  ctx.font = '400 11px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.fillText('pksport.co.za/fishing', cx, y);
+  ctx.textAlign = 'left';
+
+  return canvas;
+}
+// The personal catch card - a single catch, full-bleed photo, New PB pill.
+async function drawCatchCardImage(opts){
+  const canvas = document.createElement('canvas');
+  canvas.width = RECORD_IMG_W; canvas.height = RECORD_IMG_H;
+  const ctx = canvas.getContext('2d');
+  const logo = await loadRecordLogo();
+
+  ctx.fillStyle = '#2A1414';
+  ctx.fillRect(0, 0, RECORD_IMG_W, RECORD_IMG_H);
+
+  const photoH = 430;
+  ctx.fillStyle = '#3A2020';
+  ctx.fillRect(0, 0, RECORD_IMG_W, photoH);
+
+  if(opts.photoImg){
+    try{
+      const img = opts.photoImg;
+      const s = Math.max(RECORD_IMG_W / img.naturalWidth, photoH / img.naturalHeight);
+      const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+      ctx.drawImage(img, (RECORD_IMG_W-dw)/2, (photoH-dh)/2, dw, dh);
+    }catch(e){ console.error('drawCatchCardImage photo failed', e); }
+  }else{
+    ctx.fillStyle = '#9C6B6B';
+    ctx.font = '400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('[ CATCH PHOTO ]', RECORD_IMG_W/2, photoH/2);
+    ctx.textAlign = 'left';
+  }
+
+  const logoH = 24;
+  const logoW = drawLogo(ctx, logo, 24, 18, logoH);
+  ctx.fillStyle = '#F1B9B9';
+  ctx.font = '700 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('PK FISHING', 24 + logoW + 7, 18 + logoH/2);
+  ctx.textBaseline = 'alphabetic';
+
+  if(opts.isPB){
+    ctx.font = '700 13px Rockwell,"Roboto Slab",Georgia,serif';
+    const pbText = 'New PB';
+    const pbW = ctx.measureText(pbText).width + 28, pbH = 30;
+    const px = RECORD_IMG_W - 24 - pbW, py = 20;
+    ctx.fillStyle = '#B3121F';
+    rrPath(ctx, px, py, pbW, pbH, pbH/2);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'center';
+    ctx.fillText(pbText, px + pbW/2, py + 20);
+    ctx.textAlign = 'left';
+  }
+
+  let by = photoH + 54;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 36px Rockwell,"Roboto Slab",Georgia,serif';
+  ctx.fillText(fitText(ctx, opts.species, RECORD_IMG_W - 72), 36, by);
+
+  by += 48;
+  ctx.fillStyle = '#E63946';
+  ctx.font = '700 44px "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace';
+  ctx.fillText(opts.weightText, 36, by);
+
+  by = RECORD_IMG_H - 100;
+  ctx.fillStyle = '#F5EAEA';
+  ctx.font = '400 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.fillText(fitText(ctx, opts.venueName + ' · ' + opts.dateText, RECORD_IMG_W - 72), 36, by);
+
+  by += 20;
+  ctx.fillStyle = '#C79999';
+  ctx.font = '400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.fillText('Caught by ' + opts.anglerName, 36, by);
+
+  const footY = RECORD_IMG_H - 36;
+  ctx.strokeStyle = '#4A2525';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(36, footY - 16);
+  ctx.lineTo(RECORD_IMG_W - 36, footY - 16);
+  ctx.stroke();
+
+  ctx.fillStyle = '#9C6B6B';
+  ctx.font = '400 11.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.fillText('Logged on PK Fishing', 36, footY);
+  ctx.font = '700 11.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('pksport.co.za/fishing', RECORD_IMG_W - 36, footY);
+  ctx.textAlign = 'left';
+
+  return canvas;
+}
+// Share sheet first (so it can go straight to WhatsApp etc.), a plain
+// download if the browser/device can't share a file - same fallback shape
+// used for "Copy this link" elsewhere in the app.
+function shareOrDownloadCanvas(canvas, filename, shareTitle, shareText, onDone){
+  try{
+    canvas.toBlob(async (blob)=>{
+      if(!blob){ if(onDone) onDone('Could not create the image.'); return; }
+      try{
+        const file = new File([blob], filename, {type: 'image/png'});
+        if(navigator.canShare && navigator.canShare({files: [file]})){
+          try{
+            await navigator.share({files: [file], title: shareTitle, text: shareText});
+            if(onDone) onDone(null);
+            return;
+          }catch(e){
+            if(e && e.name === 'AbortError'){ if(onDone) onDone(null); return; }
+          }
+        }
+      }catch(e){ console.error('share failed, falling back to download', e); }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(()=> URL.revokeObjectURL(url), 1000);
+      if(onDone) onDone(null);
+    }, 'image/png');
+  }catch(e){
+    console.error('shareOrDownloadCanvas failed', e);
+    if(onDone) onDone('Could not create the image — try again.');
+  }
 }
 
 // ---------- CSV export (Pro) ----------
@@ -11955,6 +12409,12 @@ async function openProfile(personId, focusCatchId){
       `</div>`;
   }
   html += `<div id="pb-detail-area" style="margin-bottom:14px;"></div>`;
+  if(isMyFishermanId(personId) && speciesStats.length){
+    html += `<div style="margin:-6px 0 14px;">
+        <button type="button" class="mini-btn" id="share-personal-bests-btn">${isPro() ? '' : '🔒 '}Share my personal bests</button>
+        <div class="status" id="share-personal-bests-status"></div>
+      </div>`;
+  }
   if(photoEntries.length){
     html += `<p class="sub-heading">Photos (${photoEntries.length})</p>`;
     if(photoTypes.length > 1){
@@ -12099,6 +12559,36 @@ async function openProfile(personId, focusCatchId){
       detailArea.dataset.currentId = catchId;
     });
   });
+
+  const sharePbBtn = document.getElementById('share-personal-bests-btn');
+  if(sharePbBtn){
+    sharePbBtn.addEventListener('click', async ()=>{
+      if(!isPro()){ openUpgrade('Sharing your personal bests list is a Pro feature.'); return; }
+      const st = document.getElementById('share-personal-bests-status');
+      st.textContent = 'Preparing...';
+      try{
+        const venues = await loadMyVenues();
+        const venueNames = {};
+        venues.forEach(v=> venueNames[v.id] = v.name);
+        const rows = Object.values(bestPerSpeciesMap(caughtOnly)).sort((a,b)=> (b.weight||0) - (a.weight||0)).map(c=>({
+          species: c.type,
+          metaLine: (c.venueId && venueNames[c.venueId] || 'Unknown venue') + ' · ' + new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
+          weightText: formatWeight(c.weight)
+        }));
+        const canvas = await drawRecordListImage({
+          title: p.name, subtitle: 'Personal Bests · as of ' + new Date().toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
+          rows, footerLeft: rows.length + ' species logged'
+        });
+        shareOrDownloadCanvas(canvas, 'pk-fishing-personal-bests.png', 'My PK Fishing personal bests', 'My personal bests from PK Fishing',
+          (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
+        markProFeatureUsed('record_images');
+        pkTrack('record_image_shared', {kind: 'personal_bests'});
+      }catch(e){
+        console.error(e);
+        st.textContent = 'Could not create the image: ' + (e.message || 'unknown error');
+      }
+    });
+  }
 
   const followBtn = document.getElementById('profile-follow-btn');
   if(followBtn){
@@ -12383,10 +12873,67 @@ function openPhotoModal(src, catchId, index){
   }else if(likeWrap){
     likeWrap.innerHTML = '';
   }
+  updatePhotoShareWrap();
   document.getElementById('photo-modal').showModal();
+}
+// Only your own catches can become a shareable card - a quick ownership
+// check rather than assuming, since this modal also opens other people's
+// photos (feed, following, friends' profiles).
+async function updatePhotoShareWrap(){
+  const wrap = document.getElementById('photo-modal-share-wrap');
+  if(!wrap) return;
+  wrap.style.display = 'none';
+  if(!currentPhotoCatchId || !isSignedIn()) return;
+  const myId = getMyFishermanId();
+  if(!myId) return;
+  try{
+    const rows = await sbGet('catches?id=eq.'+currentPhotoCatchId+'&select=fisherman_id&limit=1');
+    if(!rows[0] || rows[0].fisherman_id !== myId) return;
+  }catch(e){ console.error('updatePhotoShareWrap failed', e); return; }
+  document.getElementById('photo-modal-share-btn').textContent = isPro() ? 'Share this catch' : '🔒 Share this catch';
+  wrap.style.display = 'block';
 }
 document.getElementById('photo-modal-x').addEventListener('click', ()=>{
   document.getElementById('photo-modal').close();
+});
+document.getElementById('photo-modal-share-btn').addEventListener('click', async ()=>{
+  if(!isPro()){ openUpgrade('Sharing a catch as a card is a Pro feature.'); return; }
+  const catchId = currentPhotoCatchId;
+  if(!catchId) return;
+  const st = document.getElementById('photo-modal-share-status');
+  st.textContent = 'Preparing...';
+  try{
+    const myId = getMyFishermanId();
+    const [rows, venues, allCatches] = await Promise.all([
+      sbGet('catches?id=eq.'+catchId+'&select=*'),
+      loadMyVenues(),
+      sbGet('catches?fisherman_id=eq.'+myId+'&caught=eq.true&select=id,type,weight')
+    ]);
+    const c = rows[0] ? mapCatchRow(rows[0]) : null;
+    if(!c){ st.textContent = 'Could not load this catch.'; return; }
+    const venueNames = {};
+    venues.forEach(v=> venueNames[v.id] = v.name);
+    const myName = (people.find(p=>p.id===myId) || {}).name || 'Angler';
+    const best = bestPerSpeciesMap(allCatches.map(r=>({caught:true, type:r.type, weight:r.weight})));
+    const isPB = !!(c.type && best[c.type] && best[c.type].weight === c.weight);
+    const photoSrc = fishPhotoSrc(c);
+    const photoImg = photoSrc ? await loadImageSafe(photoSrc) : null;
+    const canvas = await drawCatchCardImage({
+      species: c.type || 'Catch',
+      weightText: formatWeight(c.weight),
+      venueName: (c.venueId && venueNames[c.venueId]) || 'Unknown venue',
+      dateText: new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
+      anglerName: myName,
+      isPB, photoImg
+    });
+    shareOrDownloadCanvas(canvas, 'pk-fishing-catch.png', (c.type||'Catch') + ' — PK Fishing', 'My catch from PK Fishing',
+      (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
+    markProFeatureUsed('record_images');
+    pkTrack('record_image_shared', {kind: 'catch_card'});
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not create the image: ' + (e.message || 'unknown error');
+  }
 });
 document.addEventListener('click', (e)=>{
   if(e.target.classList && (e.target.classList.contains('pc-photo') || e.target.classList.contains('catch-log-photo'))){
