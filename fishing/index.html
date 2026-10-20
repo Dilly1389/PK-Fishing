@@ -1042,6 +1042,17 @@
             <input type="date" id="plan-return-date" autocomplete="off">
             <span class="pc-line muted">Leave blank for a single-day trip.</span>
           </div>
+          <div class="row2">
+            <div class="field">
+              <label>Depart (optional)</label>
+              <input type="datetime-local" id="plan-depart-at" autocomplete="off">
+            </div>
+            <div class="field">
+              <label>Arrival at the venue (optional)</label>
+              <input type="datetime-local" id="plan-arrival-at" autocomplete="off">
+            </div>
+          </div>
+          <span class="pc-line muted">Set either one to get a reminder at that time (needs push notifications on, and "Trip reminders" ticked under Profile → Notifications).</span>
           <button class="primary-btn" id="plan-create-btn">Plan this trip</button>
           <div class="status" id="plan-create-status"></div>
         </section>
@@ -1367,6 +1378,7 @@
             <label class="check-row"><input type="checkbox" id="notify-pref-competition"> Competition updates</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-friend_catch"> Catches from people I follow</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-tackle_share"> Tackle sharing</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-trip_plan"> Trip reminders (depart and arrival times)</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-rod-alert"> Time in water alert</label>
             <div class="field" id="rod-alert-minutes-wrap" style="display:none;margin-top:8px;">
               <label>Alert me when a rod has been in the water for</label>
@@ -5613,7 +5625,7 @@ function urlBase64ToUint8Array(base64String){
 // The 11 notifications.type values collapse into these 6 user-facing
 // toggles server-side (see TYPE_TO_PREFERENCE in send-notification-push) -
 // kept in sync with that mapping by hand, since they live in different runtimes.
-const NOTIFICATION_PREF_KEYS = ['badge','follow','social','competition','friend_catch','tackle_share'];
+const NOTIFICATION_PREF_KEYS = ['badge','follow','social','competition','friend_catch','tackle_share','trip_plan'];
 
 async function loadAndRenderNotificationPrefs(){
   const enableBtn = document.getElementById('enable-push-btn');
@@ -5657,7 +5669,7 @@ async function loadAndRenderNotificationPrefs(){
 
   if(subscription && isSignedIn()){
     try{
-      const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_tackle_share,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
+      const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_tackle_share,notify_push_trip_plan,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
       const f = rows[0];
       if(f){
         NOTIFICATION_PREF_KEYS.forEach(key=>{
@@ -5926,6 +5938,14 @@ async function goToNotificationTarget(n){
     // A rod alert isn't about one specific catch or rod card to jump to -
     // just get them back to Timers
     switchToTab('timers');
+    return;
+  }
+  if(n.target_type === 'plan'){
+    // A depart/arrival alert isn't about one specific trip plan to jump to -
+    // just get them back to the Plan tab's list. Not switchToTab(): Plan has
+    // no dedicated nav button since it moved into More, so that would silently
+    // no-op (switchToTab only ever clicks a literal nav.tabs button).
+    goToTab('plan');
     return;
   }
   if(!n.target_id) return;
@@ -8897,6 +8917,26 @@ function planDateRangeLabel(plan){
   return start + ' – ' + end;
 }
 
+// <input type="datetime-local"> gives a timezone-less "2026-10-25T05:00" -
+// treated as the browser's own local time (same assumption the rest of the
+// app makes - there's no per-user timezone setting), then stored as a real
+// instant so check-trip-alerts can compare it against now() directly.
+function datetimeLocalToIso(value){
+  if(!value) return null;
+  const d = new Date(value);
+  return isNaN(d) ? null : d.toISOString();
+}
+function isoToDatetimeLocal(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  const pad = n=> String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+function fmtPlanTime(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleString(dateLocale(), {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+}
+
 function renderKitSectionsHtml(plan, kitRows){
   const byKey = new Map(kitRows.map(r=>[r.item_key, r]));
   return KIT_CATEGORIES.filter(cat=> !cat.multiDayOnly || isMultiDay(plan)).map(cat=>{
@@ -9000,6 +9040,9 @@ async function openPlanDetail(planId){
   body.innerHTML = '<div class="profile-catch"><div class="row2">'
       + '<div class="field"><label>Start date</label><input type="date" id="plan-detail-start" value="' + escapeHtml(plan.trip_date) + '"></div>'
       + '<div class="field"><label>Return date (optional)</label><input type="date" id="plan-detail-return" value="' + escapeHtml(plan.return_date || '') + '"></div>'
+      + '</div><div class="row2" style="margin-top:10px;">'
+      + '<div class="field"><label>Depart (optional)</label><input type="datetime-local" id="plan-detail-depart" value="' + escapeHtml(isoToDatetimeLocal(plan.depart_at)) + '"></div>'
+      + '<div class="field"><label>Arrival at the venue (optional)</label><input type="datetime-local" id="plan-detail-arrival" value="' + escapeHtml(isoToDatetimeLocal(plan.arrival_at)) + '"></div>'
       + '</div><div class="status" id="plan-detail-date-status"></div></div>'
     + renderPlanRecapHtml(recap) + forecastHtml
     + '<details class="ins-group" data-plan-group="tackle" open><summary><span class="ins-group-title">Tackle box</span></summary>'
@@ -9014,12 +9057,17 @@ async function openPlanDetail(planId){
     const st2 = document.getElementById('plan-detail-date-status');
     const newStart = document.getElementById('plan-detail-start').value;
     const newReturn = document.getElementById('plan-detail-return').value || null;
+    const newDepart = datetimeLocalToIso(document.getElementById('plan-detail-depart').value);
+    const newArrival = datetimeLocalToIso(document.getElementById('plan-detail-arrival').value);
     if(!newStart){ st2.textContent = 'Start date is required.'; return; }
     if(newReturn && newReturn < newStart){ st2.textContent = 'Return date is before the start date.'; return; }
     try{
-      await sbPatch('trip_plans', 'id=eq.'+plan.id, {trip_date: newStart, return_date: newReturn});
-      planDetailCurrent.plan.trip_date = newStart;
-      planDetailCurrent.plan.return_date = newReturn;
+      const patch = {trip_date: newStart, return_date: newReturn, depart_at: newDepart, arrival_at: newArrival};
+      // A changed time is a new reminder, due again even if the old one already fired
+      if(newDepart !== planDetailCurrent.plan.depart_at) patch.depart_alert_sent = false;
+      if(newArrival !== planDetailCurrent.plan.arrival_at) patch.arrival_alert_sent = false;
+      await sbPatch('trip_plans', 'id=eq.'+plan.id, patch);
+      Object.assign(planDetailCurrent.plan, patch);
       title.textContent = plan.venue_name + ' — ' + planDateRangeLabel(planDetailCurrent.plan);
       st2.textContent = '';
       refreshKitSection();
@@ -9030,6 +9078,8 @@ async function openPlanDetail(planId){
   };
   document.getElementById('plan-detail-start').addEventListener('change', onDateChange);
   document.getElementById('plan-detail-return').addEventListener('change', onDateChange);
+  document.getElementById('plan-detail-depart').addEventListener('change', onDateChange);
+  document.getElementById('plan-detail-arrival').addEventListener('change', onDateChange);
 }
 
 async function deleteTripPlanPrompt(){
@@ -9050,8 +9100,9 @@ function renderPlanListHtml(plans){
   if(!plans.length) return '<div class="empty">No trips planned yet — add one above.</div>';
   return '<ul class="people-list">' + plans.map(p=>{
     const when = planDateRangeLabel(p);
+    const timing = p.depart_at ? (' · depart ' + fmtPlanTime(p.depart_at)) : '';
     return '<li class="plan-list-row" data-plan-id="' + escapeHtml(p.id) + '" style="cursor:pointer;">'
-      + '<div class="who"><b>' + escapeHtml(p.venue_name) + '</b><div class="pc-line muted">' + escapeHtml(when) + (p.session_id ? ' · fished' : '') + '</div></div>'
+      + '<div class="who"><b>' + escapeHtml(p.venue_name) + '</b><div class="pc-line muted">' + escapeHtml(when + timing) + (p.session_id ? ' · fished' : '') + '</div></div>'
       + '</li>';
   }).join('') + '</ul>';
 }
@@ -9086,6 +9137,8 @@ document.getElementById('plan-create-btn').addEventListener('click', async ()=>{
   const venueName = document.getElementById('plan-venue').value.trim();
   const tripDate = document.getElementById('plan-date').value;
   const returnDate = document.getElementById('plan-return-date').value || null;
+  const departAt = datetimeLocalToIso(document.getElementById('plan-depart-at').value);
+  const arrivalAt = datetimeLocalToIso(document.getElementById('plan-arrival-at').value);
   if(!venueName){ st.textContent = 'Enter a venue.'; return; }
   if(!tripDate){ st.textContent = 'Pick a start date.'; return; }
   if(returnDate && returnDate < tripDate){ st.textContent = 'Return date is before the start date.'; return; }
@@ -9093,11 +9146,17 @@ document.getElementById('plan-create-btn').addEventListener('click', async ()=>{
   st.textContent = 'Saving...';
   try{
     const venue = await resolveTripVenue(venueName);
-    const plan = {id: uid(), owner_user_id: session.user.id, venue_id: venue.id, venue_name: venue.name, trip_date: tripDate, return_date: returnDate, session_id: null};
+    const plan = {
+      id: uid(), owner_user_id: session.user.id, venue_id: venue.id, venue_name: venue.name,
+      trip_date: tripDate, return_date: returnDate, session_id: null,
+      depart_at: departAt, arrival_at: arrivalAt
+    };
     await sbPost('trip_plans', plan);
     document.getElementById('plan-venue').value = '';
     document.getElementById('plan-date').value = '';
     document.getElementById('plan-return-date').value = '';
+    document.getElementById('plan-depart-at').value = '';
+    document.getElementById('plan-arrival-at').value = '';
     st.textContent = 'Saved.';
     pkTrack('trip_plan_created');
     setTimeout(()=> st.textContent = '', 1200);
