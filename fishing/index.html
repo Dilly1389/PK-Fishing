@@ -1639,6 +1639,7 @@
                 <input type="date" id="admin-plan-until">
               </div>
               <button class="mini-btn" id="admin-plan-save-btn">Save plan</button>
+              <div id="admin-plan-feature-log" style="margin-top:14px;font-size:13px;"></div>
             </div>
           </div>
         </div>
@@ -5479,7 +5480,7 @@ const TRIAL_CATCHES_NEEDED = 10;
 // True when this angler may add one more of that kind; otherwise shows the upgrade screen.
 // For tackle, pass the category: each category has its own cap.
 async function checkLimit(kind, category){
-  if(isPro() || !isSignedIn()) return true;
+  if(!isSignedIn()) return true;
   const L = FREE_LIMITS[kind];
   let max = L.max, label = L.label, extra = '';
   if(kind === 'tackle'){
@@ -5487,6 +5488,16 @@ async function checkLimit(kind, category){
     max = tackleCapOf(cat);
     label = tackleCapLabel(cat, max);
     extra = '&category=' + (cat === 'Other' ? 'not.in.(' + Object.keys(FREE_TACKLE_CAPS).filter(c=> c !== 'Other').map(encodeURIComponent).join(',') + ')' : 'eq.' + encodeURIComponent(cat));
+  }
+  if(isPro()){
+    // Pro skips the limit, but still worth knowing whether this account is
+    // genuinely over the free cap (using the unlimited-gear perk for real)
+    // or just happens to be Pro with a small box, for the refund window.
+    try{
+      const rows = await sbGet(L.table + '?' + L.col + '=eq.' + encodeURIComponent(session.user.id) + extra + '&select=id&limit=' + max);
+      if(rows.length >= max) markProFeatureUsed('unlimited_gear');
+    }catch(e){ /* best-effort only - never blocks the actual action */ }
+    return true;
   }
   try{
     const rows = await sbGet(L.table + '?' + L.col + '=eq.' + encodeURIComponent(session.user.id) + extra + '&select=id&limit=' + max);
@@ -5561,6 +5572,28 @@ function isPro(){
   if(p.plan === 'pro' && (!p.pro_until || new Date(p.pro_until) > new Date())) return true;
   const te = trialEnd(p);
   return !!(te && te > new Date());
+}
+
+// What a refund request actually gets checked against: not just "is this
+// account Pro", but whether it has genuinely exercised a Pro-only capability
+// since paying - logged per feature (with a count and last-used date, not
+// only the first time) so a dispute can be answered with specifics rather
+// than a single yes/no. Shown next to the plan control in the Admin tab.
+const PRO_FEATURE_LABELS = {
+  unlimited_gear: 'Unlimited gear (over a free cap)',
+  insights_pro: 'A Pro Insights section',
+  competition_pro_tools: 'Advanced competition tools',
+  tackle_box_share_all: 'Sharing the whole tackle box'
+};
+async function markProFeatureUsed(featureKey){
+  const myId = getMyFishermanId();
+  if(!myId) return;
+  try{ await sbRpc('mark_pro_feature_used', {p_fisherman_id: myId, p_feature_key: featureKey}); }
+  catch(e){ console.error('markProFeatureUsed failed', featureKey, e); }
+}
+async function loadProFeatureUses(fishermanId){
+  try{ return await sbGet('pro_feature_uses?select=*&fisherman_id=eq.'+fishermanId+'&order=first_used_at.asc'); }
+  catch(e){ console.error('loadProFeatureUses failed', e); return []; }
 }
 
 // ---------- Tackle box (signed-in only) ----------
@@ -6319,6 +6352,7 @@ async function renderTackleBoxSharePicker(){
             id: uid(), owner_user_id: session.user.id, shared_with_user_id: cb.dataset.user
           });
           notifyBoxShare(cb.dataset.user);
+          markProFeatureUsed('tackle_box_share_all');
         }else{
           await sbDelete('tackle_box_shares', 'owner_user_id=eq.'+session.user.id+'&shared_with_user_id=eq.'+cb.dataset.user);
         }
@@ -10477,6 +10511,10 @@ async function openInsights(){
     body.innerHTML = '<div class="empty">Could not find your angler profile.</div>';
     return;
   }
+  // The deeper sections just appear automatically once you're Pro - there's
+  // no separate click to "use" them, so opening Insights while Pro is the
+  // moment that counts for the refund window.
+  if(isPro()) markProFeatureUsed('insights_pro');
   // Clear any venues nothing references before loading, so the map can't
   // show a pin for a water with no sessions or catches behind it
   await cleanOrphanVenues();
@@ -14420,6 +14458,7 @@ function renderCompetitionEditForm(comp, containerEl){
         require_fish_photo: containerEl.querySelector('.comp-edit-require-fish').checked,
         require_scale_photo: containerEl.querySelector('.comp-edit-require-scale').checked
       });
+      if(isPro() && (containerEl.querySelector('.comp-edit-require-fish').checked || containerEl.querySelector('.comp-edit-require-scale').checked)) markProFeatureUsed('competition_pro_tools');
       delete competitionRulesCache[comp.id];
       st.textContent = 'Saved.';
       setTimeout(()=>{ renderCompetitions(); }, 700);
@@ -14740,6 +14779,7 @@ async function openCompetitionDetail(comp, anglerId){
           btn.disabled = true;
           try{
             await sbRpc('set_catch_verification', {p_catch_id: btn.dataset.catch, p_status: status});
+            markProFeatureUsed('competition_pro_tools');
             const c = catches.find(x=> x.id === btn.dataset.catch);
             if(c) c.verificationStatus = status;
             draw();
@@ -15001,10 +15041,31 @@ function describePlan(p){
     if(!te) return 'Plan: Free (trial not started)';
     return te > new Date() ? 'Plan: Free, on a Pro trial until ' + te.toLocaleDateString() : 'Plan: Free (trial used)';
   }
-  if(p.founder) return 'Plan: Pro (Founder, for life)';
-  if(!p.pro_until) return 'Plan: Pro (no end date)';
+  const since = p.pro_started_at ? ' — Pro since ' + new Date(p.pro_started_at).toLocaleDateString() : '';
+  if(p.founder) return 'Plan: Pro (Founder, for life)' + since;
+  if(!p.pro_until) return 'Plan: Pro (no end date)' + since;
   const d = new Date(p.pro_until);
-  return 'Plan: ' + (d > new Date() ? 'Pro until ' : 'Pro ended ') + d.toLocaleDateString();
+  return 'Plan: ' + (d > new Date() ? 'Pro until ' : 'Pro ended ') + d.toLocaleDateString() + since;
+}
+// For a refund request: how many days into the current Pro period this
+// account is, and exactly which Pro-only things it has actually done since.
+function renderAdminPlanFeatureLog(p, uses){
+  const el = document.getElementById('admin-plan-feature-log');
+  if(!el) return;
+  if(!p || !p.pro_started_at){ el.innerHTML = ''; return; }
+  const daysIn = Math.floor((Date.now() - new Date(p.pro_started_at).getTime()) / 86400000);
+  const withinWindow = daysIn < 7;
+  let html = '<p class="pc-line muted">' + daysIn + ' day' + (daysIn === 1 ? '' : 's') + ' into this Pro period'
+    + (withinWindow ? ' (within the 7-day refund window)' : ' (past the 7-day refund window)') + '.</p>';
+  if(!uses.length){
+    html += '<p class="pc-line muted">No Pro-only feature used yet' + (withinWindow ? ' — eligible for a full refund if requested.' : '.') + '</p>';
+  }else{
+    html += '<p class="pc-line muted">Pro features used:</p><ul class="people-list">' + uses.map(u=>
+      '<li><div class="who"><b>' + escapeHtml(PRO_FEATURE_LABELS[u.feature_key] || u.feature_key) + '</b>'
+        + '<div class="pc-line muted">First: ' + new Date(u.first_used_at).toLocaleString() + ' · Last: ' + new Date(u.last_used_at).toLocaleString() + ' · ' + u.use_count + ' time' + (u.use_count === 1 ? '' : 's') + '</div></div></li>'
+    ).join('') + '</ul>';
+  }
+  el.innerHTML = html;
 }
 function syncAdminPlanFields(){
   const founder = document.getElementById('admin-plan-founder').checked;
@@ -15014,14 +15075,17 @@ function syncAdminPlanFields(){
 async function loadAdminPlan(id){
   const statusEl = document.getElementById('admin-plan-status');
   statusEl.textContent = 'Loading plan...';
+  document.getElementById('admin-plan-feature-log').innerHTML = '';
   try{
-    const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(id) + '&select=plan,pro_until,founder,trial_started_at');
+    const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(id) + '&select=plan,pro_until,founder,trial_started_at,pro_started_at');
     const p = rows[0] || null;
     statusEl.textContent = describePlan(p);
     document.getElementById('admin-plan-select').value = p ? p.plan : 'pro';
     document.getElementById('admin-plan-founder').checked = !!(p && p.founder);
     document.getElementById('admin-plan-until').value = p && p.pro_until ? p.pro_until.slice(0,10) : '';
     syncAdminPlanFields();
+    const uses = await loadProFeatureUses(id);
+    renderAdminPlanFeatureLog(p, uses);
   }catch(e){
     console.error(e);
     statusEl.textContent = 'Could not load the plan.';
@@ -15188,6 +15252,7 @@ document.getElementById('competition-create-btn').addEventListener('click', asyn
       require_scale_photo: isPro() && document.getElementById('competition-require-scale').checked,
       creator_user_id: session.user.id
     };
+    if(isPro() && (newComp.require_fish_photo || newComp.require_scale_photo || selectedIds.length > FREE_COMP_ANGLERS)) markProFeatureUsed('competition_pro_tools');
     await insertCompetition(newComp);
     const myId = getMyFishermanId();
     if(myId && document.getElementById('competition-creator-fishing').checked && !selectedIds.includes(myId)){
