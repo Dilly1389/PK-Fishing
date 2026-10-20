@@ -5462,7 +5462,8 @@ const FREE_RODS = 1;
 const FREE_LIMITS = {
   tackle: {table:'tackle_items', col:'owner_user_id'},
   rigs:   {max:1,  table:'rigs', col:'creator_user_id', label:'rig'},
-  combos: {max:3,  table:'bait_combinations', col:'owner_user_id', label:'bait combinations'}
+  combos: {max:3,  table:'bait_combinations', col:'owner_user_id', label:'bait combinations'},
+  trip_plans: {max:1, table:'trip_plans', col:'owner_user_id', label:'planned trip'}
 };
 const TRIAL_CATCHES_NEEDED = 10;
 // True when this angler may add one more of that kind; otherwise shows the upgrade screen.
@@ -5477,13 +5478,20 @@ async function checkLimit(kind, category){
     label = tackleCapLabel(cat, max);
     extra = '&category=' + (cat === 'Other' ? 'not.in.(' + Object.keys(FREE_TACKLE_CAPS).filter(c=> c !== 'Other').map(encodeURIComponent).join(',') + ')' : 'eq.' + encodeURIComponent(cat));
   }
+  if(kind === 'trip_plans'){
+    // "1 at a time" means 1 upcoming (or ongoing) plan, same definition of
+    // upcoming the Plan tab itself uses - a past, unfinished plan you never
+    // deleted shouldn't block planning the next trip.
+    const today = new Date().toISOString().slice(0,10);
+    extra = '&or=(return_date.gte.' + today + ',and(return_date.is.null,trip_date.gte.' + today + '))';
+  }
   if(isPro()){
     // Pro skips the limit, but still worth knowing whether this account is
-    // genuinely over the free cap (using the unlimited-gear perk for real)
-    // or just happens to be Pro with a small box, for the refund window.
+    // genuinely over the free cap (using the unlimited perk for real) or
+    // just happens to be Pro with a small box, for the refund window.
     try{
       const rows = await sbGet(L.table + '?' + L.col + '=eq.' + encodeURIComponent(session.user.id) + extra + '&select=id&limit=' + max);
-      if(rows.length >= max) markProFeatureUsed('unlimited_gear');
+      if(rows.length >= max) markProFeatureUsed(kind === 'trip_plans' ? 'unlimited_trip_plans' : 'unlimited_gear');
     }catch(e){ /* best-effort only - never blocks the actual action */ }
     return true;
   }
@@ -5571,7 +5579,8 @@ const PRO_FEATURE_LABELS = {
   unlimited_gear: 'Unlimited gear (over a free cap)',
   insights_pro: 'A Pro Insights section',
   competition_pro_tools: 'Advanced competition tools',
-  tackle_box_share_all: 'Sharing the whole tackle box'
+  tackle_box_share_all: 'Sharing the whole tackle box',
+  unlimited_trip_plans: 'More than one planned trip at a time'
 };
 async function markProFeatureUsed(featureKey){
   const myId = getMyFishermanId();
@@ -9123,6 +9132,7 @@ document.getElementById('plan-create-btn').addEventListener('click', async ()=>{
   if(!venueName){ st.textContent = 'Enter a venue.'; return; }
   if(!tripDate){ st.textContent = 'Pick a start date.'; return; }
   if(returnDate && returnDate < tripDate){ st.textContent = 'Return date is before the start date.'; return; }
+  if(!(await checkLimit('trip_plans'))) return;
   btn.disabled = true;
   st.textContent = 'Saving...';
   try{
