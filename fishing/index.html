@@ -10170,11 +10170,11 @@ function buildInsightsHtml(catches, venues, sessions){
     }
   }
 
-  return group('overview', 'Overview', 'Your totals, species and time in the water', overview)
+  return group('trends', 'Over time', 'Seasons and month by month', trends)
+    + group('overview', 'Overview', 'Your totals, species and time in the water', overview)
+    + group('sessions', 'Sessions', 'How each trip went', sessionsHtml)
     + group('works', 'What works', 'Rigs, hooks, baits and feed', works)
-    + group('where', 'When and where', 'Time of day, moon, pressure, distance, rods, spots, venues and pegs', where)
-    + group('trends', 'Over time', 'Seasons and month by month', trends)
-    + group('sessions', 'Sessions', 'How each trip went', sessionsHtml);
+    + group('where', 'When and where', 'Time of day, moon, pressure, distance, rods, spots, venues and pegs', where);
 }
 
 // ---------- Badges ----------
