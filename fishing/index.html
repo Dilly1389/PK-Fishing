@@ -9091,6 +9091,21 @@ async function refreshKitSection(){
 
 let planDetailCurrent = null; // {plan, items} for whichever plan is open in the dialog
 
+let planDetailMapInstance = null;
+// A quick "where am I headed" reference map on the trip plan - read-only,
+// just the one venue pin. Editing the venue's own location stays on the
+// existing venue map/edit flow in Insights, not duplicated here.
+async function renderPlanDetailMap(venue){
+  try{ await ensureLeaflet(); }catch(e){ console.error(e); return; }
+  const container = document.getElementById('plan-detail-map');
+  if(!container) return;
+  if(planDetailMapInstance){ planDetailMapInstance.remove(); planDetailMapInstance = null; }
+  planDetailMapInstance = L.map('plan-detail-map').setView([venue.latitude, venue.longitude], 13);
+  addMapLayers(planDetailMapInstance);
+  L.marker([venue.latitude, venue.longitude]).addTo(planDetailMapInstance).bindPopup(escapeHtml(venue.name));
+  setTimeout(()=>{ if(planDetailMapInstance) planDetailMapInstance.invalidateSize(); }, 100);
+}
+
 async function openPlanDetail(planId){
   const modal = document.getElementById('plan-detail-modal');
   const body = document.getElementById('plan-detail-body');
@@ -9126,14 +9141,19 @@ async function openPlanDetail(planId){
 
   planDetailCurrent = {plan, items};
 
+  const hasCoords = venue && venue.latitude != null && venue.longitude != null;
+
   body.innerHTML = '<div class="profile-catch"><div class="row2">'
       + '<div class="field"><label>Start date</label><input type="date" id="plan-detail-start" value="' + escapeHtml(plan.trip_date) + '"></div>'
       + '<div class="field"><label>Return date (optional)</label><input type="date" id="plan-detail-return" value="' + escapeHtml(plan.return_date || '') + '"></div>'
       + '</div><div class="status" id="plan-detail-date-status"></div></div>'
+    + (hasCoords ? '<div id="plan-detail-map" style="height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;"></div>' : '')
     + renderPlanRecapHtml(recap) + forecastHtml
     + '<details class="ins-group" data-plan-group="tackle" open><summary><span class="ins-group-title">Tackle box</span></summary>'
       + '<div class="ins-group-body">' + renderPlanChecklistHtml(items, ticks) + '</div></details>'
     + '<div id="plan-kit-body">' + renderKitSectionsHtml(plan, kitRows) + '</div>';
+
+  if(hasCoords) renderPlanDetailMap(venue);
 
   body.querySelectorAll('.plan-pack-check').forEach(cb=>{
     cb.addEventListener('change', ()=> setPlanTick(plan.id, cb.dataset.itemId, cb.checked));
@@ -10823,7 +10843,7 @@ async function renderVenueMap(venues, allCatches){
   // Tear down any previous map — this modal can reopen multiple times
   if(venueMapInstance){ venueMapInstance.remove(); venueMapInstance = null; }
 
-  venueMapInstance = L.map('venue-map', {scrollWheelZoom: false});
+  venueMapInstance = L.map('venue-map');
   addMapLayers(venueMapInstance);
 
   const catches = allCatches || [];
