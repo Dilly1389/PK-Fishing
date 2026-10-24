@@ -2684,28 +2684,41 @@ if(/safari/i.test(navigator.userAgent) && !/chrome|chromium|android/i.test(navig
   legacySliderCss.textContent = '.fill-level-slider{-webkit-appearance:slider-vertical;}';
   document.head.appendChild(legacySliderCss);
 }
+// Loads a stylesheet or script once, resolving when it's ready. Several
+// calls for the same href/src share one <link>/<script> rather than
+// re-adding it.
+const loadedAssets = {};
+function loadAsset(tag, attrs){
+  const key = attrs.href || attrs.src;
+  if(loadedAssets[key]) return loadedAssets[key];
+  loadedAssets[key] = new Promise((resolve, reject)=>{
+    const el = document.createElement(tag);
+    Object.keys(attrs).forEach(k=> el[k] = attrs[k]);
+    el.onload = resolve;
+    el.onerror = ()=>{ delete loadedAssets[key]; reject(new Error('Failed to load ' + key)); };
+    document.head.appendChild(el);
+  });
+  return loadedAssets[key];
+}
+
 // The map library is only needed on the venue map and the pin-drop screen, so
 // it is fetched the first time one of them opens instead of on every page load.
 let leafletPromise = null;
 function ensureLeaflet(){
-  if(window.L) return Promise.resolve();
+  if(window.L && window.L.MarkerClusterGroup && window.L.heatLayer) return Promise.resolve();
   if(leafletPromise) return leafletPromise;
-  leafletPromise = new Promise((resolve, reject)=>{
-    const css = document.createElement('link');
-    css.rel = 'stylesheet';
-    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    const js = document.createElement('script');
-    js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    let cssDone = false, jsDone = false;
-    const check = ()=>{ if(cssDone && jsDone) resolve(); };
-    const fail = ()=>{ leafletPromise = null; reject(new Error('Map library failed to load')); };
-    css.onload = ()=>{ cssDone = true; check(); };
-    js.onload = ()=>{ jsDone = true; check(); };
-    css.onerror = fail;
-    js.onerror = fail;
-    document.head.appendChild(css);
-    document.head.appendChild(js);
-  });
+  leafletPromise = Promise.all([
+    loadAsset('link', {rel:'stylesheet', href:'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'}),
+    loadAsset('script', {src:'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'})
+  ]).then(()=> Promise.all([
+    // Marker clustering (many venue pins on one map) and a heat layer
+    // (venues glowing by how much you've caught there) - both pure
+    // client-side plugins, no external service, no API key.
+    loadAsset('link', {rel:'stylesheet', href:'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css'}),
+    loadAsset('link', {rel:'stylesheet', href:'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css'}),
+    loadAsset('script', {src:'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js'}),
+    loadAsset('script', {src:'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js'})
+  ])).catch(e=>{ leafletPromise = null; throw e; });
   return leafletPromise;
 }
 </script>
@@ -10128,7 +10141,12 @@ function buildInsightsHtml(catches, venues, sessions){
   // A private map of your own venues — only waters with real coordinates
   // (some are name-only if GPS was denied or unavailable)
   if((venues||[]).some(v=> v.latitude != null && v.longitude != null)){
-    where += `<div id="venue-map" style="height:260px;border-radius:10px;overflow:hidden;margin-top:14px;border:1px solid var(--line);"></div>`;
+    where += `<div style="margin-top:14px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink);margin-bottom:6px;">
+        <input type="checkbox" id="venue-map-heat-toggle"> Show hot spots (glow by how much you've caught there)
+      </label>
+      <div id="venue-map" style="height:260px;border-radius:10px;overflow:hidden;border:1px solid var(--line);"></div>
+    </div>`;
   }
 
   // ===== Over time =====
@@ -10685,6 +10703,30 @@ function addMapLayers(map){
   map.on('baselayerchange', (e)=>{
     try{ localStorage.setItem('pk_fishing_map_view', e.name); }catch(err){}
   });
+  addLocateControl(map);
+}
+// A button that re-centers the map on your current GPS position - the
+// venue/pin-drop maps only centre on it once, when they first open, so
+// there was no way back after panning away without closing and reopening.
+function addLocateControl(map){
+  const LocateControl = L.Control.extend({
+    options: {position: 'topleft'},
+    onAdd: function(){
+      const wrap = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+      const btn = L.DomUtil.create('a', '', wrap);
+      btn.href = '#';
+      btn.title = 'Find my location';
+      btn.setAttribute('role', 'button');
+      btn.setAttribute('aria-label', 'Find my location');
+      btn.innerHTML = '📍';
+      btn.style.cssText = 'display:flex;align-items:center;justify-content:center;width:30px;height:30px;font-size:16px;';
+      L.DomEvent.on(btn, 'click', L.DomEvent.stop)
+        .on(btn, 'click', ()=> map.locate({setView: true, maxZoom: 15}));
+      return wrap;
+    }
+  });
+  map.addControl(new LocateControl());
+  map.on('locationerror', (e)=> alert('Could not find your location: ' + e.message));
 }
 // Full catch list for one venue, opened from a map pin
 function openVenueCatches(venue, venueCatches){
@@ -10796,7 +10838,33 @@ async function renderVenueMap(venues, allCatches){
       </div>`;
     return L.marker([v.latitude, v.longitude]).bindPopup(popupHtml);
   });
-  markers.forEach(m=> m.addTo(venueMapInstance));
+  // Clustered rather than added straight to the map - with enough venues,
+  // overlapping pins at a zoomed-out view become unreadable otherwise.
+  const clusterGroup = L.markerClusterGroup();
+  markers.forEach(m=> clusterGroup.addLayer(m));
+  clusterGroup.addTo(venueMapInstance);
+
+  // Hot spots: an optional heat layer, each venue weighted by how many fish
+  // you've caught there. This is per-venue (venues only have one point each
+  // today), not true within-venue spatial density - it shows which waters
+  // are paying off, not which exact peg.
+  const heatPoints = mappable.map(v=>{
+    const here = catches.filter(c=> c.caught && c.venueId === v.id);
+    return [v.latitude, v.longitude, Math.max(0.3, Math.min(1, here.length / 10))];
+  });
+  const heatLayer = L.heatLayer(heatPoints, {radius: 35, blur: 25, maxZoom: 15});
+  const heatToggle = document.getElementById('venue-map-heat-toggle');
+  if(heatToggle){
+    let heatOn = false;
+    try{ heatOn = localStorage.getItem('pk_fishing_venuemap_heat') === 'true'; }catch(e){}
+    heatToggle.checked = heatOn;
+    const applyHeat = on=>{ if(on) heatLayer.addTo(venueMapInstance); else venueMapInstance.removeLayer(heatLayer); };
+    applyHeat(heatOn);
+    heatToggle.addEventListener('change', ()=>{
+      applyHeat(heatToggle.checked);
+      try{ localStorage.setItem('pk_fishing_venuemap_heat', heatToggle.checked ? 'true' : 'false'); }catch(e){}
+    });
+  }
 
   // Popups are created on open, so the buttons only exist from then on
   venueMapInstance.on('popupopen', (e)=>{
