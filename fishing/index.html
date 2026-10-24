@@ -1858,6 +1858,24 @@
           </div>
         </section>
 
+        <section class="card" id="tackle-import-card">
+          <h2>Import from a spreadsheet</h2>
+          <div id="tackle-import-body">
+          <p class="pc-line muted">Download the template, fill it in with your gear (Excel, Numbers or Google Sheets), then copy your rows — header included — and paste them in below.</p>
+          <button type="button" class="mini-btn" id="tackle-import-template-btn">Download template</button>
+          <div class="field" style="margin-top:10px;">
+            <label>Paste your rows here</label>
+            <textarea id="tackle-import-paste" rows="6" placeholder="Paste cells copied from your spreadsheet, including the header row" autocomplete="off" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="mini-btn" id="tackle-import-preview-btn">🔒 Preview import</button>
+            <button class="mini-btn" id="tackle-import-confirm-btn" style="display:none;">Import</button>
+          </div>
+          <div id="tackle-import-preview"></div>
+          <div class="status" id="tackle-import-status"></div>
+          </div>
+        </section>
+
         <section class="card" id="build-rig-card">
           <h2>Build a rig</h2>
           <div id="build-rig-body">
@@ -5274,11 +5292,16 @@ async function loadMyPlan(){
   refreshRodChoices();
   refreshCompetitionForm();
   refreshExportCsvButton();
+  refreshTackleImportButton();
   if(isSignedIn() && !isPro()){ loadGearOptions(); loadTackleCategoryOptions(); }
 }
 function refreshExportCsvButton(){
   const btn = document.getElementById('export-csv-btn');
   if(btn) btn.textContent = isPro() ? 'Export as CSV' : '🔒 Export as CSV';
+}
+function refreshTackleImportButton(){
+  const btn = document.getElementById('tackle-import-preview-btn');
+  if(btn) btn.textContent = isPro() ? 'Preview import' : '🔒 Preview import';
 }
 // A free account over a tackle limit picks which items stay active; the rest
 // are locked (kept, read-only, hidden from the pickers) until it upgrades.
@@ -5621,7 +5644,8 @@ const PRO_FEATURE_LABELS = {
   tackle_box_share_all: 'Sharing the whole tackle box',
   unlimited_trip_plans: 'More than one planned trip at a time',
   csv_export: 'Exporting catches as CSV',
-  record_images: 'Sharing a record image (venue board, catch card, or personal bests)'
+  record_images: 'Sharing a record image (venue board, catch card, or personal bests)',
+  tackle_import: 'Importing tackle from a spreadsheet'
 };
 async function markProFeatureUsed(featureKey){
   const myId = getMyFishermanId();
@@ -11287,6 +11311,162 @@ document.getElementById('export-csv-btn').addEventListener('click', async ()=>{
   }
 });
 
+// ---------- Tackle Box import from a spreadsheet (Pro) ----------
+// Lets someone with an existing gear list skip retyping every item by hand:
+// download a template, fill it in their own spreadsheet app, paste the rows
+// back in, review what was understood, then confirm.
+const TACKLE_IMPORT_CATEGORIES = ['Bait','Dips','Hooks','Line/Braid','Other','Reels','Rods','Swivels/Rig rings','Weights/Leads'];
+const TACKLE_IMPORT_BAIT_TYPES = [
+  'Artificial / Lures','Big hard floats','Big soft floats','Boilies','Bread, dough & meat','Fish & Cut bait',
+  'Groundbait','Live bait','Mielies','Oozer','Other','Particles/Seeds','Paste','Pellets','Pop-ups',
+  'Small hard floats','Small soft floats','Tiger nuts','Wafters'
+];
+function tackleImportTemplateCsv(){
+  const headers = ['Name','Category','Brand','Bait type','Flavour','Notes'];
+  const example1 = ['Size 6 Barbel hook','Hooks','Korda','','',''];
+  const example2 = ['Scopex boilies','Bait','Dynamite','Boilies','Scopex',''];
+  const esc = v=>{
+    const s = String(v ?? '');
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  };
+  return [headers, example1, example2].map(r=> r.map(esc).join(',')).join('\r\n');
+}
+document.getElementById('tackle-import-template-btn').addEventListener('click', ()=>{
+  downloadTextFile('pk-fishing-tackle-template.csv', tackleImportTemplateCsv(), 'text/csv');
+});
+
+// Cells copied straight out of a spreadsheet are tab-separated; CSV text
+// (e.g. pasted from a text editor) is comma-separated. Whichever the first
+// line contains is what every line is split on.
+function splitTackleImportLine(line, delim){
+  if(delim === '\t') return line.split('\t').map(c=>c.trim());
+  // Minimal quoted-CSV support, matching what Excel/Sheets produce when a
+  // cell's own text contains a comma: a field wrapped in "..." may hold
+  // commas and escaped "" quotes.
+  const cells = [];
+  let cur = '', inQuotes = false;
+  for(let i=0; i<line.length; i++){
+    const ch = line[i];
+    if(inQuotes){
+      if(ch === '"'){ if(line[i+1] === '"'){ cur += '"'; i++; } else inQuotes = false; }
+      else cur += ch;
+    }else{
+      if(ch === '"') inQuotes = true;
+      else if(ch === ','){ cells.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+  }
+  cells.push(cur.trim());
+  return cells;
+}
+
+function parseTackleImportText(text){
+  const lines = text.split(/\r\n|\r|\n/);
+  const nonEmpty = [];
+  lines.forEach((l, idx)=>{ if(l.trim() !== '') nonEmpty.push({line: idx+1, raw: l}); });
+  if(!nonEmpty.length) return {items:[], errors:[]};
+  const delim = nonEmpty[0].raw.includes('\t') ? '\t' : ',';
+  nonEmpty.forEach(r=> r.cells = splitTackleImportLine(r.raw, delim));
+  // Drop a header row whether or not the paste included one, so the
+  // instruction to "copy the header too" isn't a trap if someone skips it.
+  let dataRows = nonEmpty;
+  if(dataRows[0].cells[0] && dataRows[0].cells[0].trim().toLowerCase() === 'name') dataRows = dataRows.slice(1);
+
+  const catByLower = {};
+  TACKLE_IMPORT_CATEGORIES.forEach(c=> catByLower[c.toLowerCase()] = c);
+  const baitTypeByLower = {};
+  TACKLE_IMPORT_BAIT_TYPES.forEach(t=> baitTypeByLower[t.toLowerCase()] = t);
+
+  const items = [], errors = [];
+  dataRows.forEach(r=>{
+    const [nameRaw, categoryRaw, brandRaw, baitTypeRaw, flavourRaw, notesRaw] = r.cells;
+    const name = (nameRaw || '').trim();
+    const categoryInput = (categoryRaw || '').trim();
+    if(!name && !categoryInput) return; // a genuinely blank row
+    if(!name){ errors.push({row: r.line, reason: 'No name'}); return; }
+    const category = catByLower[categoryInput.toLowerCase()];
+    if(!category){ errors.push({row: r.line, reason: 'Category "' + categoryInput + '" not recognised'}); return; }
+    let baitType = null;
+    let notes = (notesRaw || '').trim();
+    if(category === 'Bait' && baitTypeRaw && baitTypeRaw.trim()){
+      baitType = baitTypeByLower[baitTypeRaw.trim().toLowerCase()] || null;
+      // An unrecognised bait type isn't dropped - it's kept as a note so
+      // nothing in the pasted data is silently lost.
+      if(!baitType) notes = 'Type: ' + baitTypeRaw.trim() + (notes ? '; ' + notes : '');
+    }
+    items.push({
+      name, category,
+      brand: (brandRaw || '').trim() || null,
+      bait_type: baitType,
+      flavour: (category === 'Bait' || category === 'Dips') ? ((flavourRaw || '').trim() || null) : null,
+      fill_level: (category === 'Bait' || category === 'Dips') ? 100 : null,
+      notes
+    });
+  });
+  return {items, errors};
+}
+
+let pendingTackleImportItems = [];
+document.getElementById('tackle-import-preview-btn').addEventListener('click', ()=>{
+  if(!isPro()){ openUpgrade('Importing tackle from a spreadsheet is a Pro feature.'); return; }
+  const text = document.getElementById('tackle-import-paste').value;
+  const preview = document.getElementById('tackle-import-preview');
+  const confirmBtn = document.getElementById('tackle-import-confirm-btn');
+  const st = document.getElementById('tackle-import-status');
+  st.textContent = '';
+  if(!text.trim()){ preview.innerHTML = ''; confirmBtn.style.display = 'none'; st.textContent = 'Paste some rows first.'; return; }
+  const {items, errors} = parseTackleImportText(text);
+  pendingTackleImportItems = items;
+  let html = '';
+  if(items.length){
+    html += '<div class="pc-line" style="margin-top:8px;"><b>' + items.length + '</b> item' + (items.length===1?'':'s') + ' ready to import:</div>';
+    html += '<div class="pc-line muted">' + items.slice(0,20).map(it=> escapeHtml(it.name + ' — ' + it.category)).join('<br>')
+      + (items.length>20 ? '<br>…and ' + (items.length-20) + ' more' : '') + '</div>';
+  }
+  if(errors.length){
+    html += '<div class="pc-line" style="margin-top:8px;color:#c04;"><b>' + errors.length + '</b> row' + (errors.length===1?'':'s') + ' skipped:</div>';
+    html += '<div class="pc-line muted">' + errors.map(e=> escapeHtml('Row ' + e.row + ': ' + e.reason)).join('<br>') + '</div>';
+  }
+  preview.innerHTML = html;
+  confirmBtn.style.display = items.length ? 'inline-flex' : 'none';
+});
+
+document.getElementById('tackle-import-confirm-btn').addEventListener('click', async ()=>{
+  if(!isPro()){ openUpgrade('Importing tackle from a spreadsheet is a Pro feature.'); return; }
+  if(!pendingTackleImportItems.length) return;
+  const st = document.getElementById('tackle-import-status');
+  const btn = document.getElementById('tackle-import-confirm-btn');
+  btn.disabled = true;
+  st.textContent = 'Importing...';
+  try{
+    const rows = pendingTackleImportItems.map(it=> ({
+      id: uid(), name: it.name, brand: it.brand, category: it.category,
+      fill_level: it.fill_level, bait_type: it.bait_type, flavour: it.flavour,
+      notes: it.notes, photo: null, has_photo: false,
+      owner_user_id: session.user.id, is_shared: false
+    }));
+    await sbPost('tackle_items', rows);
+    markProFeatureUsed('tackle_import');
+    pkTrack('tackle_import', {count: rows.length});
+    st.textContent = 'Added ' + rows.length + ' item' + (rows.length===1?'':'s') + '.';
+    document.getElementById('tackle-import-paste').value = '';
+    document.getElementById('tackle-import-preview').innerHTML = '';
+    btn.style.display = 'none';
+    pendingTackleImportItems = [];
+    renderTackleList();
+    if(rows.some(r=> r.category === 'Rods' || r.category === 'Reels')){
+      await loadGearOptions();
+      await loadTackleCategoryOptions();
+      if(currentPerson) renderAll();
+    }
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not import: ' + (e.message || 'unknown error');
+  }finally{
+    btn.disabled = false;
+  }
+});
+
 document.getElementById('delete-account-btn').addEventListener('click', ()=>{
   document.getElementById('delete-account-confirm').style.display = 'block';
   document.getElementById('delete-account-btn').style.display = 'none';
@@ -13533,6 +13713,8 @@ function enterTackleTab(){
     if(comboRigSel) comboRigSel.innerHTML = buildRigOptionsHtml();
     renderCombosList();
     makeCardCollapsible('add-tackle-card', 'add-tackle-body', 'pk_fishing_collapse_addtackle');
+    makeCardCollapsible('tackle-import-card', 'tackle-import-body', 'pk_fishing_collapse_import', true);
+    refreshTackleImportButton();
     makeCardCollapsible('build-rig-card', 'build-rig-body', 'pk_fishing_collapse_buildrig');
     makeCardCollapsible('my-rigs-card', 'my-rigs-body', 'pk_fishing_collapse_myrigs', true);
     makeCardCollapsible('build-combo-card', 'build-combo-body', 'pk_fishing_collapse_buildcombo');
