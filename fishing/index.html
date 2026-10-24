@@ -976,6 +976,8 @@
 
       <div id="home-week" style="display:none;margin-bottom:14px;"></div>
 
+      <button type="button" class="mini-btn" id="home-venue-map-btn" style="display:none;margin-bottom:14px;"><i class="ti ti-map-pin" style="vertical-align:-2px;margin-right:4px;" aria-hidden="true"></i>See my venues map</button>
+
       <p class="sub-heading">Latest from your mates</p>
       <div id="home-feed"><div class="empty">Loading...</div></div>
     </div>
@@ -10533,6 +10535,7 @@ async function loadMySessions(){
 }
 
 let pendingInsightsSession = null;
+let pendingInsightsVenueMap = false;
 function focusInsightsSession(body, sid){
   const row = body.querySelector('[data-session-row="' + CSS.escape(sid) + '"]');
   if(!row) return;
@@ -10590,6 +10593,19 @@ async function openInsights(){
     const sid = pendingInsightsSession;
     pendingInsightsSession = null;
     focusInsightsSession(body, sid);
+  }
+  // Jump from Home's "See my venues map" button straight to the map,
+  // opening its group and building it if it wasn't already.
+  if(pendingInsightsVenueMap){
+    pendingInsightsVenueMap = false;
+    if(whereGroup){
+      whereGroup.open = true;
+      buildMapOnce();
+      setTimeout(()=>{
+        const mapEl = document.getElementById('venue-map');
+        if(mapEl) mapEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+      }, 150);
+    }
   }
 
   body.querySelectorAll('[data-recap-session]').forEach(btn=>{
@@ -10726,6 +10742,15 @@ function addLocateControl(map){
     }
   });
   map.addControl(new LocateControl());
+  // A circle sized to the GPS accuracy, so it's clear how much to trust the
+  // dot - a phone indoors or under tree cover can easily be 50m+ off.
+  let locateMarker = null, locateCircle = null;
+  map.on('locationfound', (e)=>{
+    if(locateMarker) map.removeLayer(locateMarker);
+    if(locateCircle) map.removeLayer(locateCircle);
+    locateMarker = L.circleMarker(e.latlng, {radius: 6, color: '#fff', weight: 2, fillColor: '#1a73e8', fillOpacity: 1}).addTo(map);
+    locateCircle = L.circle(e.latlng, {radius: e.accuracy, color: '#1a73e8', weight: 1, fillOpacity: 0.12}).addTo(map);
+  });
   map.on('locationerror', (e)=> alert('Could not find your location: ' + e.message));
 }
 // Full catch list for one venue, opened from a map pin
@@ -14451,6 +14476,7 @@ async function renderHome(){
   const weatherWrap = document.getElementById('home-weather');
   const compWrap = document.getElementById('home-competitions');
   const feedWrap = document.getElementById('home-feed');
+  const venueMapBtn = document.getElementById('home-venue-map-btn');
 
   renderLaunchBanner();
 
@@ -14460,10 +14486,12 @@ async function renderHome(){
     weatherWrap.style.display = 'none';
     const weekWrapOut = document.getElementById('home-week');
     if(weekWrapOut) weekWrapOut.style.display = 'none';
+    if(venueMapBtn) venueMapBtn.style.display = 'none';
     compWrap.innerHTML = '';
     feedWrap.innerHTML = '<div class="empty">Sign in to see what your mates are catching.</div>';
     return;
   }
+  if(venueMapBtn) venueMapBtn.style.display = 'block';
 
   await loadActiveSession();
 
@@ -14835,6 +14863,10 @@ async function toggleHomeLike(btn){
 }
 
 document.getElementById('home-start-session').addEventListener('click', ()=> goToTab('timers'));
+document.getElementById('home-venue-map-btn').addEventListener('click', ()=>{
+  pendingInsightsVenueMap = true;
+  goToTab('insights');
+});
 
 // Reachable from the footer even when signed out, since that's exactly when
 // someone deciding whether to sign up would want to read these
