@@ -476,6 +476,18 @@
   .catch-log-item .del{background:none;border:none;color:#c04;font-size:12.5px;cursor:pointer;flex-shrink:0;}
   .catch-log-item .edit-catch{background:none;border:none;color:var(--dam);font-size:12.5px;font-weight:700;cursor:pointer;flex-shrink:0;margin-right:6px;}
 
+  .logbook-page{border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  .logbook-head{background:var(--dam);color:#fff;padding:12px 14px;}
+  .logbook-head b{display:block;font-size:15px;}
+  .logbook-head span{font-size:12px;opacity:.85;}
+  .logbook-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .logbook-table td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .logbook-table tr:last-child td{border-bottom:none;}
+  .logbook-time{white-space:nowrap;color:var(--muted);font-size:11px;width:58px;}
+  .logbook-result-link{color:var(--dam);text-decoration:underline;cursor:pointer;font-weight:700;background:none;border:none;padding:0;font:inherit;text-align:left;}
+  .logbook-foot{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:11.5px;color:var(--muted);border-top:2px solid var(--line);}
+  .logbook-foot b{font-size:14px;color:var(--ink);}
+
   .people-list{list-style:none;padding:0;margin:0;}
   .people-list li{
     display:flex;justify-content:space-between;align-items:center;padding:10px 0;
@@ -11669,8 +11681,9 @@ async function openSessionRecap(sessionId){
   const sessions = await loadMySessions();
   const s = sessions.find(x=>x.id === sessionId);
   if(!s) return;
-  const when = new Date(s.started_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
-  document.getElementById('session-recap-sub').textContent = (s.venue_name || 'Session') + ' · ' + when;
+  // The logbook page below has its own header (venue, date, conditions), so
+  // this line stays empty rather than repeating it.
+  document.getElementById('session-recap-sub').textContent = '';
   const feed = document.getElementById('session-recap-feed');
   feed.innerHTML = '<div class="empty">Loading...</div>';
   document.getElementById('session-recap-modal').showModal();
@@ -11680,7 +11693,7 @@ async function openSessionRecap(sessionId){
   // signed-in account's own sessions.
   try{
     const rows = await sbGet('catches?select=*&session_id=eq.'+s.id+'&order=time.asc');
-    feed.innerHTML = sessionFeedRowsHtml(rows.map(mapCatchRow), 'Nothing was logged in this session.', true);
+    feed.innerHTML = sessionLogbookPageHtml(s, rows.map(mapCatchRow));
   }catch(e){
     console.error('Could not load session catches', e);
     feed.innerHTML = '<div class="empty">Could not load what happened this session.</div>';
@@ -12942,6 +12955,12 @@ document.addEventListener('click', (e)=>{
     const idx = parseInt(e.target.dataset.photoIndex || '0', 10);
     openPhotoModal(e.target.src, catchId, idx);
   }
+  if(e.target.classList && e.target.classList.contains('logbook-result-link')){
+    const catchId = e.target.dataset.catchId || null;
+    const idx = parseInt(e.target.dataset.photoIndex || '0', 10);
+    const photos = catchId && photoGalleryCache[catchId];
+    if(photos && photos.length) openPhotoModal(photos[idx] || photos[0], catchId, idx);
+  }
 });
 
 async function fetchCatchLikers(catchId){
@@ -13396,6 +13415,83 @@ function sessionFeedRowsHtml(entries, emptyMessage, recap){
       : '';
     return `<div class="catch-log-item"><span style="font-size:11px;color:var(--muted);flex-shrink:0;min-width:44px;">${time}</span>${thumb}<span style="flex:1;"><b>${rodLabel}</b> · ${label}</span></div>`;
   }).join('');
+}
+
+// The first bait note found on a catch, hook order then bom - good enough to
+// name "the bait" for a logbook row, even though a rig can carry more than one.
+function primaryBaitOf(c){
+  for(let n=1; n<=MAX_HOOKS; n++){ if(c['hook'+n]) return c['hook'+n]; }
+  return c.bom || '';
+}
+function pressureTrendWord(pressureChange){
+  if(pressureChange == null) return '';
+  return pressureChange >= 1 ? 'pressure rising' : (pressureChange <= -1 ? 'pressure falling' : 'pressure steady');
+}
+
+// A past session shown as a logbook page, like the sample on the PK Fishing
+// marketing page: a header of conditions, one row per cast in time order, and
+// a footer naming the session's best rod + bait combo. Replaces the plain
+// "What happened" list on Insights -> Sessions -> What happened.
+function sessionLogbookPageHtml(session, entries){
+  if(entries.length === 0){
+    return '<div class="empty">Nothing was logged in this session.</div>';
+  }
+  const sorted = entries.slice().sort((a,b)=> a.time - b.time);
+  const rods = normalizeRodsCount(session.rods);
+  const tempEntry = sorted.find(c=> c.weather && c.weather.temp != null);
+  const pressureEntry = sorted.find(c=> c.weather && c.weather.pressureChange != null);
+  const moonEntry = sorted.find(c=> c.moonPhase);
+  const headerBits = [
+    rods + ' rod' + (rods === 1 ? '' : 's'),
+    tempEntry ? fmtTemp(tempEntry.weather.temp) : null,
+    pressureEntry ? pressureTrendWord(pressureEntry.weather.pressureChange) : null,
+    moonEntry ? moonEntry.moonPhase : null
+  ].filter(Boolean).join(' · ');
+  const when = new Date(session.started_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+
+  const rows = sorted.map(c=>{
+    const rodLabel = c.rodIdentifier || RID_LABEL[c.rod] || 'Rod';
+    const bait = primaryBaitOf(c);
+    const rigBait = [c.rig, bait].filter(Boolean).map(escapeHtml).join(', ');
+    const timeOnly = c.hasKnownTime !== false
+      ? new Date(c.time).toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})
+      : '—';
+    const photoCount = (c.photos && c.photos.length) || 0;
+    if(photoCount){ photoGalleryCache[c.id] = c.photos; photoLabelsCache[c.id] = c.photoLabels || []; photoWhenCache[c.id] = {t:c.time, k:c.hasKnownTime !== false}; }
+    const resultLabel = c.caught ? `${escapeHtml(c.type || 'Fish')} — ${formatWeight(c.weight)}` : 'No catch';
+    const result = (c.caught && photoCount)
+      ? `<button type="button" class="logbook-result-link" data-catch-id="${c.id}" data-photo-index="0">${resultLabel}</button>`
+      : resultLabel;
+    return `<tr><td class="logbook-time">${timeOnly}</td><td><b>${escapeHtml(rodLabel)}</b>${rigBait ? ', ' + rigBait : ''}</td><td>${result}</td></tr>`;
+  }).join('');
+
+  const caughtCount = sorted.filter(c=>c.caught).length;
+  const footerLine = caughtCount + ' fish from ' + sorted.length + ' cast' + (sorted.length === 1 ? '' : 's');
+
+  // Best rod + bait combo this session, by fish count then catch rate.
+  const groups = {};
+  sorted.forEach(c=>{
+    const rodLabel = c.rodIdentifier || RID_LABEL[c.rod] || 'Rod';
+    const bait = primaryBaitOf(c);
+    const key = rodLabel + '||' + bait;
+    if(!groups[key]) groups[key] = {rodLabel, bait, fish:0, casts:0};
+    groups[key].casts++;
+    if(c.caught) groups[key].fish++;
+  });
+  let best = null;
+  Object.values(groups).forEach(g=>{
+    if(!g.fish) return;
+    if(!best || g.fish > best.fish || (g.fish === best.fish && g.fish / g.casts > best.fish / best.casts)) best = g;
+  });
+  const bestLine = best
+    ? escapeHtml(best.rodLabel) + (best.bait ? ' on ' + escapeHtml(best.bait) : '') + ': ' + best.fish + ' from ' + best.casts
+    : '';
+
+  return `<div class="logbook-page">
+    <div class="logbook-head"><b>${escapeHtml(session.venue_name || 'Session')}</b><span>${escapeHtml(when)}${headerBits ? ' · ' + escapeHtml(headerBits) : ''}</span></div>
+    <table class="logbook-table"><tbody>${rows}</tbody></table>
+    <div class="logbook-foot"><b>${footerLine}</b>${bestLine ? '<span>' + bestLine + '</span>' : ''}</div>
+  </div>`;
 }
 
 function renderSessionFeed(){
