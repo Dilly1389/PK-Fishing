@@ -689,6 +689,12 @@
      320px modal-card to avoid every cell wrapping onto 3 lines. */
   dialog#session-recap-modal .modal-card{max-width:min(94vw,640px);max-height:88vh;text-align:left;}
   body.desk-mode dialog#session-recap-modal .modal-card{max-width:min(85vw,860px);}
+  /* The pin-drop map is cramped at the default 320px modal width - give it
+     real room to pick a spot precisely, especially on a desktop screen. */
+  dialog#pin-drop-modal .modal-card{max-width:min(94vw,640px);width:min(94vw,640px);max-height:88vh;}
+  body.desk-mode dialog#pin-drop-modal .modal-card{max-width:min(85vw,820px);width:min(85vw,820px);}
+  body.desk-mode #pin-drop-map{height:520px !important;}
+  body.desk-mode #venue-map{height:420px !important;}
   .comp-name-btn{
     background:none;border:none;padding:0;margin:0;font:inherit;color:inherit;text-align:left;
     cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:4px;
