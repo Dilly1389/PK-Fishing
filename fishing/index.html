@@ -396,6 +396,11 @@
     font-family:inherit;font-size:16px;resize:vertical;background:var(--card-bg);color:var(--ink);
   }
   .field textarea{min-height:52px;}
+  .password-checklist{list-style:none;padding:0;margin:8px 0 0;font-size:12px;}
+  .password-checklist li{display:flex;align-items:center;gap:7px;padding:2px 0;color:var(--muted);}
+  .password-checklist li.met{color:#1f9254;}
+  .password-checklist .pw-check-icon{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1.5px solid currentColor;font-size:10px;line-height:1;flex-shrink:0;}
+  .password-checklist li.met .pw-check-icon{background:#1f9254;border-color:#1f9254;color:#fff;}
   .row2{display:flex;gap:10px;}
   .row2 > div{flex:1;min-width:0;}
 
@@ -1190,7 +1195,8 @@
             <div class="field">
               <label>Password</label>
               <input type="text" name="username" autocomplete="username" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;" tabindex="-1" aria-hidden="true">
-              <input type="password" maxlength="200" class="auth-input" id="signup-password" placeholder="Min 8: a-z, A-Z, 0-9 and a symbol">
+              <input type="password" maxlength="200" class="auth-input" id="signup-password" placeholder="Min 8: a-z, A-Z, 0-9 and a symbol" autocomplete="new-password">
+              <ul class="password-checklist" id="signup-password-checklist"></ul>
             </div>
             <div id="captcha-signup" style="margin:12px 0;min-height:65px;"></div>
             <button class="primary-btn" id="signup-btn">Create account</button>
@@ -2348,6 +2354,7 @@
       <label>New password</label>
       <input type="text" name="username" autocomplete="username" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;" tabindex="-1" aria-hidden="true">
       <input type="password" maxlength="200" class="auth-input" id="reset-password-input" placeholder="Min 8: a-z, A-Z, 0-9 and a symbol" autocomplete="new-password">
+      <ul class="password-checklist" id="reset-password-checklist"></ul>
     </div>
     <div class="field">
       <label>Confirm password</label>
@@ -4740,12 +4747,39 @@ function resetCaptcha(id){
   captchaTokens[id] = null;
   if(window.turnstile && captchaWidgets[id] !== undefined) window.turnstile.reset(captchaWidgets[id]);
 }
-// Must match the password rules set in Supabase (Authentication, Email provider)
+// Must match the password rules set in Supabase (Authentication, Email provider).
+// One rule list feeds both the live tick-list below and the submit-time check,
+// so the two can never drift apart.
 const PASSWORD_RULE_TEXT = 'At least 8 characters, with a lowercase letter, an uppercase letter, a number and a symbol.';
+const PASSWORD_RULES = [
+  {label: 'At least 8 characters', test: pw => pw.length >= 8},
+  {label: 'A lowercase letter (a-z)', test: pw => /[a-z]/.test(pw)},
+  {label: 'An uppercase letter (A-Z)', test: pw => /[A-Z]/.test(pw)},
+  {label: 'A number (0-9)', test: pw => /[0-9]/.test(pw)},
+  {label: 'A symbol (e.g. ! ? # $)', test: pw => /[^A-Za-z0-9]/.test(pw)}
+];
 function passwordProblem(pw){
-  const ok = pw.length >= 8 && /[a-z]/.test(pw) && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
+  const ok = PASSWORD_RULES.every(r => r.test(pw));
   return ok ? '' : 'Password needs: ' + PASSWORD_RULE_TEXT;
 }
+function passwordChecklistHtml(pw){
+  return PASSWORD_RULES.map(r=>{
+    const met = r.test(pw);
+    return '<li class="' + (met ? 'met' : '') + '"><span class="pw-check-icon">' + (met ? '✓' : '') + '</span>' + escapeHtml(r.label) + '</li>';
+  }).join('');
+}
+// Live tick-list under a password field - ticks off each rule as you type,
+// rather than only finding out what's wrong after clicking submit.
+function wirePasswordChecklist(inputId, listId){
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  if(!input || !list) return;
+  const update = ()=>{ list.innerHTML = passwordChecklistHtml(input.value); };
+  input.addEventListener('input', update);
+  update();
+}
+wirePasswordChecklist('signup-password', 'signup-password-checklist');
+wirePasswordChecklist('reset-password-input', 'reset-password-checklist');
 function authErrorMessage(data, fallback){
   const msg = data.msg || data.error_description || '';
   if(/captcha/i.test(msg)) return 'Security check failed. Wait for the check to finish (or refresh the page) and try again.';
