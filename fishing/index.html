@@ -14475,13 +14475,13 @@ function renderLaunchBanner(){
   if(!el) return;
   let dismissed = false;
   try{ dismissed = localStorage.getItem('pk_fishing_launch_banner_dismissed') === 'true'; }catch(e){}
-  if(dismissed || Date.now() >= Date.parse('2026-11-01T00:00:00')){
+  if(dismissed || Date.now() >= Date.parse('2026-11-02T00:00:00')){
     el.style.display = 'none';
     el.innerHTML = '';
     return;
   }
   el.style.display = 'block';
-  el.innerHTML = '<div class="pc-head">Free and Pro plans launch 1 November 2026</div>'
+  el.innerHTML = '<div class="pc-head">Free and Pro plans launch 2 November 2026</div>'
     + '<div class="pc-line muted">Everything is free and unlocked until then, so explore, build your tackle box and get a feel for the app.</div>'
     + '<button type="button" class="mini-btn" id="launch-banner-dismiss" style="margin-top:8px;">Got it</button>';
   document.getElementById('launch-banner-dismiss').addEventListener('click', ()=>{
