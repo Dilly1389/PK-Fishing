@@ -660,7 +660,7 @@
   dialog#confirm-modal, dialog#forecast-modal, dialog#venue-catches-modal, dialog#venue-edit-modal,
   dialog#session-edit-modal, dialog#session-recap-modal, dialog#recast-confirm-modal, dialog#pin-drop-modal, dialog#badge-bookcase-modal,
   dialog#badge-detail-modal, dialog#follow-list-modal, dialog#profile-modal, dialog#notif-modal,
-  dialog#onboarding-modal, dialog#reset-password-modal, dialog#timers-help-modal, dialog#profile-help-modal,
+  dialog#onboarding-modal, dialog#forgot-password-modal, dialog#reset-password-modal, dialog#timers-help-modal, dialog#profile-help-modal,
   dialog#tackle-help-modal, dialog#insights-help-modal, dialog#competitions-help-modal, dialog#photo-modal, dialog#edit-catch-modal, dialog#competition-detail-modal,
   dialog#plan-detail-modal, dialog#plan-help-modal{
     border:none;padding:0;background:transparent;margin:auto;
@@ -677,7 +677,7 @@
   dialog#venue-edit-modal::backdrop, dialog#session-edit-modal::backdrop, dialog#session-recap-modal::backdrop, dialog#recast-confirm-modal::backdrop,
   dialog#pin-drop-modal::backdrop, dialog#badge-bookcase-modal::backdrop, dialog#badge-detail-modal::backdrop,
   dialog#follow-list-modal::backdrop, dialog#profile-modal::backdrop, dialog#notif-modal::backdrop,
-  dialog#onboarding-modal::backdrop, dialog#reset-password-modal::backdrop, dialog#timers-help-modal::backdrop,
+  dialog#onboarding-modal::backdrop, dialog#forgot-password-modal::backdrop, dialog#reset-password-modal::backdrop, dialog#timers-help-modal::backdrop,
   dialog#profile-help-modal::backdrop, dialog#tackle-help-modal::backdrop, dialog#insights-help-modal::backdrop,
   dialog#competitions-help-modal::backdrop, dialog#photo-modal::backdrop,
   dialog#edit-catch-modal::backdrop, dialog#competition-detail-modal::backdrop,
@@ -1238,15 +1238,6 @@
             <p class="pc-line muted" style="margin-top:6px;text-align:center;">
               <button type="button" id="forgot-password-link" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;font-family:inherit;padding:0;text-decoration:underline;">Forgot password?</button>
             </p>
-            <div id="forgot-password-form" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
-              <p class="pc-line muted" style="margin-bottom:8px;">We'll email you a link to reset your password.</p>
-              <div class="field">
-                <input type="email" maxlength="120" class="auth-input" id="forgot-password-email" placeholder="you@example.com">
-              </div>
-              <div id="captcha-forgot" style="margin:10px 0;min-height:65px;"></div>
-              <button class="mini-btn" id="forgot-password-send-btn">Send reset link</button>
-              <div class="status" id="forgot-password-status"></div>
-            </div>
           </div>
         </div>
 
@@ -2322,8 +2313,27 @@
   </div>
 </dialog>
 
+<dialog id="forgot-password-modal" closedby="any" aria-label="Reset your password">
+  <div class="modal-card" style="position:relative;">
+    <button type="button" id="forgot-password-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <div class="auth-header">
+      <div class="auth-icon"><img src="logo-pk-fishing-v2.webp" width="242" height="300" alt="PK Fishing" loading="lazy" decoding="async"></div>
+      <h3 style="margin:6px 0 2px;">Reset your password</h3>
+      <p class="pc-line muted" style="margin:0;">We'll email you a link to reset it.</p>
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" maxlength="120" class="auth-input" id="forgot-password-email" placeholder="you@example.com">
+    </div>
+    <div id="captcha-forgot" style="margin:10px 0;min-height:65px;"></div>
+    <button class="primary-btn" id="forgot-password-send-btn">Send reset link</button>
+    <div class="status" id="forgot-password-status"></div>
+  </div>
+</dialog>
+
 <dialog id="reset-password-modal" closedby="any" aria-label="Set a new password">
-  <div class="modal-card">
+  <div class="modal-card" style="position:relative;">
+    <button type="button" id="reset-password-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
     <div class="auth-header">
       <div class="auth-icon"><img src="logo-pk-fishing-v2.webp" width="242" height="300" alt="PK Fishing" loading="lazy" decoding="async"></div>
       <h3 style="margin:6px 0 2px;">Set a new password</h3>
@@ -2331,12 +2341,12 @@
     <div class="field">
       <label>New password</label>
       <input type="text" name="username" autocomplete="username" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;" tabindex="-1" aria-hidden="true">
-      <input type="password" maxlength="200" class="auth-input" id="reset-password-input" placeholder="Min 8: a-z, A-Z, 0-9 and a symbol">
+      <input type="password" maxlength="200" class="auth-input" id="reset-password-input" placeholder="Min 8: a-z, A-Z, 0-9 and a symbol" autocomplete="new-password">
     </div>
     <div class="field">
       <label>Confirm password</label>
       <input type="text" name="username" autocomplete="username" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;" tabindex="-1" aria-hidden="true">
-      <input type="password" maxlength="200" class="auth-input" id="reset-password-confirm" placeholder="Type it again">
+      <input type="password" maxlength="200" class="auth-input" id="reset-password-confirm" placeholder="Type it again" autocomplete="new-password">
     </div>
     <button class="primary-btn" id="reset-password-save-btn">Save new password</button>
     <div class="status" id="reset-password-status"></div>
@@ -5045,16 +5055,19 @@ document.getElementById('show-signin-link').addEventListener('click', ()=>{
 });
 
 document.getElementById('forgot-password-link').addEventListener('click', ()=>{
-  const form = document.getElementById('forgot-password-form');
-  const open = form.style.display !== 'none';
-  form.style.display = open ? 'none' : 'block';
-  if(!open){
-    const emailEl = document.getElementById('forgot-password-email');
-    const prefill = document.getElementById('signin-email').value.trim();
-    if(prefill) emailEl.value = prefill;
-    emailEl.focus();
-    pkRenderCaptchas();
-  }
+  document.getElementById('forgot-password-status').textContent = '';
+  const emailEl = document.getElementById('forgot-password-email');
+  const prefill = document.getElementById('signin-email').value.trim();
+  emailEl.value = prefill;
+  document.getElementById('forgot-password-modal').showModal();
+  emailEl.focus();
+  pkRenderCaptchas();
+});
+document.getElementById('forgot-password-x').addEventListener('click', ()=>{
+  document.getElementById('forgot-password-modal').close();
+});
+document.getElementById('reset-password-x').addEventListener('click', ()=>{
+  document.getElementById('reset-password-modal').close();
 });
 document.getElementById('forgot-password-send-btn').addEventListener('click', async ()=>{
   const emailEl = document.getElementById('forgot-password-email');
