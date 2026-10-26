@@ -2709,17 +2709,27 @@ let leafletPromise = null;
 function ensureLeaflet(){
   if(window.L && window.L.MarkerClusterGroup && window.L.heatLayer) return Promise.resolve();
   if(leafletPromise) return leafletPromise;
+  // Every CDN file is loaded with Subresource Integrity: the browser
+  // verifies the hash itself before running anything, so a compromised
+  // CDN or package can't silently swap in different code. Hashes are
+  // sha384 of the exact pinned-version file at each URL below.
   leafletPromise = Promise.all([
-    loadAsset('link', {rel:'stylesheet', href:'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'}),
-    loadAsset('script', {src:'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'})
+    loadAsset('link', {rel:'stylesheet', href:'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+      integrity:'sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H', crossOrigin:'anonymous'}),
+    loadAsset('script', {src:'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+      integrity:'sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH', crossOrigin:'anonymous'})
   ]).then(()=> Promise.all([
     // Marker clustering (many venue pins on one map) and a heat layer
     // (venues glowing by how much you've caught there) - both pure
     // client-side plugins, no external service, no API key.
-    loadAsset('link', {rel:'stylesheet', href:'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css'}),
-    loadAsset('link', {rel:'stylesheet', href:'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css'}),
-    loadAsset('script', {src:'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js'}),
-    loadAsset('script', {src:'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js'})
+    loadAsset('link', {rel:'stylesheet', href:'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
+      integrity:'sha384-pmjIAcz2bAn0xukfxADbZIb3t8oRT9Sv0rvO+BR5Csr6Dhqq+nZs59P0pPKQJkEV', crossOrigin:'anonymous'}),
+    loadAsset('link', {rel:'stylesheet', href:'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css',
+      integrity:'sha384-wgw+aLYNQ7dlhK47ZPK7FRACiq7ROZwgFNg0m04avm4CaXS+Z9Y7nMu8yNjBKYC+', crossOrigin:'anonymous'}),
+    loadAsset('script', {src:'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
+      integrity:'sha384-eXVCORTRlv4FUUgS/xmOyr66XBVraen8ATNLMESp92FKXLAMiKkerixTiBvXriZr', crossOrigin:'anonymous'}),
+    loadAsset('script', {src:'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js',
+      integrity:'sha384-mFKkGiGvT5vo1fEyGCD3hshDdKmW3wzXW/x+fWriYJArD0R3gawT6lMvLboM22c0', crossOrigin:'anonymous'})
   ])).catch(e=>{ leafletPromise = null; throw e; });
   return leafletPromise;
 }
