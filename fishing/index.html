@@ -13287,14 +13287,14 @@ document.getElementById('photo-modal-share-btn').addEventListener('click', async
     const [rows, venues, allCatches] = await Promise.all([
       sbGet('catches?id=eq.'+catchId+'&select=*'),
       loadMyVenues(),
-      sbGet('catches?fisherman_id=eq.'+myId+'&caught=eq.true&select=id,type,weight')
+      sbGet('catches?fisherman_id=eq.'+myId+'&caught=eq.true&select=id,fish_type,weight')
     ]);
     const c = rows[0] ? mapCatchRow(rows[0]) : null;
     if(!c){ st.textContent = 'Could not load this catch.'; return; }
     const venueNames = {};
     venues.forEach(v=> venueNames[v.id] = v.name);
     const myName = (people.find(p=>p.id===myId) || {}).name || 'Angler';
-    const best = bestPerSpeciesMap(allCatches.map(r=>({caught:true, type:r.type, weight:r.weight})));
+    const best = bestPerSpeciesMap(allCatches.map(r=>({caught:true, type:r.fish_type, weight:r.weight})));
     const isPB = !!(c.type && best[c.type] && best[c.type].weight === c.weight);
     const photoSrc = fishPhotoSrc(c);
     const photoImg = photoSrc ? await loadImageSafe(photoSrc) : null;
