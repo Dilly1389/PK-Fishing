@@ -2544,7 +2544,12 @@
     </div>
     <div class="profile-catch">
       <div class="pc-head">Price</div>
-      <div class="pc-line muted">R49 a month or R399 a year. Online payment opens soon.</div>
+      <div class="pc-line muted">R49 a month or R399 a year, billed automatically by PayFast until you cancel.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button class="primary-btn" id="upgrade-pay-monthly-btn">Pay R49/month</button>
+        <button class="primary-btn" id="upgrade-pay-yearly-btn">Pay R399/year</button>
+      </div>
+      <div class="pc-line muted" id="upgrade-pay-status" style="margin-top:6px;"></div>
     </div>
     <div id="upgrade-trial-area" style="margin-top:10px;"></div>
     <button class="mini-btn" id="upgrade-close" style="margin-top:12px;">Not now</button>
@@ -5689,6 +5694,43 @@ async function openUpgrade(reason){
     }
   }
   dlg.showModal();
+}
+
+// Builds the signed checkout fields server-side (the signature needs the
+// PayFast passphrase, which must never reach the client), then does a real
+// form POST - not a fetch - so the browser actually navigates to PayFast's
+// hosted payment page.
+async function startPayfastCheckout(frequency){
+  const statusEl = document.getElementById('upgrade-pay-status');
+  const btns = [document.getElementById('upgrade-pay-monthly-btn'), document.getElementById('upgrade-pay-yearly-btn')];
+  btns.forEach(b=> b.disabled = true);
+  statusEl.textContent = 'Preparing secure checkout…';
+  try{
+    const res = await sbFetch(SUPABASE_URL + '/functions/v1/payfast-checkout', {
+      method: 'POST',
+      headers: sbHeaders(),
+      body: JSON.stringify({ frequency })
+    });
+    const body = await res.json();
+    if(!res.ok) throw new Error(body.error || ('Checkout failed: ' + res.status));
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = body.processUrl;
+    form.style.display = 'none';
+    body.fields.forEach(([name, value])=>{
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  }catch(e){
+    statusEl.textContent = 'Could not start checkout: ' + (e.message || 'unknown error');
+    btns.forEach(b=> b.disabled = false);
+  }
 }
 const TRIAL_DAYS = 7;
 function trialEnd(p){
@@ -11826,6 +11868,8 @@ document.getElementById('competitions-help-btn').addEventListener('click', ()=>{
 document.getElementById('upgrade-close').addEventListener('click', ()=>{
   document.getElementById('upgrade-modal').close();
 });
+document.getElementById('upgrade-pay-monthly-btn').addEventListener('click', ()=> startPayfastCheckout('3'));
+document.getElementById('upgrade-pay-yearly-btn').addEventListener('click', ()=> startPayfastCheckout('6'));
 document.getElementById('competitions-help-close').addEventListener('click', ()=>{
   document.getElementById('competitions-help-modal').close();
 });
