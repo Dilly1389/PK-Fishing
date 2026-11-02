@@ -11325,7 +11325,11 @@ async function drawCatchCardImage(opts){
       const img = opts.photoImg;
       const s = Math.max(RECORD_IMG_W / img.naturalWidth, photoH / img.naturalHeight);
       const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
-      ctx.drawImage(img, (RECORD_IMG_W-dw)/2, (photoH-dh)/2, dw, dh);
+      // Bias the vertical crop toward the top instead of centering it: a trophy
+      // shot almost always has more empty grass/water at the bottom than
+      // headroom at the top, and losing the angler's head reads far worse
+      // than losing their feet.
+      ctx.drawImage(img, (RECORD_IMG_W-dw)/2, (photoH-dh)*0.15, dw, dh);
     }catch(e){ console.error('drawCatchCardImage photo failed', e); }
   }else{
     ctx.fillStyle = '#9C6B6B';
@@ -13298,15 +13302,18 @@ document.getElementById('photo-modal-share-btn').addEventListener('click', async
     const isPB = !!(c.type && best[c.type] && best[c.type].weight === c.weight);
     const photoSrc = fishPhotoSrc(c);
     const photoImg = photoSrc ? await loadImageSafe(photoSrc) : null;
+    const weightText = formatWeight(c.weight);
+    const venueName = (c.venueId && venueNames[c.venueId]) || 'Unknown venue';
     const canvas = await drawCatchCardImage({
       species: c.type || 'Catch',
-      weightText: formatWeight(c.weight),
-      venueName: (c.venueId && venueNames[c.venueId]) || 'Unknown venue',
+      weightText,
+      venueName,
       dateText: new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
       anglerName: myName,
       isPB, photoImg
     });
-    shareOrDownloadCanvas(canvas, 'pk-fishing-catch.png', (c.type||'Catch') + ' — PK Fishing', 'My catch from PK Fishing',
+    const shareText = (c.type || 'Catch') + ' — ' + weightText + ' at ' + venueName + '\nLogged on PK Fishing — pksport.co.za/pk-fishing/';
+    shareOrDownloadCanvas(canvas, 'pk-fishing-catch.png', (c.type||'Catch') + ' — PK Fishing', shareText,
       (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
     markProFeatureUsed('record_images');
     pkTrack('record_image_shared', {kind: 'catch_card'});
