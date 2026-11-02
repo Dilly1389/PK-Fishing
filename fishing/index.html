@@ -11402,8 +11402,9 @@ async function drawCatchCardImage(opts){
       // Bias the vertical crop toward the top instead of centering it: a trophy
       // shot almost always has more empty grass/water at the bottom than
       // headroom at the top, and losing the angler's head reads far worse
-      // than losing their feet.
-      ctx.drawImage(img, (RECORD_IMG_W-dw)/2, (photoH-dh)*0.15, dw, dh);
+      // than losing their feet. 0.15 turned out too aggressive - it cut
+      // heads less but started cutting feet instead; 0.32 splits it better.
+      ctx.drawImage(img, (RECORD_IMG_W-dw)/2, (photoH-dh)*0.32, dw, dh);
     }catch(e){ console.error('drawCatchCardImage photo failed', e); }
   }else{
     ctx.fillStyle = '#9C6B6B';
