@@ -5774,6 +5774,7 @@ function renderAccountPlanLine(){
   else if(p && p.plan === 'pro' && (!p.pro_until || new Date(p.pro_until) > new Date())) text = p.pro_until ? 'Pro, until ' + fmtDate(new Date(p.pro_until)) : 'Pro';
   else if(te && te > new Date()) text = 'Pro trial, ends ' + fmtDate(te);
   el.innerHTML = 'Account type: <b>' + escapeHtml(text) + '</b>';
+  el.style.display = 'block';
 
   // Only an actual live PayFast subscription can be cancelled this way -
   // a Founder grant or an admin-set Pro period has no token and nothing
