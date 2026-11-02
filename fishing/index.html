@@ -1256,6 +1256,8 @@
         <div id="account-signed-in" style="display:none;">
           <p class="pc-line" id="signed-in-as" style="margin-bottom:12px;"></p>
           <p class="pc-line" id="account-plan-line" style="display:none;margin-bottom:12px;"></p>
+          <button class="mini-btn danger" id="cancel-subscription-btn" style="display:none;margin-bottom:12px;">Cancel my subscription</button>
+          <p class="pc-line muted" id="cancel-subscription-status" style="display:none;margin-bottom:12px;"></p>
           <button class="mini-btn" id="view-my-profile-btn">View my profile</button>
           <button class="mini-btn danger" id="sign-out-btn">Sign out</button>
         </div>
@@ -5374,7 +5376,7 @@ async function loadMyPlan(){
     }catch(e){ limitsActive = false; }
     const mine = (session && session.user) ? people.find(p=>p.user_id===session.user.id) : null;
     if(!mine){ myPlan = null; return; }
-    const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(mine.id) + '&select=plan,pro_until,founder,trial_started_at,tackle_choice_at');
+    const rows = await sbGet('account_plans?fisherman_id=eq.' + encodeURIComponent(mine.id) + '&select=plan,pro_until,founder,trial_started_at,tackle_choice_at,payfast_token');
     myPlan = rows[0] || null;
   }catch(e){ console.error('loadMyPlan failed', e); }
   renderAccountPlanLine();
@@ -5732,6 +5734,30 @@ async function startPayfastCheckout(frequency){
     btns.forEach(b=> b.disabled = false);
   }
 }
+
+async function cancelPayfastSubscription(){
+  if(!confirm("Cancel your PK Fishing Pro subscription? You'll keep Pro until the period you've already paid for runs out, then your account goes back to Free.")) return;
+  const btn = document.getElementById('cancel-subscription-btn');
+  const statusEl = document.getElementById('cancel-subscription-status');
+  btn.disabled = true;
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Cancelling…';
+  try{
+    const res = await sbFetch(SUPABASE_URL + '/functions/v1/payfast-cancel-subscription', {
+      method: 'POST',
+      headers: sbHeaders()
+    });
+    const body = await res.json();
+    if(!res.ok) throw new Error(body.error || ('Cancel failed: ' + res.status));
+    await loadMyPlan();
+    statusEl.textContent = 'Cancelled. ' + (myPlan && myPlan.pro_until
+      ? 'You keep Pro until ' + new Date(myPlan.pro_until).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}) + '.'
+      : 'Your next billing has been stopped.');
+  }catch(e){
+    statusEl.textContent = 'Could not cancel: ' + (e.message || 'unknown error');
+    btn.disabled = false;
+  }
+}
 const TRIAL_DAYS = 7;
 function trialEnd(p){
   if(!p || !p.trial_started_at) return null;
@@ -5748,6 +5774,12 @@ function renderAccountPlanLine(){
   else if(p && p.plan === 'pro' && (!p.pro_until || new Date(p.pro_until) > new Date())) text = p.pro_until ? 'Pro, until ' + fmtDate(new Date(p.pro_until)) : 'Pro';
   else if(te && te > new Date()) text = 'Pro trial, ends ' + fmtDate(te);
   el.innerHTML = 'Account type: <b>' + escapeHtml(text) + '</b>';
+
+  // Only an actual live PayFast subscription can be cancelled this way -
+  // a Founder grant or an admin-set Pro period has no token and nothing
+  // to tell PayFast to stop billing.
+  const cancelBtn = document.getElementById('cancel-subscription-btn');
+  if(cancelBtn) cancelBtn.style.display = (p && p.payfast_token) ? 'inline-block' : 'none';
 }
 function isPro(){
   const p = myPlan;
@@ -11870,6 +11902,7 @@ document.getElementById('upgrade-close').addEventListener('click', ()=>{
 });
 document.getElementById('upgrade-pay-monthly-btn').addEventListener('click', ()=> startPayfastCheckout('3'));
 document.getElementById('upgrade-pay-yearly-btn').addEventListener('click', ()=> startPayfastCheckout('6'));
+document.getElementById('cancel-subscription-btn').addEventListener('click', cancelPayfastSubscription);
 document.getElementById('competitions-help-close').addEventListener('click', ()=>{
   document.getElementById('competitions-help-modal').close();
 });
