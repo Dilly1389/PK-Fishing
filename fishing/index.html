@@ -11099,6 +11099,21 @@ async function renderVenueMap(venues, allCatches){
 // code, but no cross-browser foreignObject/flex quirks to worry about on
 // real phones, which is what this actually needs to work on.
 const RECORD_IMG_W = 600, RECORD_IMG_H = 750;
+// Every drawRecordListImage/drawVenueBoardRustic/drawCatchCardImage call
+// below draws in this 600x750 logical space, but the canvas itself is
+// created at RECORD_IMG_SCALE times that (see newRecordCanvas) so text and
+// photos come out sharp on a modern phone screen instead of soft/pixelated.
+const RECORD_IMG_SCALE = 2;
+function newRecordCanvas(){
+  const canvas = document.createElement('canvas');
+  canvas.width = RECORD_IMG_W * RECORD_IMG_SCALE;
+  canvas.height = RECORD_IMG_H * RECORD_IMG_SCALE;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(RECORD_IMG_SCALE, RECORD_IMG_SCALE);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  return { canvas, ctx };
+}
 
 function rrPath(ctx, x, y, w, h, r){
   ctx.beginPath();
@@ -11165,9 +11180,7 @@ function bestPerSpeciesMap(catches){
 // structurally identical in the mockups - same shell, different title/
 // subtitle/row-meta/footer text - so one renderer covers both.
 async function drawRecordListImage(opts){
-  const canvas = document.createElement('canvas');
-  canvas.width = RECORD_IMG_W; canvas.height = RECORD_IMG_H;
-  const ctx = canvas.getContext('2d');
+  const { canvas, ctx } = newRecordCanvas();
   const logo = await loadRecordLogo();
   const padX = 44;
 
@@ -11256,9 +11269,7 @@ async function drawRecordListImage(opts){
 // The rustic wood-sign skin of the venue record board - same row data as
 // drawRecordListImage, different chrome throughout.
 async function drawVenueBoardRustic(venueName, rows){
-  const canvas = document.createElement('canvas');
-  canvas.width = RECORD_IMG_W; canvas.height = RECORD_IMG_H;
-  const ctx = canvas.getContext('2d');
+  const { canvas, ctx } = newRecordCanvas();
   const logo = await loadRecordLogo();
   const padX = 30;
   const cx = RECORD_IMG_W / 2;
@@ -11383,9 +11394,7 @@ async function drawVenueBoardRustic(venueName, rows){
 }
 // The personal catch card - a single catch, full-bleed photo, New PB pill.
 async function drawCatchCardImage(opts){
-  const canvas = document.createElement('canvas');
-  canvas.width = RECORD_IMG_W; canvas.height = RECORD_IMG_H;
-  const ctx = canvas.getContext('2d');
+  const { canvas, ctx } = newRecordCanvas();
   const logo = await loadRecordLogo();
 
   ctx.fillStyle = '#2A1414';
