@@ -11104,7 +11104,7 @@ const RECORD_IMG_W = 600, RECORD_IMG_H = 750;
 // own height - see there), but the canvas itself is created at
 // RECORD_IMG_SCALE times that (see newRecordCanvas) so text and photos come
 // out sharp on a modern phone screen instead of soft/pixelated.
-const RECORD_IMG_SCALE = 2;
+const RECORD_IMG_SCALE = 3;
 function newRecordCanvas(height){
   const h = height || RECORD_IMG_H;
   const canvas = document.createElement('canvas');
@@ -11527,7 +11527,7 @@ function shareOrDownloadCanvas(canvas, filename, shareTitle, shareText, onDone){
     // the photo region (3-5x+ bigger for no visible benefit once WhatsApp
     // recompresses it anyway) - high-quality JPEG keeps the flat-color
     // text/logo areas clean while shrinking the file a lot.
-    }, 'image/jpeg', 0.92);
+    }, 'image/jpeg', 0.95);
   }catch(e){
     console.error('shareOrDownloadCanvas failed', e);
     if(onDone) onDone('Could not create the image — try again.');
