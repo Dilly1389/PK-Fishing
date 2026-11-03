@@ -10946,7 +10946,7 @@ function openVenueCatches(venue, venueCatches){
             title: venue.name, subtitle: 'Record Board · updated ' + new Date().toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
             rows, footerLeft: 'Verified from logged catches'
           });
-      shareOrDownloadCanvas(canvas, 'pk-fishing-' + venue.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') + '-records.png',
+      shareOrDownloadCanvas(canvas, 'pk-fishing-' + venue.name.toLowerCase().replace(/[^a-z0-9]+/g,'-') + '-records.jpg',
         venue.name + ' record board', 'My ' + venue.name + ' record board from PK Fishing',
         (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
       markProFeatureUsed('record_images');
@@ -11503,7 +11503,7 @@ function shareOrDownloadCanvas(canvas, filename, shareTitle, shareText, onDone){
     canvas.toBlob(async (blob)=>{
       if(!blob){ if(onDone) onDone('Could not create the image.'); return; }
       try{
-        const file = new File([blob], filename, {type: 'image/png'});
+        const file = new File([blob], filename, {type: 'image/jpeg'});
         if(navigator.canShare && navigator.canShare({files: [file]})){
           try{
             await navigator.share({files: [file], title: shareTitle, text: shareText});
@@ -11522,7 +11522,12 @@ function shareOrDownloadCanvas(canvas, filename, shareTitle, shareText, onDone){
       document.body.removeChild(a);
       setTimeout(()=> URL.revokeObjectURL(url), 1000);
       if(onDone) onDone(null);
-    }, 'image/png');
+    // JPEG, not PNG: this is a photo-dominant image for WhatsApp/social
+    // sharing, not a logo or screenshot. PNG's losslessness is wasted on
+    // the photo region (3-5x+ bigger for no visible benefit once WhatsApp
+    // recompresses it anyway) - high-quality JPEG keeps the flat-color
+    // text/logo areas clean while shrinking the file a lot.
+    }, 'image/jpeg', 0.92);
   }catch(e){
     console.error('shareOrDownloadCanvas failed', e);
     if(onDone) onDone('Could not create the image — try again.');
@@ -13062,7 +13067,7 @@ async function openProfile(personId, focusCatchId){
           title: p.name, subtitle: 'Personal Bests · as of ' + new Date().toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
           rows, footerLeft: rows.length + ' species logged'
         });
-        shareOrDownloadCanvas(canvas, 'pk-fishing-personal-bests.png', 'My PK Fishing personal bests', 'My personal bests from PK Fishing',
+        shareOrDownloadCanvas(canvas, 'pk-fishing-personal-bests.jpg', 'My PK Fishing personal bests', 'My personal bests from PK Fishing',
           (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
         markProFeatureUsed('record_images');
         pkTrack('record_image_shared', {kind: 'personal_bests'});
@@ -13412,7 +13417,7 @@ document.getElementById('photo-modal-share-btn').addEventListener('click', async
       isPB, photoImg
     });
     const shareText = (c.type || 'Catch') + ' — ' + weightText + ' at ' + venueName + '\nLogged on PK Fishing — pksport.co.za/pk-fishing/';
-    shareOrDownloadCanvas(canvas, 'pk-fishing-catch.png', (c.type||'Catch') + ' — PK Fishing', shareText,
+    shareOrDownloadCanvas(canvas, 'pk-fishing-catch.jpg', (c.type||'Catch') + ' — PK Fishing', shareText,
       (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
     markProFeatureUsed('record_images');
     pkTrack('record_image_shared', {kind: 'catch_card'});
