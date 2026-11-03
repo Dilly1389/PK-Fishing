@@ -11100,14 +11100,16 @@ async function renderVenueMap(venues, allCatches){
 // real phones, which is what this actually needs to work on.
 const RECORD_IMG_W = 600, RECORD_IMG_H = 750;
 // Every drawRecordListImage/drawVenueBoardRustic/drawCatchCardImage call
-// below draws in this 600x750 logical space, but the canvas itself is
-// created at RECORD_IMG_SCALE times that (see newRecordCanvas) so text and
-// photos come out sharp on a modern phone screen instead of soft/pixelated.
+// below draws in this 600-wide logical space (drawCatchCardImage varies its
+// own height - see there), but the canvas itself is created at
+// RECORD_IMG_SCALE times that (see newRecordCanvas) so text and photos come
+// out sharp on a modern phone screen instead of soft/pixelated.
 const RECORD_IMG_SCALE = 2;
-function newRecordCanvas(){
+function newRecordCanvas(height){
+  const h = height || RECORD_IMG_H;
   const canvas = document.createElement('canvas');
   canvas.width = RECORD_IMG_W * RECORD_IMG_SCALE;
-  canvas.height = RECORD_IMG_H * RECORD_IMG_SCALE;
+  canvas.height = h * RECORD_IMG_SCALE;
   const ctx = canvas.getContext('2d');
   ctx.scale(RECORD_IMG_SCALE, RECORD_IMG_SCALE);
   ctx.imageSmoothingEnabled = true;
@@ -11394,21 +11396,24 @@ async function drawVenueBoardRustic(venueName, rows){
 }
 // The personal catch card - a single catch, full-bleed photo, New PB pill.
 async function drawCatchCardImage(opts){
-  const { canvas, ctx } = newRecordCanvas();
+  // Most catch photos are portrait (phone held upright), not the landscape
+  // shape a fixed 430px band assumed - that mismatch is the real reason this
+  // took three tries: a fixed band forces a choice between cropping the
+  // subject or leaving bars down the sides. Instead, size the band to each
+  // photo's own proportions (floor only, no ceiling) and grow the WHOLE
+  // card to match, so the text block below keeps its usual fixed spacing
+  // regardless of how tall the photo band ends up being.
+  const MIN_PHOTO_H = 360, TEXT_BLOCK_H = RECORD_IMG_H - 430; // = 320, the original design's photo-to-footer space
+  const idealPhotoH = opts.photoImg ? RECORD_IMG_W * (opts.photoImg.naturalHeight / opts.photoImg.naturalWidth) : 430;
+  const photoH = Math.max(MIN_PHOTO_H, idealPhotoH);
+  const cardH = photoH + TEXT_BLOCK_H;
+
+  const { canvas, ctx } = newRecordCanvas(cardH);
   const logo = await loadRecordLogo();
 
   ctx.fillStyle = '#2A1414';
-  ctx.fillRect(0, 0, RECORD_IMG_W, RECORD_IMG_H);
+  ctx.fillRect(0, 0, RECORD_IMG_W, cardH);
 
-  // Most catch photos are portrait (phone held upright), not the landscape
-  // shape a fixed 430px band assumes - that mismatch is what forced a choice
-  // between cropping the subject or leaving empty bars down the sides.
-  // Instead, size the band to each photo's own proportions (capped so the
-  // text below it always has room to breathe) so it fills edge-to-edge with
-  // little or no cropping, whatever shape the photo actually is.
-  const MIN_PHOTO_H = 400, MAX_PHOTO_H = 500;
-  const idealPhotoH = opts.photoImg ? RECORD_IMG_W * (opts.photoImg.naturalHeight / opts.photoImg.naturalWidth) : 430;
-  const photoH = Math.max(MIN_PHOTO_H, Math.min(MAX_PHOTO_H, idealPhotoH));
   ctx.fillStyle = '#3A2020';
   ctx.fillRect(0, 0, RECORD_IMG_W, photoH);
 
@@ -11416,8 +11421,8 @@ async function drawCatchCardImage(opts){
     try{
       const img = opts.photoImg;
       // Cover-fit at this band height: since the band is sized from the
-      // photo's own ratio (then clamped), the crop this needs is usually
-      // zero and never more than the clamp's small overshoot.
+      // photo's own ratio, this needs zero crop except for the rare photo
+      // narrower than MIN_PHOTO_H allows, which only trims the sides.
       const s = Math.max(RECORD_IMG_W / img.naturalWidth, photoH / img.naturalHeight);
       const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
       ctx.drawImage(img, (RECORD_IMG_W-dw)/2, (photoH-dh)/2, dw, dh);
@@ -11462,7 +11467,7 @@ async function drawCatchCardImage(opts){
   ctx.font = '700 44px "SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace';
   ctx.fillText(opts.weightText, 36, by);
 
-  by = RECORD_IMG_H - 100;
+  by = cardH - 100;
   ctx.fillStyle = '#F5EAEA';
   ctx.font = '400 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
   ctx.fillText(fitText(ctx, opts.venueName + ' · ' + opts.dateText, RECORD_IMG_W - 72), 36, by);
@@ -11472,7 +11477,7 @@ async function drawCatchCardImage(opts){
   ctx.font = '400 13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
   ctx.fillText('Caught by ' + opts.anglerName, 36, by);
 
-  const footY = RECORD_IMG_H - 36;
+  const footY = cardH - 36;
   ctx.strokeStyle = '#4A2525';
   ctx.lineWidth = 1;
   ctx.beginPath();
