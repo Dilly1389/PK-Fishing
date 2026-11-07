@@ -2635,7 +2635,7 @@
     <div id="photo-modal-when" style="display:none;font-size:13px;font-weight:600;color:var(--ink);margin-top:8px;"></div>
     <div style="font-size:11px;color:var(--muted);margin-top:6px;">Pinch or double-tap to zoom</div>
     <div id="photo-modal-share-wrap" style="display:none;margin-top:8px;">
-      <button type="button" class="mini-btn" id="photo-modal-share-btn">🔒 Share this catch</button>
+      <button type="button" class="mini-btn" id="photo-modal-share-btn">Share this catch</button>
       <div class="status" id="photo-modal-share-status"></div>
     </div>
     <div id="photo-modal-nav" style="display:none;justify-content:space-between;align-items:center;margin-top:8px;">
@@ -13378,14 +13378,17 @@ async function updatePhotoShareWrap(){
     const rows = await sbGet('catches?id=eq.'+currentPhotoCatchId+'&select=fisherman_id&limit=1');
     if(!rows[0] || rows[0].fisherman_id !== myId) return;
   }catch(e){ console.error('updatePhotoShareWrap failed', e); return; }
-  document.getElementById('photo-modal-share-btn').textContent = isPro() ? 'Share this catch' : '🔒 Share this catch';
+  document.getElementById('photo-modal-share-btn').textContent = 'Share this catch';
   wrap.style.display = 'block';
 }
 document.getElementById('photo-modal-x').addEventListener('click', ()=>{
   document.getElementById('photo-modal').close();
 });
 document.getElementById('photo-modal-share-btn').addEventListener('click', async ()=>{
-  if(!isPro()){ openUpgrade('Sharing a catch as a card is a Pro feature.'); return; }
+  // Free for everyone, unlike the Personal Bests / Venue Board record
+  // images: a single catch card is the one that functions as a growth
+  // loop (shared to people who aren't users yet), not a vanity feature
+  // worth gating.
   const catchId = currentPhotoCatchId;
   if(!catchId) return;
   const st = document.getElementById('photo-modal-share-status');
@@ -13419,7 +13422,9 @@ document.getElementById('photo-modal-share-btn').addEventListener('click', async
     const shareText = (c.type || 'Catch') + ' — ' + weightText + ' at ' + venueName + '\nLogged on PK Fishing — pksport.co.za/pk-fishing/';
     shareOrDownloadCanvas(canvas, 'pk-fishing-catch.jpg', (c.type||'Catch') + ' — PK Fishing', shareText,
       (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
-    markProFeatureUsed('record_images');
+    // No markProFeatureUsed here - the catch card is free now, so this
+    // isn't Pro usage worth logging in pro_feature_uses (that table is
+    // specifically for refund-dispute evidence on paying accounts).
     pkTrack('record_image_shared', {kind: 'catch_card'});
   }catch(e){
     console.error(e);
