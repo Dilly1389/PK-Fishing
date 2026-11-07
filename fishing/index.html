@@ -942,7 +942,8 @@
   .desk-user-btn:hover,.desk-user-btn:focus-visible{border-color:var(--line);background:var(--bg,#fafafa);color:var(--ink);}
   .desk-bookcase{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,3fr);gap:28px;align-items:start;max-width:1300px;}
 </style>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.48.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.48.0/dist/tabler-icons.min.css" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.48.0/dist/tabler-icons.min.css"></noscript>
 <script>window.pkCaptchaReady=function(){ if(window.pkRenderCaptchas) window.pkRenderCaptchas(); };</script>
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=pkCaptchaReady" async defer></script>
 </head>
