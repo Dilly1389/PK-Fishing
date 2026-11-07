@@ -5470,7 +5470,11 @@ function renderTackleActiveBanner(){
   el.style.display = 'block';
   const counts = tackleCountsByCategory(activeTackleItems());
   el.innerHTML = tackleNeedsChoice()
-    ? '<div class="pc-head">You are over the free limit</div><div class="pc-line muted">' + tackleOverCategories().map(c=> escapeHtml(c) + ': ' + counts[c] + ' in use, ' + tackleCapOf(c) + ' allowed').join('. ') + '. That counts your own items plus the ones shared with you that you use. Choose which to keep; your own items stay saved and unlock again if you upgrade to Pro, and shared ones go back to the Shared with me list.</div>'
+    ? '<div class="pc-head">You are over the free limit</div>'
+      + '<ul style="margin:4px 0 8px;padding-left:18px;color:var(--muted);font-size:12.5px;">'
+      + tackleOverCategories().map(c=> '<li><span style="color:#d33;">✖</span> ' + escapeHtml(c) + ': <strong style="color:var(--ink);">' + counts[c] + '</strong> of ' + tackleCapOf(c) + '</li>').join('')
+      + '</ul>'
+      + '<div class="pc-line muted">That counts your own items plus the ones shared with you that you use. Choose which to keep; your own items stay saved and unlock again if you upgrade to Pro, and shared ones go back to the Shared with me list.</div>'
     : '<div class="pc-head">' + active + ' in use, ' + locked + ' locked</div><div class="pc-line muted">Locked items stay saved and unlock again if you upgrade to Pro.</div>';
   const wait = tackleChoiceNextDate();
   el.innerHTML += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
