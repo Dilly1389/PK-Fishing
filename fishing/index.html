@@ -1480,7 +1480,7 @@
       <section class="card" id="export-csv-card" style="display:none;">
         <h2>Export my catches</h2>
         <p class="pc-line muted">Downloads every catch and blank you've logged as a CSV file, for your own records or to open in a spreadsheet.</p>
-        <button class="mini-btn" id="export-csv-btn">🔒 Export as CSV</button>
+        <button class="mini-btn" id="export-csv-btn">Export as CSV</button>
         <div class="status" id="export-csv-status"></div>
       </section>
 
@@ -5388,7 +5388,7 @@ async function loadMyPlan(){
 }
 function refreshExportCsvButton(){
   const btn = document.getElementById('export-csv-btn');
-  if(btn) btn.textContent = isPro() ? 'Export as CSV' : '🔒 Export as CSV';
+  if(btn) btn.textContent = 'Export as CSV';
 }
 function refreshTackleImportButton(){
   const btn = document.getElementById('tackle-import-preview-btn');
@@ -11577,7 +11577,9 @@ function downloadTextFile(filename, text, mimeType){
   setTimeout(()=> URL.revokeObjectURL(url), 1000);
 }
 document.getElementById('export-csv-btn').addEventListener('click', async ()=>{
-  if(!isPro()){ openUpgrade('Exporting your catches as a CSV file is a Pro feature.'); return; }
+  // Free for everyone, same reasoning as the catch-card share image: this
+  // just reformats the user's own already-visible data into a download,
+  // not worth gating.
   const st = document.getElementById('export-csv-status');
   const myId = getMyFishermanId();
   if(!myId) return;
@@ -11588,7 +11590,6 @@ document.getElementById('export-csv-btn').addEventListener('click', async ()=>{
     venues.forEach(v=> venueNames[v.id] = v.name);
     const csv = catchesToCsv(person ? person.catches : [], venueNames);
     downloadTextFile('pk-fishing-catches-' + new Date().toISOString().slice(0,10) + '.csv', csv, 'text/csv');
-    markProFeatureUsed('csv_export');
     pkTrack('csv_export');
     st.textContent = 'Downloaded.';
     setTimeout(()=> st.textContent = '', 1500);
