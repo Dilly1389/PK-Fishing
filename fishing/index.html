@@ -9845,9 +9845,17 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
   if(activeSession){
     entry.sessionId = activeSession.id;
     entry.competitionId = activeSession.competition_id || null;
+    // The venue comes straight from the session, no lookup needed, so this
+    // belongs on blanks too — otherwise a venue you only ever blanked at
+    // (a whole blank session, say) never counts toward Explorer or any
+    // other venue-based stat. Previously this was gated behind entry.caught
+    // along with the weather/GPS capture below, which cost nothing for a
+    // catch but silently dropped the venue on every blank.
+    if(activeSession.venue_id) entry.venueId = activeSession.venue_id;
   }
 
-  // Capture where this was caught (private — powers venue insights only)
+  // Weather, moon phase and GPS still only matter for an actual catch —
+  // these cost an API call or a location prompt, not worth it per blank
   if(entry.caught){
     if(activeSession){
       // Reuse whatever we already fetched for the session bar — no need
@@ -9864,10 +9872,8 @@ document.getElementById('confirm-correct').addEventListener('click', async ()=>{
       entry.latitude = coords.lat;
       entry.longitude = coords.lng;
     }
-    // A running session already knows the venue — otherwise fall back to GPS matching
-    if(activeSession && activeSession.venue_id){
-      entry.venueId = activeSession.venue_id;
-    }else if(coords){
+    // No active session (e.g. logging a past catch) — fall back to GPS matching
+    if(!entry.venueId && coords){
       entry.venueId = await findOrPromptVenue(coords);
     }
   }
@@ -10564,9 +10570,12 @@ async function computeBadgeStats(fishermanId){
       return new Date(c.time).getHours() < 6;
     }).length,
     fullMoonCatchCount: caught.filter(c=> c.moonPhase === 'Full Moon').length,
-    venueCount: new Set(caught.map(c=>c.venueId).filter(Boolean)).size,
+    // "Fished" and "took part in", not "caught at" — a blank session still
+    // counts for Explorer, and entering a competition doesn't require a
+    // fish, so these read from every logged entry, not just the catches
+    venueCount: new Set(catches.map(c=>c.venueId).filter(Boolean)).size,
     sessionCount: 0,
-    competitionCount: new Set(caught.map(c=>c.competitionId).filter(Boolean)).size,
+    competitionCount: new Set(catches.map(c=>c.competitionId).filter(Boolean)).size,
     rareCatchCount: caught.filter(c=> RARE_SPECIES.includes(c.type)).length,
     recordSpeciesTotal: 0,
     recordSpeciesCaught: 0,
