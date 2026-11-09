@@ -779,6 +779,9 @@
   .home-week-row:last-child{border-bottom:none;}
   .home-week-row small{display:block;font-size:12px;color:var(--muted);}
   .home-week-row .hw-side{font-weight:700;white-space:nowrap;}
+  .streak-dots{display:flex;gap:6px;margin-top:10px;}
+  .streak-dot{flex:1;height:26px;border-radius:7px;background:var(--paper);border:1px solid var(--line);}
+  .streak-dot.on{background:var(--dam);border-color:var(--dam);}
   .row-flash{animation:rowFlash 2.4s ease-out;}
   @keyframes rowFlash{0%,50%{background:rgba(193,68,14,.2);}100%{background:transparent;}}
   .home-feed-thumb{width:44px;height:44px;max-width:44px;object-fit:cover;margin-top:0;border-radius:8px;flex-shrink:0;}
@@ -985,6 +988,8 @@
       <div id="home-competitions" style="margin-bottom:14px;"></div>
 
       <div id="home-weather" role="button" tabindex="0" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;"></div>
+
+      <div id="home-streak" style="display:none;margin-bottom:14px;"></div>
 
       <div id="home-week" style="display:none;margin-bottom:14px;"></div>
 
@@ -14922,6 +14927,7 @@ async function renderHome(){
 
   // Current conditions where you are — useful for deciding whether to go
   renderHomeWeather();
+  renderHomeStreak();
   renderHomeWeek();
 
   // Any competitions you're in that are live right now
@@ -15149,6 +15155,81 @@ async function renderHomeWeather(){
     };
     el.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); el.onclick(); } };
   }catch(e){ console.error('home weather failed', e); el.style.display = 'none'; }
+}
+
+// A weekly streak, not daily: fishing is a weekend/sporadic hobby, so a
+// day-based streak breaks for almost everyone. A week counts the moment
+// you log one session in it - catch or blank, both count equally, since
+// logging the blank honestly is the whole point of this app's records.
+function isoWeekStart(d){
+  const date = new Date(d);
+  date.setHours(0,0,0,0);
+  const day = (date.getDay() + 6) % 7; // Mon=0 .. Sun=6
+  date.setDate(date.getDate() - day);
+  return date;
+}
+function weekKeyOf(d){ return isoWeekStart(d).toISOString().slice(0,10); }
+
+async function renderHomeStreak(){
+  const el = document.getElementById('home-streak');
+  if(!el) return;
+  const myId = getMyFishermanId();
+  if(!isSignedIn() || !myId){ el.style.display = 'none'; return; }
+  try{
+    const sessions = await sbGet('sessions?select=started_at&fisherman_id=eq.'+myId);
+    if(!sessions.length){ el.style.display = 'none'; return; }
+
+    const weekSet = new Set(sessions.map(s=> weekKeyOf(s.started_at)));
+    const weekStarts = [...weekSet].map(k=> new Date(k+'T00:00:00')).sort((a,b)=> a-b);
+
+    let longest = 1, run = 1;
+    for(let i=1;i<weekStarts.length;i++){
+      const gapDays = Math.round((weekStarts[i]-weekStarts[i-1])/86400000);
+      run = gapDays === 7 ? run+1 : 1;
+      if(run > longest) longest = run;
+    }
+
+    const thisWeek = isoWeekStart(new Date());
+    const lastWeek = new Date(thisWeek.getTime() - 7*86400000);
+    const mostRecent = weekStarts[weekStarts.length-1];
+    const alive = mostRecent.getTime() === thisWeek.getTime() || mostRecent.getTime() === lastWeek.getTime();
+    const loggedThisWeek = mostRecent.getTime() === thisWeek.getTime();
+
+    let current = 0;
+    if(alive){
+      current = 1;
+      let cursor = mostRecent;
+      for(let i=weekStarts.length-2; i>=0; i--){
+        const expected = new Date(cursor.getTime() - 7*86400000);
+        if(weekStarts[i].getTime() === expected.getTime()){ current++; cursor = weekStarts[i]; }
+        else break;
+      }
+    }
+
+    const dots = [];
+    for(let i=6;i>=0;i--){
+      const wk = new Date(thisWeek.getTime() - i*7*86400000);
+      dots.push(weekSet.has(weekKeyOf(wk)));
+    }
+
+    let subLine;
+    if(current === 0) subLine = longest > 0 ? 'Broken — your best was ' + longest + ' week' + (longest===1?'':'s') : 'Log a session to start one';
+    else if(longest > current) subLine = 'Your best: ' + longest + ' week' + (longest===1?'':'s');
+    else subLine = 'This is your best yet';
+
+    el.style.display = 'block';
+    el.innerHTML = `<div style="background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:26px;line-height:1;">🔥</span>
+        <div>
+          <div style="font-weight:800;font-size:18px;">${current}-week streak</div>
+          <div class="pc-line muted" style="margin-top:2px;">${escapeHtml(subLine)}</div>
+        </div>
+      </div>
+      <div class="streak-dots">${dots.map(on=>'<span class="streak-dot'+(on?' on':'')+'"></span>').join('')}</div>
+      ${!loggedThisWeek ? '<div class="pc-line muted" style="margin-top:8px;">Log a session this week to keep it going.</div>' : ''}
+    </div>`;
+  }catch(e){ console.error('home streak failed', e); el.style.display = 'none'; }
 }
 
 // A quick look at your own last 7 days, above the mates feed. Each number
