@@ -2164,6 +2164,19 @@
   </div>
 </dialog>
 
+<dialog id="session-complete-modal" closedby="any" aria-label="Session complete">
+  <div class="modal-card" style="position:relative;">
+    <button type="button" id="session-complete-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <h3 style="margin-top:0;">Session complete</h3>
+    <div id="session-complete-body" style="text-align:left;"></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button type="button" class="primary-btn" id="session-complete-share-btn" style="display:none;">Share this session</button>
+      <button type="button" class="mini-btn" id="session-complete-done-btn">Done</button>
+      <span class="pc-line muted" id="session-complete-share-status"></span>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="recast-confirm-modal" closedby="any" aria-label="Recast this rod?">
   <div class="modal-card">
     <h3 style="margin-top:0;">↻ Recast this rod?</h3>
@@ -8816,17 +8829,18 @@ document.getElementById('session-log-save').addEventListener('click', async ()=>
 document.getElementById('session-end-btn').addEventListener('click', async ()=>{
   if(!activeSession) return;
   if(!window.confirm('End this session?\n\nYour rods, timers and rig selections will be cleared. Logged catches are kept.')) return;
+  const endedSession = activeSession;
   const endedAt = new Date().toISOString();
-  const startedAt = activeSession.started_at ? new Date(activeSession.started_at) : null;
-  const durationMinutes = startedAt ? Math.round((new Date(endedAt) - startedAt) / 60000) : null;
-  pkTrack('session_ended', {durationMinutes, rods: activeSession.rods});
+  const startedAt = endedSession.started_at ? new Date(endedSession.started_at) : null;
+  const durationMs = startedAt ? (new Date(endedAt) - startedAt) : null;
+  pkTrack('session_ended', {durationMinutes: durationMs != null ? Math.round(durationMs/60000) : null, rods: endedSession.rods});
   try{
     if(navigator.onLine){
-      await sbPatch('sessions', 'id=eq.'+activeSession.id, {ended_at: endedAt});
-      await offlineDelete(OFFLINE_SESSION_STORE, activeSession.id);
+      await sbPatch('sessions', 'id=eq.'+endedSession.id, {ended_at: endedAt});
+      await offlineDelete(OFFLINE_SESSION_STORE, endedSession.id);
     }else{
-      activeSession.ended_at = endedAt;
-      await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
+      endedSession.ended_at = endedAt;
+      await offlinePut(OFFLINE_SESSION_STORE, {id: endedSession.id, record: endedSession});
     }
     activeSession = null;
     await clearAllRodState();
@@ -8835,13 +8849,92 @@ document.getElementById('session-end-btn').addEventListener('click', async ()=>{
     updateOfflineBanner();
   }catch(e){
     console.error(e);
-    activeSession.ended_at = endedAt;
-    await offlinePut(OFFLINE_SESSION_STORE, {id: activeSession.id, record: activeSession});
+    endedSession.ended_at = endedAt;
+    await offlinePut(OFFLINE_SESSION_STORE, {id: endedSession.id, record: endedSession});
     activeSession = null;
     await clearAllRodState();
     await renderSessionUi();
     await renderActiveCompetitionsBar();
     updateOfflineBanner();
+  }
+  await showSessionCompleteModal(endedSession, durationMs);
+});
+
+// ---------- End-of-session summary (duration, fish, casts, best catch) ----------
+function sessionCompleteBodyHtml(venueName, durationMs, caughtCount, castCount, bestCatch, isPB){
+  const durationText = durationMs != null ? fmtDuration(durationMs) : null;
+  const headline = (durationText ? durationText + ' on the bank' : 'Session logged');
+  const statLine = caughtCount + ' fish from ' + castCount + ' cast' + (castCount === 1 ? '' : 's');
+  const pbLine = (isPB && bestCatch)
+    ? '<div class="pc-line" style="margin-top:8px;"><b>New PB</b> on ' + escapeHtml(bestCatch.type || 'this species') + ' — ' + formatWeight(bestCatch.weight) + '</div>'
+    : '';
+  return `<div class="pc-head">${escapeHtml(headline)}</div>
+    <div class="pc-line muted">${escapeHtml(venueName || 'Session')}</div>
+    <div class="pc-line" style="margin-top:8px;">${escapeHtml(statLine)}</div>
+    ${pbLine}`;
+}
+async function showSessionCompleteModal(session, durationMs){
+  const body = document.getElementById('session-complete-body');
+  body.innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById('session-complete-share-btn').style.display = 'none';
+  document.getElementById('session-complete-share-status').textContent = '';
+  document.getElementById('session-complete-modal').showModal();
+  try{
+    const myId = getMyFishermanId();
+    const [rows, allCatches] = await Promise.all([
+      sbGet('catches?select=*&session_id=eq.'+session.id+'&order=time.asc'),
+      myId ? sbGet('catches?fisherman_id=eq.'+myId+'&caught=eq.true&select=id,fish_type,weight') : Promise.resolve([])
+    ]);
+    const entries = rows.map(mapCatchRow);
+    const caughtEntries = entries.filter(c=>c.caught);
+    const best = bestPerSpeciesMap(allCatches.map(r=>({caught:true, type:r.fish_type, weight:r.weight})));
+    let bestCatch = null, isPB = false;
+    caughtEntries.forEach(c=>{
+      if(!bestCatch || c.weight > bestCatch.weight) bestCatch = c;
+      if(c.type && best[c.type] && best[c.type].weight === c.weight) isPB = true;
+    });
+    sessionCompleteData = {session, entries, durationMs, bestCatch, isPB};
+    body.innerHTML = sessionCompleteBodyHtml(session.venue_name, durationMs, caughtEntries.length, entries.length, bestCatch, isPB);
+    if(entries.length) document.getElementById('session-complete-share-btn').style.display = 'inline-block';
+  }catch(e){
+    console.error('showSessionCompleteModal failed', e);
+    body.innerHTML = '<div class="empty">Session ended. Could not load the summary.</div>';
+    sessionCompleteData = null;
+  }
+}
+document.getElementById('session-complete-x').addEventListener('click', ()=>{
+  document.getElementById('session-complete-modal').close();
+});
+document.getElementById('session-complete-done-btn').addEventListener('click', ()=>{
+  document.getElementById('session-complete-modal').close();
+});
+document.getElementById('session-complete-share-btn').addEventListener('click', async ()=>{
+  if(!sessionCompleteData) return;
+  const st = document.getElementById('session-complete-share-status');
+  st.textContent = 'Preparing...';
+  try{
+    const {session, entries, durationMs, bestCatch, isPB} = sessionCompleteData;
+    const myId = getMyFishermanId();
+    const myName = (people.find(p=>p.id===myId) || {}).name || 'Angler';
+    const caughtCount = entries.filter(c=>c.caught).length;
+    const durationText = durationMs != null ? fmtDuration(durationMs) : null;
+    const canvas = await drawSessionSummaryImage({
+      headline: durationText ? durationText + ' on the bank' : 'Session logged',
+      venueName: session.venue_name || 'Session',
+      fishCount: caughtCount,
+      castCount: entries.length,
+      bestWeightText: bestCatch ? formatWeight(bestCatch.weight) : null,
+      isPB, pbSpecies: bestCatch ? (bestCatch.type || 'this species') : '',
+      pbWeightText: bestCatch ? formatWeight(bestCatch.weight) : '',
+      anglerName: myName
+    });
+    const shareText = caughtCount + ' fish at ' + (session.venue_name || 'the dam') + ' today.\nLogged on PK Fishing — pksport.co.za/pk-fishing/';
+    shareOrDownloadCanvas(canvas, 'pk-fishing-session.jpg', (session.venue_name || 'Session') + ' — PK Fishing', shareText,
+      (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
+    pkTrack('record_image_shared', {kind: 'session_summary'});
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not create the image: ' + (e.message || 'unknown error');
   }
 });
 
@@ -11500,6 +11593,112 @@ async function drawCatchCardImage(opts){
 
   return canvas;
 }
+// A condensed end-of-session recap card - duration, fish, casts, best catch
+// and a New PB callout if one happened. Shown right when a session ends.
+async function drawSessionSummaryImage(opts){
+  const cardH = opts.isPB ? 560 : 500;
+  const { canvas, ctx } = newRecordCanvas(cardH);
+  const logo = await loadRecordLogo();
+  const padX = 36;
+
+  ctx.fillStyle = '#15080A';
+  ctx.fillRect(0, 0, RECORD_IMG_W, cardH);
+
+  const grad = ctx.createLinearGradient(0, 0, RECORD_IMG_W, cardH);
+  grad.addColorStop(0, '#2A0F13');
+  grad.addColorStop(1, '#160A0B');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, RECORD_IMG_W, cardH);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(RECORD_IMG_W*0.62, 0);
+  ctx.lineTo(RECORD_IMG_W, 0);
+  ctx.lineTo(RECORD_IMG_W, cardH*0.4);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(179,18,31,.35)';
+  ctx.fill();
+  ctx.restore();
+
+  const logoH = 24;
+  const logoW = drawLogo(ctx, logo, padX, 30, logoH);
+  ctx.fillStyle = '#F1B9B9';
+  ctx.font = '700 12px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('PK FISHING', padX + logoW + 7, 30 + logoH/2);
+  ctx.textBaseline = 'alphabetic';
+
+  let y = 100;
+  ctx.fillStyle = '#C98D93';
+  ctx.font = '700 11px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.fillText("TODAY'S SESSION", padX, y);
+
+  y += 44;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '800 34px Rockwell,"Roboto Slab",Georgia,serif';
+  ctx.fillText(fitText(ctx, opts.headline, RECORD_IMG_W - padX*2 - 70), padX, y);
+
+  ctx.fillStyle = '#C98D93';
+  ctx.font = '400 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  y += 28;
+  ctx.fillText(fitText(ctx, opts.venueName, RECORD_IMG_W - padX*2), padX, y);
+
+  y += 50;
+  ctx.strokeStyle = 'rgba(255,255,255,.14)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padX, y - 24);
+  ctx.lineTo(RECORD_IMG_W - padX, y - 24);
+  ctx.stroke();
+
+  const stats = [
+    {n: String(opts.fishCount), l: 'FISH'},
+    {n: String(opts.castCount), l: 'CASTS'},
+    {n: opts.bestWeightText || '—', l: 'BEST'}
+  ];
+  const colW = (RECORD_IMG_W - padX*2) / 3;
+  stats.forEach((s, i)=>{
+    const cx = padX + colW*i;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '800 26px Rockwell,"Roboto Slab",Georgia,serif';
+    ctx.fillText(s.n, cx, y + 14);
+    ctx.fillStyle = '#C98D93';
+    ctx.font = '700 11px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillText(s.l, cx, y + 32);
+  });
+
+  y += 60;
+  if(opts.isPB){
+    const bannerH = 48;
+    ctx.fillStyle = 'rgba(255,255,255,.08)';
+    rrPath(ctx, padX, y, RECORD_IMG_W - padX*2, bannerH, 10);
+    ctx.fill();
+    ctx.fillStyle = '#F1D9DB';
+    ctx.font = '600 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillText('New PB on ' + opts.pbSpecies + ' — ', padX + 16, y + 30);
+    const prefixW = ctx.measureText('New PB on ' + opts.pbSpecies + ' — ').width;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '800 14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+    ctx.fillText(opts.pbWeightText, padX + 16 + prefixW, y + 30);
+  }
+
+  const footY = cardH - 32;
+  ctx.strokeStyle = 'rgba(255,255,255,.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padX, footY - 16);
+  ctx.lineTo(RECORD_IMG_W - padX, footY - 16);
+  ctx.stroke();
+
+  ctx.fillStyle = '#9C6B6B';
+  ctx.font = '400 11.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.fillText('Logged by ' + opts.anglerName, padX, footY);
+  ctx.font = '700 11.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('pksport.co.za/fishing', RECORD_IMG_W - padX, footY);
+  ctx.textAlign = 'left';
+
+  return canvas;
+}
 // Share sheet first (so it can go straight to WhatsApp etc.), a plain
 // download if the browser/device can't share a file - same fallback shape
 // used for "Copy this link" elsewhere in the app.
@@ -12038,6 +12237,7 @@ document.getElementById('pin-drop-confirm').addEventListener('click', ()=>{
 // ---------- Editing a session's venue ----------
 let editingSession = null;
 let editingSessionCoords = null;
+let sessionCompleteData = null; // {session, entries, durationMs, bestCatch, isPB} for the just-ended session's summary modal
 
 // ---------- Editing a venue directly ----------
 // Needed because a venue created by "Log a past catch" has no session
