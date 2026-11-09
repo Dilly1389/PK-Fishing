@@ -698,6 +698,10 @@
      real room to pick a spot precisely, especially on a desktop screen. */
   dialog#pin-drop-modal .modal-card{max-width:min(94vw,640px);width:min(94vw,640px);max-height:88vh;}
   body.desk-mode dialog#pin-drop-modal .modal-card{max-width:min(85vw,820px);width:min(85vw,820px);}
+  /* Search result, requests and a friends list can all be open at once -
+     the default 320px modal cramps it fast. */
+  dialog#friends-modal .modal-card{max-width:min(94vw,560px);width:min(94vw,560px);max-height:88vh;overflow-y:auto;text-align:left;}
+  body.desk-mode dialog#friends-modal .modal-card{max-width:min(85vw,680px);width:min(85vw,680px);}
   body.desk-mode #pin-drop-map{height:520px !important;}
   body.desk-mode #venue-map{height:420px !important;}
   /* This modal only ever shows while signed out, so it can never be in
@@ -1008,7 +1012,7 @@
     <div class="panel" id="panel-more">
       <button type="button" class="more-link" data-goto="feed">
         <span class="more-icon"><i class="ti ti-users" aria-hidden="true"></i></span>
-        <span><b>Feed</b><br><span class="pc-line muted">Recent catches from anglers you follow</span></span>
+        <span><b>Mates' Catches</b><br><span class="pc-line muted">Recent catches from anglers you follow</span></span>
       </button>
       <button type="button" class="more-link" id="open-friends-btn">
         <span class="more-icon"><i class="ti ti-user-plus" aria-hidden="true"></i></span>
