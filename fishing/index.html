@@ -782,6 +782,11 @@
   .streak-dots{display:flex;gap:6px;margin-top:10px;}
   .streak-dot{flex:1;height:26px;border-radius:7px;background:var(--paper);border:1px solid var(--line);}
   .streak-dot.on{background:var(--dam);border-color:var(--dam);}
+  .whatsnew-entry summary{outline:none;}
+  .whatsnew-entry summary::-webkit-details-marker{display:none;}
+  .whatsnew-entry summary::marker{content:'';}
+  .wn-chevron{display:inline-block;transition:transform .15s ease;color:var(--muted);margin-left:8px;flex-shrink:0;}
+  .whatsnew-entry[open] .wn-chevron{transform:rotate(90deg);}
   .row-flash{animation:rowFlash 2.4s ease-out;}
   @keyframes rowFlash{0%,50%{background:rgba(193,68,14,.2);}100%{background:transparent;}}
   .home-feed-thumb{width:44px;height:44px;max-width:44px;object-fit:cover;margin-top:0;border-radius:8px;flex-shrink:0;}
@@ -14718,16 +14723,19 @@ function renderWhatsNew(){
   if(!el) return;
   // Reading the changelog counts as seeing the update
   if(isSignedIn()){ saveAppUpdateNotice('seen'); refreshNotifBadge(); }
-  el.innerHTML = CHANGELOG.map(v=>`
-    <section class="card">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-        <b style="font-size:15px;">Version ${escapeHtml(v.version)}</b>
+  el.innerHTML = CHANGELOG.map((v,i)=>`
+    <details class="card whatsnew-entry"${i === 0 ? ' open' : ''}>
+      <summary style="display:flex;justify-content:space-between;align-items:baseline;cursor:pointer;">
+        <span style="display:flex;align-items:baseline;">
+          <b style="font-size:15px;">Version ${escapeHtml(v.version)}</b>
+          <svg class="wn-chevron" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+        </span>
         <span class="pc-line muted">${escapeHtml(v.date)}</span>
-      </div>
-      <ul style="margin:0;padding-left:18px;">
+      </summary>
+      <ul style="margin:8px 0 0;padding-left:18px;">
         ${v.changes.map(c=>`<li class="pc-line" style="margin-bottom:5px;">${escapeHtml(c)}</li>`).join('')}
       </ul>
-    </section>`).join('');
+    </details>`).join('');
 }
 
 // ---------- Terms of Service ----------
