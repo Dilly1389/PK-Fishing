@@ -3177,6 +3177,11 @@ let pendingPhotoLabels = {};
 // doesn't permanently override the auto behavior.
 let rodSetupExpanded = {};
 RODS.forEach(r => { catchToggle[r] = false; pendingPhotos[r] = []; pendingPhotoLabels[r] = []; rodSetupExpanded[r] = undefined; });
+// Cached per venue, not per rod: what you usually catch depends on the dam,
+// not which rod slot it came in on. Naturally invalidates itself whenever
+// the active venue differs from the cached one - see getDefaultSpeciesForActiveVenue.
+let defaultSpeciesVenueId = undefined;
+let defaultSpeciesValue = null;
 
 function isRodSetupExpanded(rod){
   if(rodSetupExpanded[rod] !== undefined) return rodSetupExpanded[rod];
@@ -7933,6 +7938,26 @@ async function applyCompetitionCatchRules(rod){
   });
 }
 
+// What species to pre-select when "Caught a fish" is tapped: whatever this
+// angler most recently caught at the session's venue, so the species list
+// doesn't start blank every time when it's usually the same 1-2 fish. Rig,
+// bait, cast distance and rod note already remember themselves per rod (see
+// saveRodState) - species was the one field with nothing to go on.
+async function getDefaultSpeciesForActiveVenue(){
+  const venueId = activeSession ? activeSession.venue_id : null;
+  if(!venueId) return null;
+  if(defaultSpeciesVenueId === venueId) return defaultSpeciesValue;
+  defaultSpeciesVenueId = venueId;
+  defaultSpeciesValue = null;
+  try{
+    const myId = getMyFishermanId();
+    if(!myId) return null;
+    const rows = await sbGet('catches?select=fish_type&fisherman_id=eq.'+myId+'&venue_id=eq.'+venueId+'&caught=eq.true&order=time.desc&limit=1');
+    defaultSpeciesValue = rows[0] ? rows[0].fish_type : null;
+  }catch(e){ console.error('getDefaultSpeciesForActiveVenue failed', e); }
+  return defaultSpeciesValue;
+}
+
 function attachRodCardHandlers(){
   document.querySelectorAll('.catch-weight, .catch-net-weight').forEach(setupWeightUnitInput);
   document.querySelectorAll('[data-action]').forEach(btn=>{
@@ -8079,7 +8104,7 @@ function attachRodCardHandlers(){
   // Scoped to rod cards — a bare '.catch-toggle button' also matches the
   // admin and edit-catch toggles, which have no data-rod and would throw
   document.querySelectorAll('.catch-toggle button[data-rod]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
+    btn.addEventListener('click', async ()=>{
       const rod = btn.dataset.rod;
       if(!rod) return;
       const yes = btn.dataset.yn === 'yes';
@@ -8092,7 +8117,20 @@ function attachRodCardHandlers(){
       if(logBtn) logBtn.style.display = yes ? 'block' : 'none';
       const cancelBtn = document.querySelector('.cancel-catch-btn[data-rod="'+rod+'"]');
       if(cancelBtn) cancelBtn.style.display = yes ? 'inline-block' : 'none';
-      if(yes) applyCompetitionCatchRules(rod);
+      if(yes){
+        applyCompetitionCatchRules(rod);
+        // Pre-highlight whatever you usually catch at this dam, so the
+        // species list doesn't start blank every single time — still just
+        // a default, tap any other species button to change it.
+        const sel = document.querySelector('.catch-type[data-rod="'+rod+'"]');
+        if(sel && !sel.value){
+          const defaultSpecies = await getDefaultSpeciesForActiveVenue();
+          if(defaultSpecies && [...sel.options].some(o=>o.value === defaultSpecies)){
+            sel.value = defaultSpecies;
+            renderCatchTypeButtons(rod);
+          }
+        }
+      }
       if(!yes){
         // No catch needs no extra detail — go straight to confirmation
         showConfirmation(buildCatchEntry(rod));
