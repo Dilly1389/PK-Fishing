@@ -10570,12 +10570,13 @@ async function computeBadgeStats(fishermanId){
       return new Date(c.time).getHours() < 6;
     }).length,
     fullMoonCatchCount: caught.filter(c=> c.moonPhase === 'Full Moon').length,
-    // "Fished" and "took part in", not "caught at" — a blank session still
-    // counts for Explorer, and entering a competition doesn't require a
-    // fish, so these read from every logged entry, not just the catches
+    // "Fished 3 venues", not "caught at 3 venues" - a blank session still
+    // counts, so this reads from every logged entry, not just the catches.
+    // Competitor stays caught-only on purpose: taking part only counts once
+    // you've actually landed something in it (see computeBadgeEvents below).
     venueCount: new Set(catches.map(c=>c.venueId).filter(Boolean)).size,
     sessionCount: 0,
-    competitionCount: new Set(catches.map(c=>c.competitionId).filter(Boolean)).size,
+    competitionCount: new Set(caught.map(c=>c.competitionId).filter(Boolean)).size,
     rareCatchCount: caught.filter(c=> RARE_SPECIES.includes(c.type)).length,
     recordSpeciesTotal: 0,
     recordSpeciesCaught: 0,
@@ -10680,12 +10681,14 @@ async function computeBadgeEvents(fishermanId){
     if(seenSpecies.size === 5){ add('five_species', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)}); break; }
   }
 
-  // Explorer — the catch that introduced the 3rd distinct venue
+  // Explorer — the entry (catch or blank) that introduced the 3rd distinct
+  // venue. Scans allCatches, not just caught - a venue you only ever
+  // blanked at still counts, same reasoning as venueCount in computeBadgeStats.
   const seenVenues = new Set();
-  for(const c of caught){
+  for(const c of allCatches){
     if(!c.venueId) continue;
     seenVenues.add(c.venueId);
-    if(seenVenues.size === 3){ add('three_venues', c.time, {species:c.type, weight:c.weight, catch_id:c.id, venue_name:venueOf(c)}); break; }
+    if(seenVenues.size === 3){ add('three_venues', c.time, {species:c.type || null, weight:c.weight || null, catch_id:c.id, venue_name:venueOf(c)}); break; }
   }
 
   // Grand Slam — the catch that completed the current Reel Records list.
