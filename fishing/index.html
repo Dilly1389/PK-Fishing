@@ -2179,6 +2179,10 @@
     <h3 style="margin-top:0;">What happened</h3>
     <p class="pc-line muted" id="session-recap-sub" style="margin-top:0;"></p>
     <div id="session-recap-feed" style="text-align:left;"></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button type="button" class="mini-btn" id="session-recap-share-btn" style="display:none;">Share this session</button>
+      <span class="pc-line muted" id="session-recap-share-status"></span>
+    </div>
   </div>
 </dialog>
 
@@ -9124,15 +9128,25 @@ document.getElementById('session-complete-x').addEventListener('click', ()=>{
 document.getElementById('session-complete-done-btn').addEventListener('click', ()=>{
   document.getElementById('session-complete-modal').close();
 });
-document.getElementById('session-complete-share-btn').addEventListener('click', async ()=>{
-  if(!sessionCompleteData) return;
-  const st = document.getElementById('session-complete-share-status');
-  st.textContent = 'Preparing...';
+// Shared by both the just-ended-session summary and the "share this old
+// session" button on a past session's recap - same card either way, just a
+// different trigger. bestCatch/isPB are looked up fresh each time rather
+// than trusting a caller's cache, since a past session's recap doesn't
+// carry sessionCompleteData's precomputed values.
+async function shareSessionSummaryImage(session, entries, durationMs, statusEl){
+  statusEl.textContent = 'Preparing...';
   try{
-    const {session, entries, durationMs, bestCatch, isPB} = sessionCompleteData;
     const myId = getMyFishermanId();
     const myName = (people.find(p=>p.id===myId) || {}).name || 'Angler';
-    const caughtCount = entries.filter(c=>c.caught).length;
+    const caughtEntries = entries.filter(c=>c.caught);
+    const caughtCount = caughtEntries.length;
+    const allCatches = myId ? await sbGet('catches?fisherman_id=eq.'+myId+'&caught=eq.true&select=id,fish_type,weight') : [];
+    const best = bestPerSpeciesMap(allCatches.map(r=>({caught:true, type:r.fish_type, weight:r.weight})));
+    let bestCatch = null, isPB = false;
+    caughtEntries.forEach(c=>{
+      if(!bestCatch || c.weight > bestCatch.weight) bestCatch = c;
+      if(c.type && best[c.type] && best[c.type].weight === c.weight) isPB = true;
+    });
     const durationText = durationMs != null ? fmtDuration(durationMs) : null;
     const canvas = await drawSessionSummaryImage({
       headline: durationText ? durationText + ' on the bank' : 'Session logged',
@@ -9144,14 +9158,19 @@ document.getElementById('session-complete-share-btn').addEventListener('click', 
       pbWeightText: bestCatch ? formatWeight(bestCatch.weight) : '',
       anglerName: myName
     });
-    const shareText = caughtCount + ' fish at ' + (session.venue_name || 'the dam') + ' today.\nLogged on PK Fishing — pksport.co.za/pk-fishing/';
+    const shareText = caughtCount + ' fish at ' + (session.venue_name || 'the dam') + '.\nLogged on PK Fishing — pksport.co.za/pk-fishing/';
     shareOrDownloadCanvas(canvas, 'pk-fishing-session.jpg', (session.venue_name || 'Session') + ' — PK Fishing', shareText,
-      (err)=>{ st.textContent = err || 'Done.'; if(!err) setTimeout(()=> st.textContent='', 1500); });
+      (err)=>{ statusEl.textContent = err || 'Done.'; if(!err) setTimeout(()=> statusEl.textContent='', 1500); });
     pkTrack('record_image_shared', {kind: 'session_summary'});
   }catch(e){
     console.error(e);
-    st.textContent = 'Could not create the image: ' + (e.message || 'unknown error');
+    statusEl.textContent = 'Could not create the image: ' + (e.message || 'unknown error');
   }
+}
+document.getElementById('session-complete-share-btn').addEventListener('click', ()=>{
+  if(!sessionCompleteData) return;
+  const {session, entries, durationMs} = sessionCompleteData;
+  shareSessionSummaryImage(session, entries, durationMs, document.getElementById('session-complete-share-status'));
 });
 
 // Fill the venue autocomplete lists from venues already saved. Without this,
@@ -12585,6 +12604,7 @@ async function openSessionEdit(sessionId){
   document.getElementById('session-edit-modal').showModal();
 }
 
+let sessionRecapData = null; // {session, entries} for the open session-recap-modal's Share button
 async function openSessionRecap(sessionId){
   const sessions = await loadMySessions();
   const s = sessions.find(x=>x.id === sessionId);
@@ -12595,13 +12615,21 @@ async function openSessionRecap(sessionId){
   const feed = document.getElementById('session-recap-feed');
   feed.innerHTML = '<div class="empty">Loading...</div>';
   document.getElementById('session-recap-modal').showModal();
+  document.getElementById('session-recap-share-btn').style.display = 'none';
+  document.getElementById('session-recap-share-status').textContent = '';
+  sessionRecapData = null;
   // Fetched directly rather than filtered from currentPerson.catches: on a
   // shared device the angler picker can point currentPerson at someone
   // other than the signed-in account, while Insights is always about the
   // signed-in account's own sessions.
   try{
     const rows = await sbGet('catches?select=*&session_id=eq.'+s.id+'&order=time.asc');
-    feed.innerHTML = sessionLogbookPageHtml(s, rows.map(mapCatchRow));
+    const entries = rows.map(mapCatchRow);
+    feed.innerHTML = sessionLogbookPageHtml(s, entries);
+    if(entries.length){
+      sessionRecapData = {session: s, entries};
+      document.getElementById('session-recap-share-btn').style.display = 'inline-block';
+    }
   }catch(e){
     console.error('Could not load session catches', e);
     feed.innerHTML = '<div class="empty">Could not load what happened this session.</div>';
@@ -12609,6 +12637,13 @@ async function openSessionRecap(sessionId){
 }
 document.getElementById('session-recap-x').addEventListener('click', ()=>{
   document.getElementById('session-recap-modal').close();
+});
+document.getElementById('session-recap-share-btn').addEventListener('click', ()=>{
+  if(!sessionRecapData) return;
+  const {session, entries} = sessionRecapData;
+  const durationMs = (session.started_at && session.ended_at)
+    ? (new Date(session.ended_at) - new Date(session.started_at)) : null;
+  shareSessionSummaryImage(session, entries, durationMs, document.getElementById('session-recap-share-status'));
 });
 
 function updateSessionEditCoordsLabel(){
