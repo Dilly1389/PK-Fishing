@@ -2199,6 +2199,13 @@
   </div>
 </dialog>
 
+<dialog id="shared-session-modal" closedby="any" aria-label="Shared session">
+  <div class="modal-card" style="position:relative;">
+    <button type="button" id="shared-session-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <div id="shared-session-body" style="text-align:left;"></div>
+  </div>
+</dialog>
+
 <dialog id="friends-modal" closedby="any" aria-label="Friends">
   <div class="modal-card" style="position:relative;">
     <button type="button" id="friends-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
@@ -5380,6 +5387,7 @@ await loadTackleCategoryOptions();
     // join now that we know who they are
     checkPendingCompetitionJoin();
     checkPendingFollow();
+    checkPendingSharedSession();
   }catch(e){
     console.error(e);
     st.textContent = e.message || 'Could not sign in.';
@@ -9158,7 +9166,12 @@ async function shareSessionSummaryImage(session, entries, durationMs, statusEl){
       pbWeightText: bestCatch ? formatWeight(bestCatch.weight) : '',
       anglerName: myName
     });
-    const shareText = caughtCount + ' fish at ' + (session.venue_name || 'the dam') + '.\nLogged on PK Fishing — pksport.co.za/pk-fishing/';
+    // The link opens the full summary for a friend (or the owner); anyone
+    // else just gets a "friends only" prompt with a way to ask - enforced
+    // server-side by get_shared_session, not by the link being secret.
+    const shareText = caughtCount + ' fish at ' + (session.venue_name || 'the dam') + '.\n'
+      + 'See the full summary (friends only): ' + sharedSessionLink(session.id) + '\n'
+      + 'Logged on PK Fishing — pksport.co.za/pk-fishing/';
     shareOrDownloadCanvas(canvas, 'pk-fishing-session.jpg', (session.venue_name || 'Session') + ' — PK Fishing', shareText,
       (err)=>{ statusEl.textContent = err || 'Done.'; if(!err) setTimeout(()=> statusEl.textContent='', 1500); });
     pkTrack('record_image_shared', {kind: 'session_summary'});
@@ -15863,6 +15876,102 @@ function followInviteLink(fishermanId){
   return url.toString();
 }
 
+// ---------- Shared session link (friends-gated, not public) ----------
+// The link itself carries no secret - access is enforced server-side by
+// get_shared_session (owner or an accepted friend, checked against
+// friend_requests), not by the link being hard to guess. Same pattern as
+// handleFollowInvite/clearFollowParam/checkPendingFollow above.
+let pendingSharedSession = null;
+async function handleSharedSessionInvite(){
+  const sid = pendingSharedSession || new URLSearchParams(window.location.search).get('session');
+  if(!sid) return;
+  if(!isSignedIn()){
+    pendingSharedSession = sid;
+    await showSharedSessionModal(sid);
+    return;
+  }
+  pendingSharedSession = null;
+  clearSharedSessionParam();
+  await showSharedSessionModal(sid);
+}
+function clearSharedSessionParam(){
+  try{
+    const url = new URL(window.location.href);
+    url.searchParams.delete('session');
+    window.history.replaceState({}, '', url.toString());
+  }catch(e){}
+}
+function checkPendingSharedSession(){
+  if(pendingSharedSession && isSignedIn()) handleSharedSessionInvite();
+}
+function sharedSessionLink(sessionId){
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('session', sessionId);
+  return url.toString();
+}
+async function showSharedSessionModal(sessionId){
+  const body = document.getElementById('shared-session-body');
+  body.innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById('shared-session-modal').showModal();
+  try{
+    const rows = await sbRpc('get_shared_session', {p_session_id: sessionId});
+    const row = rows && rows[0];
+    if(!row || !row.owner_fisherman_id){
+      body.innerHTML = '<div class="empty">That session link isn\'t valid.</div>';
+      return;
+    }
+    if(row.can_view){
+      const durationMs = (row.started_at && row.ended_at) ? (new Date(row.ended_at) - new Date(row.started_at)) : null;
+      const durationText = durationMs != null ? fmtDuration(durationMs) : null;
+      const statLine = row.fish_count + ' fish from ' + row.cast_count + ' cast' + (row.cast_count === 1 ? '' : 's');
+      const bestLine = row.best_species
+        ? '<div class="pc-line" style="margin-top:8px;"><b>Best catch</b>: ' + escapeHtml(row.best_species) + ' — ' + formatWeight(row.best_weight) + '</div>'
+        : '';
+      body.innerHTML = '<div class="pc-head">' + escapeHtml(durationText ? durationText + ' on the bank' : 'Session') + '</div>'
+        + '<div class="pc-line muted">' + escapeHtml(row.venue_name || 'Session') + ' · ' + escapeHtml(row.owner_name || 'Angler') + '</div>'
+        + '<div class="pc-line" style="margin-top:8px;">' + escapeHtml(statLine) + '</div>'
+        + bestLine;
+    }else if(!isSignedIn()){
+      body.innerHTML = '<div class="pc-head">Sign in to view this session</div>'
+        + '<div class="pc-line muted">' + escapeHtml(row.owner_name || 'An angler') + ' shared a PK Fishing session with you.</div>'
+        + '<button type="button" class="mini-btn" id="shared-session-signin-btn" style="margin-top:12px;">Go to sign in</button>';
+      const btn = document.getElementById('shared-session-signin-btn');
+      if(btn) btn.addEventListener('click', ()=>{ document.getElementById('shared-session-modal').close(); goToTab('schedule'); });
+    }else{
+      const myId = getMyFishermanId();
+      const isMe = row.owner_fisherman_id === myId;
+      body.innerHTML = '<div class="pc-head">Friends only</div>'
+        + '<div class="pc-line muted">You need to be friends with ' + escapeHtml(row.owner_name || 'this angler') + ' to see this session.</div>'
+        + (isMe ? '' : '<button type="button" class="mini-btn" id="shared-session-add-btn" style="margin-top:12px;">Send friend request</button>')
+        + '<div class="pc-line muted" id="shared-session-add-status" style="margin-top:8px;"></div>';
+      const addBtn = document.getElementById('shared-session-add-btn');
+      if(addBtn){
+        addBtn.addEventListener('click', async ()=>{
+          addBtn.disabled = true;
+          const st = document.getElementById('shared-session-add-status');
+          st.textContent = 'Sending...';
+          try{
+            await sbPost('friend_requests', {id: uid(), from_fisherman_id: myId, to_fisherman_id: row.owner_fisherman_id, status: 'pending'});
+            st.textContent = 'Request sent.';
+          }catch(e){
+            console.error('send friend request from shared session failed', e);
+            st.textContent = 'Could not send that request.';
+            addBtn.disabled = false;
+          }
+        });
+      }
+    }
+  }catch(e){
+    console.error('showSharedSessionModal failed', e);
+    body.innerHTML = '<div class="empty">Could not load that session right now.</div>';
+  }
+}
+document.getElementById('shared-session-x').addEventListener('click', ()=>{
+  document.getElementById('shared-session-modal').close();
+});
+
 // ---------- Competition badge awards ----------
 // Runs when a competition has ended. Reuses computeCompetitionLeaderboard
 // for the top-3 placements so ranking never drifts from what the standings
@@ -17838,6 +17947,7 @@ await loadTackleCategoryOptions();
   checkAndAwardBadges();
   handleCompetitionInvite();
   handleFollowInvite();
+  handleSharedSessionInvite();
   if(isSignedIn()){ await loadActiveSession(); await renderSessionUi(); }
   maybeShowInstallBanner();
   try{
