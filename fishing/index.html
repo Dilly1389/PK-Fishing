@@ -694,6 +694,8 @@
      320px modal-card to avoid every cell wrapping onto 3 lines. */
   dialog#session-recap-modal .modal-card{max-width:min(94vw,640px);max-height:88vh;text-align:left;}
   body.desk-mode dialog#session-recap-modal .modal-card{max-width:min(85vw,860px);}
+  dialog#shared-session-modal .modal-card{max-width:min(94vw,640px);max-height:88vh;overflow-y:auto;text-align:left;}
+  body.desk-mode dialog#shared-session-modal .modal-card{max-width:min(85vw,860px);}
   /* The pin-drop map is cramped at the default 320px modal width - give it
      real room to pick a spot precisely, especially on a desktop screen. */
   dialog#pin-drop-modal .modal-card{max-width:min(94vw,640px);width:min(94vw,640px);max-height:88vh;}
@@ -15923,16 +15925,14 @@ async function showSharedSessionModal(sessionId){
       return;
     }
     if(row.can_view){
-      const durationMs = (row.started_at && row.ended_at) ? (new Date(row.ended_at) - new Date(row.started_at)) : null;
-      const durationText = durationMs != null ? fmtDuration(durationMs) : null;
-      const statLine = row.fish_count + ' fish from ' + row.cast_count + ' cast' + (row.cast_count === 1 ? '' : 's');
-      const bestLine = row.best_species
-        ? '<div class="pc-line" style="margin-top:8px;"><b>Best catch</b>: ' + escapeHtml(row.best_species) + ' — ' + formatWeight(row.best_weight) + '</div>'
-        : '';
-      body.innerHTML = '<div class="pc-head">' + escapeHtml(durationText ? durationText + ' on the bank' : 'Session') + '</div>'
-        + '<div class="pc-line muted">' + escapeHtml(row.venue_name || 'Session') + ' · ' + escapeHtml(row.owner_name || 'Angler') + '</div>'
-        + '<div class="pc-line" style="margin-top:8px;">' + escapeHtml(statLine) + '</div>'
-        + bestLine;
+      // Same logbook page a friend would see if this were their own past
+      // session - get_shared_session_catches repeats the same owner/friend
+      // check, so this still returns nothing for anyone it shouldn't.
+      const catchRows = await sbRpc('get_shared_session_catches', {p_session_id: sessionId});
+      const entries = (catchRows || []).map(mapCatchRow);
+      const fakeSession = {venue_name: row.venue_name, started_at: row.started_at, rods: row.rods};
+      body.innerHTML = '<div class="pc-line muted" style="margin-bottom:8px;">' + escapeHtml(row.owner_name || 'Angler') + '\'s session</div>'
+        + sessionLogbookPageHtml(fakeSession, entries);
     }else if(!isSignedIn()){
       body.innerHTML = '<div class="pc-head">Sign in to view this session</div>'
         + '<div class="pc-line muted">' + escapeHtml(row.owner_name || 'An angler') + ' shared a PK Fishing session with you.</div>'
