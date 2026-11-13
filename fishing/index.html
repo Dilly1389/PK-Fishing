@@ -14177,6 +14177,44 @@ async function updatePhotoShareWrap(){
 document.getElementById('photo-modal-x').addEventListener('click', ()=>{
   document.getElementById('photo-modal').close();
 });
+
+// Profile and the photo viewer are the two dialogs people actually drill
+// into (not a quick confirmation or help text), so the hardware/gesture
+// back button should close them like a real screen instead of exiting the
+// app or doing nothing. Pushes one history entry per genuine open (not on
+// a same-dialog refresh, like re-opening a profile after deleting a catch
+// from it) and pops it again however the dialog actually closes - the X
+// button, Esc, or tapping outside (closedby="any"). A shared stack, not a
+// per-dialog flag, so popstate only closes the topmost one when the photo
+// viewer is opened from inside an already-open profile.
+const modalHistoryStack = [];
+let suppressModalHistoryBack = false;
+function wireModalHistory(dialogEl, tag){
+  const nativeShowModal = dialogEl.showModal.bind(dialogEl);
+  dialogEl.showModal = function(){
+    const wasOpen = dialogEl.open;
+    nativeShowModal();
+    if(!wasOpen){
+      history.pushState({pkModal: tag}, '');
+      modalHistoryStack.push(dialogEl);
+    }
+  };
+  dialogEl.addEventListener('close', ()=>{
+    const idx = modalHistoryStack.lastIndexOf(dialogEl);
+    if(idx === -1) return;
+    modalHistoryStack.splice(idx, 1);
+    if(!suppressModalHistoryBack) history.back();
+  });
+}
+window.addEventListener('popstate', ()=>{
+  const top = modalHistoryStack[modalHistoryStack.length - 1];
+  if(!top) return;
+  suppressModalHistoryBack = true;
+  top.close();
+  suppressModalHistoryBack = false;
+});
+wireModalHistory(document.getElementById('profile-modal'), 'profile');
+wireModalHistory(document.getElementById('photo-modal'), 'photo');
 document.getElementById('photo-modal-share-btn').addEventListener('click', async ()=>{
   // Free for everyone, unlike the Personal Bests / Venue Board record
   // images: a single catch card is the one that functions as a growth
