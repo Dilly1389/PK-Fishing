@@ -10402,10 +10402,36 @@ function buildInsightsHtml(catches, venues, sessions){
     return [...new Set((v||'').split(',').map(s=>s.trim()).filter(Boolean))];
   }
 
-  // Rigs are told apart by ID, so two rigs that share a name stay separate
-  // instead of being merged into one row. Catches from before rig IDs
-  // existed only have the name, so they get their own "older catches" row.
-  const rigKey = c=> c.rig ? (c.rigId || 'n:' + c.rig) : '';
+  // Rigs are told apart by ID, so two rigs that share a name normally stay
+  // separate - except catches logged before rig IDs existed, which only
+  // carry the name. When a name has exactly one real rig ID plus that
+  // legacy "no ID" bucket, there's no ambiguity about which rig those older
+  // casts belong to, so they're folded into the one real rig instead of
+  // sitting in their own "(older catches)" row and quietly understating its
+  // real catch rate. A name with two or more DISTINCT real rig IDs (a
+  // genuine case of two different physical rigs sharing a name) is left
+  // split, since there's no way to know which one the legacy casts were.
+  const rawRigKey = c=> c.rig ? (c.rigId || 'n:' + c.rig) : '';
+  const rigKeyRemap = {};
+  (function(){
+    const keysByName = {};
+    catches.forEach(c=>{
+      const k = rawRigKey(c);
+      if(!k) return;
+      if(!keysByName[c.rig]) keysByName[c.rig] = [];
+      if(!keysByName[c.rig].includes(k)) keysByName[c.rig].push(k);
+    });
+    Object.keys(keysByName).forEach(name=>{
+      const keys = keysByName[name];
+      const legacyKey = keys.find(k=> k.indexOf('n:') === 0);
+      const realKeys = keys.filter(k=> k.indexOf('n:') !== 0);
+      if(legacyKey && realKeys.length === 1) rigKeyRemap[legacyKey] = realKeys[0];
+    });
+  })();
+  const rigKey = c=>{
+    const k = rawRigKey(c);
+    return rigKeyRemap[k] || k;
+  };
   const rigLabels = {};
   (function(){
     const keysByName = {};
@@ -10516,7 +10542,8 @@ function buildInsightsHtml(catches, venues, sessions){
     for(let n=1; n<=MAX_HOOKS; n++) out.push(...contentItems(c['hook'+n]));
     return [...new Set(out)];
   };
-  works += statTable('Baits on the hook that caught', groupStats(catchingBaits, {casts:true, castKeyFn:baitsOnAnyHook}),
+  const baitRows = groupStats(catchingBaits, {casts:true, castKeyFn:baitsOnAnyHook});
+  works += statTable('Baits on the hook that caught', baitRows,
     'Casts count every bait that was on any hook, so a bait on a spare hook shares the casts but not the fish.');
   works += isPro() ? statTable('Rig + bait pairings', groupStats(c=>{
     const rk = rigKey(c);
@@ -10827,11 +10854,45 @@ function buildInsightsHtml(catches, venues, sessions){
     }
   }
 
-  return group('trends', 'Over time', 'Seasons and month by month', trends)
-    + group('overview', 'Overview', 'Your totals, species and time in the water', overview)
-    + group('sessions', 'Sessions', 'How each trip went', sessionsHtml)
+  // The one-sentence answer to the question Insights gets opened for in the
+  // first place ("what's actually working for me") - before any accordion,
+  // not buried as just one more row among twenty. Checked across rig,
+  // venue and bait rather than rig alone, and picks whichever one clears
+  // your overall catch rate by the biggest margin - the same "is this
+  // actually a real pattern, not noise" bar the pressure-trend advice
+  // above already uses (a 15-point gap), so a venue that's genuinely
+  // carrying you (as venue often does early on) isn't buried under a
+  // rig difference that's really just a coin flip at this sample size.
+  (function(){
+    const overallRate = catches.length ? caught.length / catches.length : 0;
+    const bestOf = rows=>{
+      const qualifying = rows.filter(r=> r.total >= 5);
+      if(!qualifying.length) return null;
+      return qualifying.slice().sort((a,b)=> (b.count/b.total) - (a.count/a.total) || b.count - a.count)[0];
+    };
+    const rigRows = groupStats(c=>[rigKey(c)], {casts:true, labels:rigLabels});
+    const candidates = [
+      {dim:'rig', row: bestOf(rigRows)},
+      {dim:'venue', row: bestOf(venueRows)},
+      {dim:'bait', row: bestOf(baitRows)}
+    ].filter(c=> c.row);
+    if(!candidates.length) return;
+    candidates.forEach(c=> c.gap = (c.row.count / c.row.total) - overallRate);
+    candidates.sort((a,b)=> b.gap - a.gap);
+    const top = candidates[0];
+    if(top.gap < 0.15) return;
+    const rate = Math.round(top.row.count / top.row.total * 100);
+    overview = `<div class="profile-catch" style="margin-bottom:10px;">
+      <div class="pc-head">Your best ${top.dim} so far: ${escapeHtml(top.row.label)}</div>
+      <div class="pc-line muted">${top.row.count} fish from ${top.row.total} cast${top.row.total===1?'':'s'} (${rate}%)</div>
+    </div>` + overview;
+  })();
+
+  return group('overview', 'Overview', 'Your totals, species and time in the water', overview)
     + group('works', 'What works', 'Rigs, hooks, baits and feed', works)
-    + group('where', 'When and where', 'Time of day, moon, pressure, distance, rods, spots, venues and pegs', where);
+    + group('where', 'When and where', 'Time of day, moon, pressure, distance, rods, spots, venues and pegs', where)
+    + group('sessions', 'Sessions', 'How each trip went', sessionsHtml)
+    + group('trends', 'Over time', 'Seasons and month by month', trends);
 }
 
 // ---------- Badges ----------
