@@ -431,6 +431,13 @@
   .ins-tag{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--dam);color:#fff;font-size:11px;font-weight:700;vertical-align:middle;}
   .ins-more{margin-top:6px;}
   .ins-more > summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--dam);padding:10px 0;min-height:44px;box-sizing:border-box;}
+  /* Sub-headers inside a group (so far just What works) that are themselves
+     clickable, so an angler can open just the one table they want */
+  details.ins-subsec > summary{cursor:pointer;list-style:none;position:relative;padding-right:18px;min-height:24px;display:flex;align-items:center;}
+  details.ins-subsec > summary::-webkit-details-marker{display:none;}
+  details.ins-subsec > summary::after{content:'';position:absolute;right:2px;top:50%;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-70%) rotate(45deg);}
+  details.ins-subsec[open] > summary::after{transform:translateY(-30%) rotate(-135deg);}
+  details.ins-subsec:not([open]) > summary{margin-bottom:0;}
 
   .catch-toggle{display:flex;gap:8px;margin-bottom:12px;}
   /* Fish and Scale each get their own boxed group so the two photo slots
@@ -10368,18 +10375,38 @@ function buildInsightsHtml(catches, venues, sessions){
   }
 
   // Hidden entirely when there's nothing to show — a page full of "no X
-  // yet" messages for someone still building history reads as broken
-  function statTable(title, rows, note, limit){
+  // yet" messages for someone still building history reads as broken.
+  // Collapsible sub-headers (so far just "What works") remember their own
+  // open/closed state per-browser, same as the outer groups do.
+  function statTable(title, rows, note, limit, collapsible){
     if(rows.length === 0) return '';
     limit = limit || 8;
-    let t = `<div class="ins-sec"><p class="sub-heading">${escapeHtml(title)}</p>`;
-    if(note) t += `<p class="ins-sub" style="margin:-4px 0 8px;">${note}</p>`;
-    t += `<ul class="ins-list">` + rows.slice(0, limit).map(r=>rowHtml(r)).join('') + `</ul>`;
-    if(rows.length > limit){
-      t += `<details class="ins-more"><summary>Show ${rows.length - limit} more</summary><ul class="ins-list">` +
-        rows.slice(limit).map(r=>rowHtml(r)).join('') + `</ul></details>`;
-    }
-    return t + '</div>';
+    const body = (note ? `<p class="ins-sub" style="margin:-4px 0 8px;">${note}</p>` : '')
+      + `<ul class="ins-list">` + rows.slice(0, limit).map(r=>rowHtml(r)).join('') + `</ul>`
+      + (rows.length > limit
+        ? `<details class="ins-more"><summary>Show ${rows.length - limit} more</summary><ul class="ins-list">` +
+          rows.slice(limit).map(r=>rowHtml(r)).join('') + `</ul></details>`
+        : '');
+    if(!collapsible) return `<div class="ins-sec"><p class="sub-heading">${escapeHtml(title)}</p>${body}</div>`;
+    const key = statSectionKey(title);
+    return `<details class="ins-sec ins-subsec" data-stat-key="${key}"${statSectionOpen(key) ? ' open' : ''}>
+      <summary class="sub-heading">${escapeHtml(title)}</summary>${body}</details>`;
+  }
+  function statSectionKey(title){
+    return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  // Rigs and Baits are the two anglers check most, so those start open;
+  // everything else starts closed until picked
+  const STAT_SECTION_DEFAULT_OPEN = {rigs: true, 'baits-and-dips': true};
+  function statSectionOpen(key){
+    try{
+      const v = localStorage.getItem('pk_fishing_stat_' + key);
+      if(v !== null) return v === '1';
+    }catch(e){}
+    return !!STAT_SECTION_DEFAULT_OPEN[key];
+  }
+  function saveStatSectionOpen(key, open){
+    try{ localStorage.setItem('pk_fishing_stat_' + key, open ? '1' : '0'); }catch(e){}
   }
 
   function group(key, title, hint, inner){
@@ -10511,7 +10538,7 @@ function buildInsightsHtml(catches, venues, sessions){
 
   // ===== What works =====
   let works = '';
-  works += statTable('Rigs', groupStats(c=>[rigKey(c)], {casts:true, labels:rigLabels}));
+  works += statTable('Rigs', groupStats(c=>[rigKey(c)], {casts:true, labels:rigLabels}), null, null, true);
 
   // Only meaningful once hooks are named — "Top vs Bottom" tells you
   // something, "Hook 1 vs Hook 2" doesn't. Names are looked up live, so
@@ -10533,7 +10560,7 @@ function buildInsightsHtml(catches, venues, sessions){
     // "Top" on one rig isn't "Top" on another
     const rk = rigKey(c);
     return [rk ? `${rigLabels[rk]} — ${label}` : label];
-  }));
+  }), null, null, true);
 
   // A fish is credited to the bait on the hook that caught it, but a cast
   // counts for every bait that was out there on any hook, blank casts included
@@ -10542,9 +10569,10 @@ function buildInsightsHtml(catches, venues, sessions){
     for(let n=1; n<=MAX_HOOKS; n++) out.push(...contentItems(c['hook'+n]));
     return [...new Set(out)];
   };
+  // Kept as its own named row-set (not just inlined into the table call
+  // below) because the Overview headline also reads from it when bait is
+  // the strongest signal.
   const baitRows = groupStats(catchingBaits, {casts:true, castKeyFn:baitsOnAnyHook});
-  works += statTable('Baits on the hook that caught', baitRows,
-    'Casts count every bait that was on any hook, so a bait on a spare hook shares the casts but not the fish.');
   works += isPro() ? statTable('Rig + bait pairings', groupStats(c=>{
     const rk = rigKey(c);
     if(!rk) return [];
@@ -10553,10 +10581,15 @@ function buildInsightsHtml(catches, venues, sessions){
     const rk = rigKey(c);
     if(!rk) return [];
     return baitsOnAnyHook(c).map(b=> rigLabels[rk] + ' + ' + b);
-  }})) : insLocked('Rig + bait pairings');
+  }}), null, null, true) : insLocked('Rig + bait pairings');
 
   // Everything that was out there on a cast: bait on any hook plus whatever
-  // went in the PVA bag, mesh, stringer or bait boat
+  // went in the PVA bag, mesh, stringer or bait boat. This used to render as
+  // a second, near-identical table ("Most used baits and dips") right after
+  // the hook-only one above - same baits, almost the same numbers, no
+  // explanation of the one real difference between them. One table now:
+  // free accounts get the hook-only version, Pro gets the wider one in the
+  // same slot, instead of both appearing one after the other.
   const allBaitsOut = c=>{
     const out = baitsOnAnyHook(c);
     FEED_CONTENT_KEYS.forEach(k=> out.push(...contentItems(c[k])));
@@ -10565,8 +10598,8 @@ function buildInsightsHtml(catches, venues, sessions){
   if(isPro()){
     const usedRows = groupStats(catchingBaits, {casts:true, castKeyFn:allBaitsOut})
       .sort((a, b)=> b.total - a.total || b.count - a.count);
-    works += statTable('Most used baits and dips', usedRows,
-      'Ranked by how many casts they were out on, with the fish they caught.');
+    works += statTable('Baits and dips', usedRows,
+      'Counts every cast a bait was out on, whether on a hook or in the feed, with the fish it caught.', null, true);
 
     const usedNames = new Set();
     catches.forEach(c=> allBaitsOut(c).forEach(b=> usedNames.add(b.toLowerCase())));
@@ -10581,7 +10614,8 @@ function buildInsightsHtml(catches, venues, sessions){
         <p class="ins-sub">${shown.map(escapeHtml).join(', ')}${unused.length > shown.length ? ' and ' + (unused.length - shown.length) + ' more' : ''}</p></div>`;
     }
   }else{
-    works += insLocked('Most used baits and dips');
+    works += statTable('Baits and dips', baitRows,
+      'Casts count every bait that was on any hook, so a bait on a spare hook shares the casts but not the fish.', null, true);
   }
 
   // The delivery method is fixed by the rig's own design, so it's read off
@@ -10590,12 +10624,12 @@ function buildInsightsHtml(catches, venues, sessions){
     if(c.rigId && allRigFeedMethodsById[c.rigId]) return allRigFeedMethodsById[c.rigId];
     if(!c.rig) return [];
     return allRigFeedMethods[c.rig] || [];
-  }, {casts:true}));
+  }, {casts:true}), null, null, true);
 
   // What was actually loaded into each feed method
-  works += statTable('In the bom', groupStats(c=>contentItems(c.bom), {casts:true}));
+  works += statTable('In the bom', groupStats(c=>contentItems(c.bom), {casts:true}), null, null, true);
   FEED_CONTENT_FIELDS.forEach(f=>{
-    works += statTable(f.label, groupStats(c=>contentItems(c[f.key]), {casts:true}));
+    works += statTable(f.label, groupStats(c=>contentItems(c[f.key]), {casts:true}), null, null, true);
   });
 
   // ===== When and where =====
@@ -11260,6 +11294,9 @@ async function openInsights(){
       if(!deskOn) saveInsightsGroupOpen(d.dataset.insGroup, d.open);
       if(d.open && d.dataset.insGroup === 'where') buildMapOnce();
     });
+  });
+  body.querySelectorAll('details[data-stat-key]').forEach(d=>{
+    d.addEventListener('toggle', ()=> saveStatSectionOpen(d.dataset.statKey, d.open));
   });
   const whereGroup = body.querySelector('details[data-ins-group="where"]');
   if(whereGroup && whereGroup.open) buildMapOnce();
