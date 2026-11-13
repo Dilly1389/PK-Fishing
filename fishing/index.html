@@ -14188,7 +14188,14 @@ document.getElementById('photo-modal-x').addEventListener('click', ()=>{
 // per-dialog flag, so popstate only closes the topmost one when the photo
 // viewer is opened from inside an already-open profile.
 const modalHistoryStack = [];
+// true while WE are closing a dialog because the user pressed back (stops
+// the resulting close-listener from calling history.back() again)
 let suppressModalHistoryBack = false;
+// true while WE are calling history.back() ourselves to consume a dialog's
+// pushed state after it closed some other way (X button, Esc, tapping
+// outside) - without this, that call's own popstate event gets misread as
+// "the user pressed back" and closes the NEXT dialog down the stack too.
+let consumingOwnHistoryBack = false;
 function wireModalHistory(dialogEl, tag){
   const nativeShowModal = dialogEl.showModal.bind(dialogEl);
   dialogEl.showModal = function(){
@@ -14203,10 +14210,17 @@ function wireModalHistory(dialogEl, tag){
     const idx = modalHistoryStack.lastIndexOf(dialogEl);
     if(idx === -1) return;
     modalHistoryStack.splice(idx, 1);
-    if(!suppressModalHistoryBack) history.back();
+    if(!suppressModalHistoryBack){
+      consumingOwnHistoryBack = true;
+      history.back();
+    }
   });
 }
 window.addEventListener('popstate', ()=>{
+  if(consumingOwnHistoryBack){
+    consumingOwnHistoryBack = false;
+    return;
+  }
   const top = modalHistoryStack[modalHistoryStack.length - 1];
   if(!top) return;
   suppressModalHistoryBack = true;
