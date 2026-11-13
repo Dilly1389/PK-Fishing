@@ -923,9 +923,14 @@
   #desk-tackle-cats{display:none;}
   body.desk-mode .desk-only{display:block;}
   body.desk-mode #desk-tackle-cats{display:flex;}
-  body.desk-mode .ins-group > summary{display:none;}
-  body.desk-mode .ins-group{border:none;background:none;margin:0;}
-  body.desk-mode .ins-group-body{padding:0;}
+  /* Insights now uses the segmented bar (deskBuildInsightsBar) on every
+     viewport, not just desktop, so its own groups' native accordion chrome
+     is hidden everywhere too - the Trip Plan modal's identical .ins-group
+     markup stays protected by the higher-specificity ID-scoped rules above,
+     regardless of this no longer being desk-mode-only. */
+  .ins-group > summary{display:none;}
+  .ins-group{border:none;background:none;margin:0;}
+  .ins-group-body{padding:0;}
   body.desk-mode #panel-tackle .photo-camera-btn{display:none;}
   body.desk-mode .field:has(> #tackle-filter-category){display:none;}
   body.desk-mode #add-tackle-body,body.desk-mode #tackle-list-body{display:block !important;}
@@ -10756,21 +10761,16 @@ function buildInsightsHtml(catches, venues, sessions){
         'Taken from the note you type on each rod, like "margin" or "near the reeds".')
     : insLocked('Rod spots');
 
-  where += pillPanelsHtml('where', [
-    {key:'time', label:'Time of Day', html: timeOfDayHtml},
-    {key:'moon', label:'Moon Phase', html: moonPhaseHtml},
-    {key:'pressure', label:'Pressure', html: pressureHtml},
-    {key:'distance', label:'Cast Distance', html: castDistanceHtml},
-    {key:'rods', label:'Rods', html: rodsHtml},
-    {key:'spots', label:'Rod Spots', html: rodSpotsHtml}
-  ]);
-
-  // Venues — private to you, never shown anywhere else in the app
+  // Venues — private to you, never shown anywhere else in the app. Bundled
+  // into one "Venues" pill with Pegs and stands and the map, same as
+  // Pressure/Feed Methods bundle their own related tables - all three are
+  // "where", not three separate questions.
+  let venuesHtml = '';
   const venueNames = {};
   (venues||[]).forEach(v=>{ venueNames[v.id] = v.name; });
   const venueRows = groupStats(c=> c.venueId && venueNames[c.venueId] ? [c.venueId] : [], {casts:true, labels:venueNames});
   if(venueRows.length){
-    where += `<div class="ins-sec"><p class="sub-heading">Venues</p>
+    venuesHtml += `<div class="ins-sec"><p class="sub-heading">Venues</p>
       <p class="ins-sub" style="margin:-4px 0 8px;">Private to you — venues are never shown on the leaderboard or feed.</p><ul class="ins-list">`;
     venueRows.forEach(r=>{
       const venueObj = (venues||[]).find(v=>v.id === r.key);
@@ -10793,9 +10793,9 @@ function buildInsightsHtml(catches, venues, sessions){
           <button type="button" class="mini-btn danger" data-delete-venue="${venueObj.id}">Remove</button>
         </div>`;
       }
-      where += rowHtml(r, extra);
+      venuesHtml += rowHtml(r, extra);
     });
-    where += '</ul></div>';
+    venuesHtml += '</ul></div>';
   }
   // Pegs / stands at each venue: which spot has actually produced, for
   // planning the next trip. Judged per session, since the peg belongs to the
@@ -10820,15 +10820,15 @@ function buildInsightsHtml(catches, venues, sessions){
     return {label: v.label, pegs, sessions: pegs.reduce((n,p)=>n+p.sessions,0)};
   }).sort((a,b)=> b.sessions - a.sessions);
   if(pegVenueList.length && !isPro()){
-    where += insLocked('Pegs and stands');
+    venuesHtml += insLocked('Pegs and stands');
   }else if(pegVenueList.length){
-    where += `<div class="ins-sec"><p class="sub-heading">Pegs and stands</p>
+    venuesHtml += `<div class="ins-sec"><p class="sub-heading">Pegs and stands</p>
       <p class="ins-sub" style="margin:-4px 0 8px;">Fish per session on each peg, for planning your next trip. A peg you've only fished once doesn't tell you much yet.</p>`;
     pegVenueList.forEach(v=>{
-      where += `<p class="ins-sub" style="margin:10px 0 4px;color:var(--ink);"><b>${escapeHtml(v.label)}</b></p><ul class="ins-list">`;
+      venuesHtml += `<p class="ins-sub" style="margin:10px 0 4px;color:var(--ink);"><b>${escapeHtml(v.label)}</b></p><ul class="ins-list">`;
       v.pegs.forEach((p, i)=>{
         const best = i === 0 && v.pegs.length > 1 && p.perSession > 0;
-        where += `<li class="ins-row"><div class="ins-row-top">
+        venuesHtml += `<li class="ins-row"><div class="ins-row-top">
           <div class="ins-main">
             <b>${/^(peg|stand)\b/i.test(p.label) ? '' : 'Peg '}${escapeHtml(p.label)}</b>${best ? ' <span class="ins-tag">Best so far</span>' : ''}
             <div class="ins-sub">${p.sessions} session${p.sessions===1?'':'s'} · ${p.fish} fish${p.biggest ? ' · biggest ' + formatWeight(p.biggest) : ''}</div>
@@ -10836,21 +10836,33 @@ function buildInsightsHtml(catches, venues, sessions){
           <div class="ins-side"><b>${(Math.round(p.perSession*10)/10)} per session</b>${p.weight ? `<div class="ins-sub">${formatWeight(p.weight)} total</div>` : ''}</div>
         </div></li>`;
       });
-      where += '</ul>';
+      venuesHtml += '</ul>';
     });
-    where += '</div>';
+    venuesHtml += '</div>';
   }
 
   // A private map of your own venues — only waters with real coordinates
-  // (some are name-only if GPS was denied or unavailable)
+  // (some are name-only if GPS was denied or unavailable). Sits inside the
+  // Venues pill panel now, so it's only built once that pill is actually
+  // visible - see the buildMapOnce() wiring below.
   if((venues||[]).some(v=> v.latitude != null && v.longitude != null)){
-    where += `<div style="margin-top:14px;">
+    venuesHtml += `<div style="margin-top:14px;">
       <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink);margin-bottom:6px;">
         <input type="checkbox" id="venue-map-heat-toggle"> Show hot spots (glow by how much you've caught there)
       </label>
       <div id="venue-map" style="height:260px;border-radius:10px;overflow:hidden;border:1px solid var(--line);"></div>
     </div>`;
   }
+
+  where += pillPanelsHtml('where', [
+    {key:'time', label:'Time of Day', html: timeOfDayHtml},
+    {key:'moon', label:'Moon Phase', html: moonPhaseHtml},
+    {key:'pressure', label:'Pressure', html: pressureHtml},
+    {key:'distance', label:'Cast Distance', html: castDistanceHtml},
+    {key:'rods', label:'Rods', html: rodsHtml},
+    {key:'spots', label:'Rod Spots', html: rodSpotsHtml},
+    {key:'venues', label:'Venues', html: venuesHtml}
+  ]);
 
   // ===== Over time =====
   // Seasons are the southern hemisphere's, and every catch has a date even
@@ -11321,11 +11333,31 @@ async function openInsights(){
     mapBuilt = true;
     renderVenueMap(venues, myCatches);
   };
-  if(deskOn) deskBuildInsightsBar(body);
+  // The map can only size itself while its pill panel is actually visible,
+  // not just while the "When and where" group is open - it now lives inside
+  // the Venues pill, which isn't necessarily the one showing.
+  const venuesPanelVisible = ()=>{
+    const p = body.querySelector('[data-pill-panel="venues"][data-pill-group="where"]');
+    return !!p && p.style.display !== 'none';
+  };
+  const activateWherePill = key=>{
+    const bar = body.querySelector('.ins-pillbar[data-pill-group="where"]');
+    const btn = bar && bar.querySelector('[data-pill-key="'+key+'"]');
+    if(!bar || !btn) return false;
+    bar.querySelectorAll('[data-pill-key]').forEach(b=> b.setAttribute('aria-selected', String(b===btn)));
+    bar.parentElement.querySelectorAll('[data-pill-panel][data-pill-group="where"]').forEach(p=>{
+      p.style.display = (p.dataset.pillPanel === key) ? '' : 'none';
+    });
+    try{ localStorage.setItem('pk_fishing_pill_where', key); }catch(e){}
+    return true;
+  };
+  // Same segmented bar as desktop, on every viewport now: one section
+  // picked at a time instead of five stacked accordion cards.
+  deskBuildInsightsBar(body);
   body.querySelectorAll('details[data-ins-group]').forEach(d=>{
     d.addEventListener('toggle', ()=>{
       if(!deskOn) saveInsightsGroupOpen(d.dataset.insGroup, d.open);
-      if(d.open && d.dataset.insGroup === 'where') buildMapOnce();
+      if(d.open && d.dataset.insGroup === 'where' && venuesPanelVisible()) buildMapOnce();
     });
   });
   body.querySelectorAll('[data-pill-key]').forEach(btn=>{
@@ -11338,21 +11370,24 @@ async function openInsights(){
         p.style.display = (p.dataset.pillPanel === key) ? '' : 'none';
       });
       try{ localStorage.setItem('pk_fishing_pill_' + groupKey, key); }catch(e){}
+      if(groupKey === 'where' && key === 'venues') buildMapOnce();
     });
   });
   const whereGroup = body.querySelector('details[data-ins-group="where"]');
-  if(whereGroup && whereGroup.open) buildMapOnce();
+  if(whereGroup && whereGroup.open && venuesPanelVisible()) buildMapOnce();
   if(pendingInsightsSession){
     const sid = pendingInsightsSession;
     pendingInsightsSession = null;
     focusInsightsSession(body, sid);
   }
   // Jump from Home's "See my venues map" button straight to the map,
-  // opening its group and building it if it wasn't already.
+  // opening its group, selecting the Venues pill and building it if it
+  // wasn't already.
   if(pendingInsightsVenueMap){
     pendingInsightsVenueMap = false;
     if(whereGroup){
       whereGroup.open = true;
+      activateWherePill('venues');
       buildMapOnce();
       setTimeout(()=>{
         const mapEl = document.getElementById('venue-map');
