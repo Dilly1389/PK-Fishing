@@ -11228,6 +11228,20 @@ async function checkAndAwardBadges(){
       loadBadgesFor(myId),
       computeBadgeStats(myId)
     ]);
+    // computeBadgeStats reading zero catches while badges already exist on
+    // record is almost always loadPerson having come back empty from a
+    // transient fetch hiccup (a network blip, or the session token not
+    // fully attached yet right after sign-in) - not someone genuinely
+    // losing every catch in the seconds between two checks. Trusting a
+    // zero here deleted real, long-earned badges, which then got
+    // re-created on the next successful check with today's date as their
+    // earned_at instead of the original. Bail out rather than award or
+    // drop anything this run; the next check (next load, next catch) will
+    // have real data to work from.
+    if(existing.length && stats.catchCount === 0 && stats.blankCount === 0){
+      console.warn('checkAndAwardBadges: stats came back empty with existing badges on record - skipping this run');
+      return;
+    }
     const byKey = {};
     existing.forEach(b=>{ byKey[b.badge_key] = b; });
     let changed = 0;
