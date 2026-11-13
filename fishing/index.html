@@ -1418,6 +1418,8 @@
             <label class="check-row"><input type="checkbox" id="notify-pref-competition"> Competition updates</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-friend_catch"> Catches from people I follow</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-tackle_share"> Tackle sharing</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-tackle_restock"> Low tackle stock</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-tackle_nudge"> Mid-session bait/dip reminder</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-rod-alert"> Time in water alert</label>
             <div class="field" id="rod-alert-minutes-wrap" style="display:none;margin-top:8px;">
               <label>Alert me when a rod has been in the water for</label>
@@ -2056,6 +2058,7 @@
               <option value="">Anyone</option>
             </select>
           </div>
+          <div id="tackle-restock-banner" class="profile-catch" style="display:none;margin-bottom:10px;"></div>
           <div id="tackle-active-banner" class="profile-catch" style="display:none;margin-bottom:10px;"></div>
           <div id="tackle-list"><div class="empty">No tackle added yet — add your rods, reels, bait and dips above.</div></div>
           </div>
@@ -5695,6 +5698,69 @@ function renderTackleActiveBanner(){
   document.getElementById('tackle-choose-btn').addEventListener('click', openTackleChoice);
   document.getElementById('tackle-banner-upgrade').addEventListener('click', ()=> openUpgrade('Pro keeps all your tackle in use.'));
 }
+// Bait and dips at 20% or under — a quick restock reminder, with a one-tap
+// way to mark them topped up again once you've bought more.
+const RESTOCK_THRESHOLD = 20;
+// Same low-stock list as the Tackle Box banner, but for a trip you're
+// planning. Covers your own items plus anything shared with you that
+// you've ticked "Use" — you can't restock someone else's bait yourself,
+// but it's still worth knowing before the trip, so it's tagged by owner.
+function renderPlanRestockHtml(){
+  const myUserId = isSignedIn() ? session.user.id : null;
+  const low = activeTackleItems()
+    .filter(it=> !it.inactive && (it.category === 'Bait' || it.category === 'Dips'))
+    .filter(it=> (it.fill_level ?? 100) <= RESTOCK_THRESHOLD)
+    .sort((a,b)=> (a.fill_level ?? 100) - (b.fill_level ?? 100));
+  if(!low.length) return '';
+  return '<div class="profile-catch" style="margin-bottom:14px;">'
+    + '<div class="pc-head">Need to restock before this trip</div>'
+    + '<ul style="margin:4px 0 0;padding-left:18px;color:var(--muted);font-size:12.5px;">'
+    + low.map(it=>{
+        const isMine = it.owner_user_id === myUserId;
+        let ownerTag = '';
+        if(!isMine){
+          const owner = people.find(p=>p.user_id===it.owner_user_id);
+          ownerTag = ' <span class="ins-sub">(shared by ' + escapeHtml(owner ? owner.name : 'a friend') + ')</span>';
+        }
+        return '<li><strong style="color:var(--ink);">' + escapeHtml(it.name) + '</strong>' + ownerTag + ' — '
+          + (it.fill_level === 0 ? 'empty' : it.fill_level + '% left') + '</li>';
+      }).join('')
+    + '</ul></div>';
+}
+function renderTackleRestockBanner(){
+  const el = document.getElementById('tackle-restock-banner');
+  if(!el) return;
+  const low = ownTackleItems()
+    .filter(it=> !it.inactive && (it.category === 'Bait' || it.category === 'Dips'))
+    .filter(it=> (it.fill_level ?? 100) <= RESTOCK_THRESHOLD)
+    .sort((a,b)=> (a.fill_level ?? 100) - (b.fill_level ?? 100));
+  if(!low.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = '<div class="pc-head">Running low</div>'
+    + '<ul style="margin:4px 0 8px;padding-left:18px;color:var(--muted);font-size:12.5px;">'
+    + low.map(it=> '<li><strong style="color:var(--ink);">' + escapeHtml(it.name) + '</strong> — '
+      + (it.fill_level === 0 ? 'empty' : it.fill_level + '% left')
+      + ' <button type="button" class="mini-btn" data-restock="' + it.id + '" style="margin-left:6px;padding:2px 8px;font-size:11px;">Restocked</button></li>').join('')
+    + '</ul>'
+    + '<div class="pc-line muted">Worth picking up before your next trip.</div>';
+  el.querySelectorAll('[data-restock]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const id = btn.dataset.restock;
+      btn.disabled = true;
+      try{
+        await sbPatch('tackle_items', 'id=eq.'+id, {fill_level: 100});
+        const cached = tackleItemsCache.find(x=>x.id===id);
+        if(cached) cached.fill_level = 100;
+        renderTackleRestockBanner();
+        renderTackleList();
+      }catch(e){
+        console.error(e);
+        alert('Could not save: ' + (e.message || 'unknown error'));
+        btn.disabled = false;
+      }
+    });
+  });
+}
 // Free accounts: true when these shared items may be ticked "Use"; otherwise explains why not
 function canUseMoreShared(newItems){
   if(isPro() || !isSignedIn()) return true;
@@ -6091,10 +6157,10 @@ function urlBase64ToUint8Array(base64String){
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
-// The 11 notifications.type values collapse into these 6 user-facing
+// The 13 notifications.type values collapse into these 8 user-facing
 // toggles server-side (see TYPE_TO_PREFERENCE in send-notification-push) -
 // kept in sync with that mapping by hand, since they live in different runtimes.
-const NOTIFICATION_PREF_KEYS = ['badge','follow','social','competition','friend_catch','tackle_share'];
+const NOTIFICATION_PREF_KEYS = ['badge','follow','social','competition','friend_catch','tackle_share','tackle_restock','tackle_nudge'];
 
 async function loadAndRenderNotificationPrefs(){
   const enableBtn = document.getElementById('enable-push-btn');
@@ -6138,7 +6204,7 @@ async function loadAndRenderNotificationPrefs(){
 
   if(subscription && isSignedIn()){
     try{
-      const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_tackle_share,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
+      const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_tackle_share,notify_push_tackle_restock,notify_push_tackle_nudge,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
       const f = rows[0];
       if(f){
         NOTIFICATION_PREF_KEYS.forEach(key=>{
@@ -7262,6 +7328,7 @@ async function renderTackleList(){
   const useCounts = await loadTackleUseCounts();
   tackleUseCountsCache = useCounts;
   const usedCount = (it)=> useCounts.get(String(it.name || '').trim().toLowerCase()) || 0;
+  renderTackleRestockBanner();
   renderTackleActiveBanner();
   if(tackleNeedsChoice() && !tackleChoicePrompted){
     tackleChoicePrompted = true;
@@ -7542,6 +7609,7 @@ await loadTackleCategoryOptions();
         await sbPatch('tackle_items', 'id=eq.'+id, {fill_level: v});
         const cached = tackleItemsCache.find(x=>x.id===id);
         if(cached) cached.fill_level = v;
+        renderTackleRestockBanner();
       }catch(e){
         console.error(e);
         alert('Could not save: ' + (e.message || 'unknown error'));
@@ -9103,6 +9171,20 @@ function sessionCompleteBodyHtml(venueName, durationMs, caughtCount, castCount, 
     <div class="pc-line" style="margin-top:8px;">${escapeHtml(statLine)}</div>
     ${pbLine}`;
 }
+// Only worth asking when there's actually something of theirs to update -
+// skipped entirely for someone with no bait/dips in their tackle box, same
+// "hidden when there's nothing to show" rule as the rest of this app.
+async function sessionConsumablesReminderHtml(){
+  if(!isSignedIn()) return '';
+  try{
+    const rows = await sbGet('tackle_items?select=id&owner_user_id=eq.'+session.user.id+'&category=in.(Bait,Dips)&inactive=eq.false&limit=1');
+    if(!rows.length) return '';
+  }catch(e){ console.error(e); return ''; }
+  return `<div class="pc-line" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px;">
+    <div class="ins-sub" style="margin-bottom:6px;">Used some bait or dip today? Keep your fill levels up to date so low-stock alerts stay useful.</div>
+    <button type="button" class="mini-btn" id="session-complete-restock-btn">Update bait/dip levels</button>
+  </div>`;
+}
 async function showSessionCompleteModal(session, durationMs){
   const body = document.getElementById('session-complete-body');
   body.innerHTML = '<div class="empty">Loading...</div>';
@@ -9126,6 +9208,15 @@ async function showSessionCompleteModal(session, durationMs){
     sessionCompleteData = {session, entries, durationMs, bestCatch, isPB};
     body.innerHTML = sessionCompleteBodyHtml(session.venue_name, durationMs, caughtEntries.length, entries.length, bestCatch, isPB);
     if(entries.length) document.getElementById('session-complete-share-btn').style.display = 'inline-block';
+    const reminderHtml = await sessionConsumablesReminderHtml();
+    if(reminderHtml){
+      body.insertAdjacentHTML('beforeend', reminderHtml);
+      const restockBtn = document.getElementById('session-complete-restock-btn');
+      if(restockBtn) restockBtn.addEventListener('click', ()=>{
+        document.getElementById('session-complete-modal').close();
+        switchToTab('tackle');
+      });
+    }
   }catch(e){
     console.error('showSessionCompleteModal failed', e);
     body.innerHTML = '<div class="empty">Session ended. Could not load the summary.</div>';
@@ -9638,6 +9729,7 @@ async function openPlanDetail(planId){
       + '</div><div class="status" id="plan-detail-date-status"></div></div>'
     + (hasCoords ? '<div id="plan-detail-map" style="height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;"></div>' : '')
     + renderPlanRecapHtml(recap) + forecastHtml
+    + renderPlanRestockHtml()
     + '<details class="ins-group" data-plan-group="tackle" open><summary><span class="ins-group-title">Tackle box</span></summary>'
       + '<div class="ins-group-body">' + renderPlanChecklistHtml(items, ticks) + '</div></details>'
     + '<div id="plan-kit-body">' + renderKitSectionsHtml(plan, kitRows) + '</div>';
