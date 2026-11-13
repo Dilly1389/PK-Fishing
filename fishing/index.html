@@ -431,13 +431,15 @@
   .ins-tag{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--dam);color:#fff;font-size:11px;font-weight:700;vertical-align:middle;}
   .ins-more{margin-top:6px;}
   .ins-more > summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--dam);padding:10px 0;min-height:44px;box-sizing:border-box;}
-  /* Sub-headers inside a group (so far just What works) that are themselves
-     clickable, so an angler can open just the one table they want */
-  details.ins-subsec > summary{cursor:pointer;list-style:none;position:relative;padding-right:18px;min-height:24px;display:flex;align-items:center;}
-  details.ins-subsec > summary::-webkit-details-marker{display:none;}
-  details.ins-subsec > summary::after{content:'';position:absolute;right:2px;top:50%;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-70%) rotate(45deg);}
-  details.ins-subsec[open] > summary::after{transform:translateY(-30%) rotate(-135deg);}
-  details.ins-subsec:not([open]) > summary{margin-bottom:0;}
+  /* "What works" picks one pill at a time rather than showing every table */
+  .ins-pillbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;}
+  .ins-pill{
+    padding:7px 14px;border-radius:999px;border:1.5px solid var(--line);
+    background:var(--card-bg);color:var(--muted);font-weight:700;font-size:13px;
+    font-family:inherit;cursor:pointer;min-height:36px;
+  }
+  .ins-pill[aria-selected="true"]{background:var(--dam);border-color:var(--dam);color:#fff;}
+  .ins-pill-panel > .ins-sec:first-child{margin-top:8px;}
 
   .catch-toggle{display:flex;gap:8px;margin-bottom:12px;}
   /* Fish and Scale each get their own boxed group so the two photo slots
@@ -10376,37 +10378,33 @@ function buildInsightsHtml(catches, venues, sessions){
 
   // Hidden entirely when there's nothing to show — a page full of "no X
   // yet" messages for someone still building history reads as broken.
-  // Collapsible sub-headers (so far just "What works") remember their own
-  // open/closed state per-browser, same as the outer groups do.
-  function statTable(title, rows, note, limit, collapsible){
+  function statTable(title, rows, note, limit){
     if(rows.length === 0) return '';
     limit = limit || 8;
-    const body = (note ? `<p class="ins-sub" style="margin:-4px 0 8px;">${note}</p>` : '')
-      + `<ul class="ins-list">` + rows.slice(0, limit).map(r=>rowHtml(r)).join('') + `</ul>`
-      + (rows.length > limit
-        ? `<details class="ins-more"><summary>Show ${rows.length - limit} more</summary><ul class="ins-list">` +
-          rows.slice(limit).map(r=>rowHtml(r)).join('') + `</ul></details>`
-        : '');
-    if(!collapsible) return `<div class="ins-sec"><p class="sub-heading">${escapeHtml(title)}</p>${body}</div>`;
-    const key = statSectionKey(title);
-    return `<details class="ins-sec ins-subsec" data-stat-key="${key}"${statSectionOpen(key) ? ' open' : ''}>
-      <summary class="sub-heading">${escapeHtml(title)}</summary>${body}</details>`;
+    let t = `<div class="ins-sec"><p class="sub-heading">${escapeHtml(title)}</p>`;
+    if(note) t += `<p class="ins-sub" style="margin:-4px 0 8px;">${note}</p>`;
+    t += `<ul class="ins-list">` + rows.slice(0, limit).map(r=>rowHtml(r)).join('') + `</ul>`;
+    if(rows.length > limit){
+      t += `<details class="ins-more"><summary>Show ${rows.length - limit} more</summary><ul class="ins-list">` +
+        rows.slice(limit).map(r=>rowHtml(r)).join('') + `</ul></details>`;
+    }
+    return t + '</div>';
   }
-  function statSectionKey(title){
-    return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  }
-  // Rigs and Baits are the two anglers check most, so those start open;
-  // everything else starts closed until picked
-  const STAT_SECTION_DEFAULT_OPEN = {rigs: true, 'baits-and-dips': true};
-  function statSectionOpen(key){
-    try{
-      const v = localStorage.getItem('pk_fishing_stat_' + key);
-      if(v !== null) return v === '1';
-    }catch(e){}
-    return !!STAT_SECTION_DEFAULT_OPEN[key];
-  }
-  function saveStatSectionOpen(key, open){
-    try{ localStorage.setItem('pk_fishing_stat_' + key, open ? '1' : '0'); }catch(e){}
+  // "What works" picks one of these pills at a time instead of showing
+  // every table at once; remembers the last pill picked, per browser.
+  function worksPillsHtml(panels){
+    const present = panels.filter(p=> p.html && p.html.trim());
+    if(!present.length) return '';
+    let active = null;
+    try{ active = localStorage.getItem('pk_fishing_works_pill'); }catch(e){}
+    if(!present.some(p=> p.key === active)) active = present[0].key;
+    const bar = present.map(p=>
+      `<button type="button" class="ins-pill"${p.key===active?' aria-selected="true"':''} data-works-pill="${p.key}">${escapeHtml(p.label)}</button>`
+    ).join('');
+    const panelsHtml = present.map(p=>
+      `<div class="ins-pill-panel" data-works-panel="${p.key}"${p.key===active?'':' style="display:none;"'}>${p.html}</div>`
+    ).join('');
+    return `<div class="ins-pillbar" role="tablist">${bar}</div>${panelsHtml}`;
   }
 
   function group(key, title, hint, inner){
@@ -10537,13 +10535,20 @@ function buildInsightsHtml(catches, venues, sessions){
   overview += statTable('Species', groupStats(c=>[c.type]));
 
   // ===== What works =====
+  // Five pills - Rigs, Hooks, Rig + bait pairings, Baits and dips, Feed
+  // methods - one shown at a time instead of a long scroll of tables.
+  // Feed methods, the bom contents and every other feed-content field
+  // (PVA bag, stringer, etc.) all stay bundled into that one Feed methods
+  // pill rather than each getting its own - they're all "what went in
+  // the water", not separate questions anglers ask one at a time.
   let works = '';
-  works += statTable('Rigs', groupStats(c=>[rigKey(c)], {casts:true, labels:rigLabels}), null, null, true);
+
+  const rigsHtml = statTable('Rigs', groupStats(c=>[rigKey(c)], {casts:true, labels:rigLabels}));
 
   // Only meaningful once hooks are named — "Top vs Bottom" tells you
   // something, "Hook 1 vs Hook 2" doesn't. Names are looked up live, so
   // renaming a hook updates past catches too.
-  works +=statTable('Hooks', groupStats(c=>{
+  const hooksHtml = statTable('Hooks', groupStats(c=>{
     const hookMatch = /Hook (\d+)/.exec(c.hook||'');
     if(!hookMatch) return [];
     const n = parseInt(hookMatch[1], 10);
@@ -10560,7 +10565,7 @@ function buildInsightsHtml(catches, venues, sessions){
     // "Top" on one rig isn't "Top" on another
     const rk = rigKey(c);
     return [rk ? `${rigLabels[rk]} — ${label}` : label];
-  }), null, null, true);
+  }));
 
   // A fish is credited to the bait on the hook that caught it, but a cast
   // counts for every bait that was out there on any hook, blank casts included
@@ -10573,7 +10578,7 @@ function buildInsightsHtml(catches, venues, sessions){
   // below) because the Overview headline also reads from it when bait is
   // the strongest signal.
   const baitRows = groupStats(catchingBaits, {casts:true, castKeyFn:baitsOnAnyHook});
-  works += isPro() ? statTable('Rig + bait pairings', groupStats(c=>{
+  const rigBaitHtml = isPro() ? statTable('Rig + bait pairings', groupStats(c=>{
     const rk = rigKey(c);
     if(!rk) return [];
     return catchingBaits(c).map(b=> rigLabels[rk] + ' + ' + b);
@@ -10581,7 +10586,7 @@ function buildInsightsHtml(catches, venues, sessions){
     const rk = rigKey(c);
     if(!rk) return [];
     return baitsOnAnyHook(c).map(b=> rigLabels[rk] + ' + ' + b);
-  }}), null, null, true) : insLocked('Rig + bait pairings');
+  }})) : insLocked('Rig + bait pairings');
 
   // Everything that was out there on a cast: bait on any hook plus whatever
   // went in the PVA bag, mesh, stringer or bait boat. This used to render as
@@ -10595,11 +10600,12 @@ function buildInsightsHtml(catches, venues, sessions){
     FEED_CONTENT_KEYS.forEach(k=> out.push(...contentItems(c[k])));
     return [...new Set(out)];
   };
+  let baitsHtml = '';
   if(isPro()){
     const usedRows = groupStats(catchingBaits, {casts:true, castKeyFn:allBaitsOut})
       .sort((a, b)=> b.total - a.total || b.count - a.count);
-    works += statTable('Baits and dips', usedRows,
-      'Counts every cast a bait was out on, whether on a hook or in the feed, with the fish it caught.', null, true);
+    baitsHtml += statTable('Baits and dips', usedRows,
+      'Counts every cast a bait was out on, whether on a hook or in the feed, with the fish it caught.');
 
     const usedNames = new Set();
     catches.forEach(c=> allBaitsOut(c).forEach(b=> usedNames.add(b.toLowerCase())));
@@ -10609,28 +10615,37 @@ function buildInsightsHtml(catches, venues, sessions){
       .sort((a, b)=> a.localeCompare(b));
     if(unused.length){
       const shown = unused.slice(0, 40);
-      works += `<div class="ins-sec"><p class="sub-heading">Baits and dips you have not used</p>
+      baitsHtml += `<div class="ins-sec"><p class="sub-heading">Baits and dips you have not used</p>
         <p class="ins-sub" style="margin:-4px 0 8px;">In your tackle box, but not on any logged cast yet (${unused.length}). A good place to start when you want to clear space.</p>
         <p class="ins-sub">${shown.map(escapeHtml).join(', ')}${unused.length > shown.length ? ' and ' + (unused.length - shown.length) + ' more' : ''}</p></div>`;
     }
   }else{
-    works += statTable('Baits and dips', baitRows,
-      'Casts count every bait that was on any hook, so a bait on a spare hook shares the casts but not the fish.', null, true);
+    baitsHtml += statTable('Baits and dips', baitRows,
+      'Casts count every bait that was on any hook, so a bait on a spare hook shares the casts but not the fish.');
   }
 
   // The delivery method is fixed by the rig's own design, so it's read off
   // the rig that was fished rather than stored on each catch
-  works += statTable('Feed methods', groupStats(c=>{
+  let feedHtml = statTable('Feed methods', groupStats(c=>{
     if(c.rigId && allRigFeedMethodsById[c.rigId]) return allRigFeedMethodsById[c.rigId];
     if(!c.rig) return [];
     return allRigFeedMethods[c.rig] || [];
-  }, {casts:true}), null, null, true);
+  }, {casts:true}));
 
-  // What was actually loaded into each feed method
-  works += statTable('In the bom', groupStats(c=>contentItems(c.bom), {casts:true}), null, null, true);
+  // What was actually loaded into each feed method - stays in the same
+  // Feed methods pill rather than splitting into one pill per field
+  feedHtml += statTable('In the bom', groupStats(c=>contentItems(c.bom), {casts:true}));
   FEED_CONTENT_FIELDS.forEach(f=>{
-    works += statTable(f.label, groupStats(c=>contentItems(c[f.key]), {casts:true}), null, null, true);
+    feedHtml += statTable(f.label, groupStats(c=>contentItems(c[f.key]), {casts:true}));
   });
+
+  works += worksPillsHtml([
+    {key:'rigs', label:'Rigs', html: rigsHtml},
+    {key:'hooks', label:'Hooks', html: hooksHtml},
+    {key:'rigbait', label:'Rig + Bait Pairings', html: rigBaitHtml},
+    {key:'baits', label:'Baits and dips', html: baitsHtml},
+    {key:'feed', label:'Feed Methods', html: feedHtml}
+  ]);
 
   // ===== When and where =====
   let where = '';
@@ -11295,8 +11310,16 @@ async function openInsights(){
       if(d.open && d.dataset.insGroup === 'where') buildMapOnce();
     });
   });
-  body.querySelectorAll('details[data-stat-key]').forEach(d=>{
-    d.addEventListener('toggle', ()=> saveStatSectionOpen(d.dataset.statKey, d.open));
+  body.querySelectorAll('[data-works-pill]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const key = btn.dataset.worksPill;
+      const bar = btn.closest('.ins-pillbar');
+      bar.querySelectorAll('[data-works-pill]').forEach(b=> b.setAttribute('aria-selected', String(b===btn)));
+      bar.parentElement.querySelectorAll('[data-works-panel]').forEach(p=>{
+        p.style.display = (p.dataset.worksPanel === key) ? '' : 'none';
+      });
+      try{ localStorage.setItem('pk_fishing_works_pill', key); }catch(e){}
+    });
   });
   const whereGroup = body.querySelector('details[data-ins-group="where"]');
   if(whereGroup && whereGroup.open) buildMapOnce();
