@@ -614,12 +614,17 @@
   .lb-like-btn:disabled{cursor:default;opacity:0.55;}
   .lb-like-btn.liked:disabled{opacity:1;}
   .lb-like-count{font-size:12px;font-weight:700;color:var(--muted);}
-  .comment-item{border-bottom:1px solid var(--line);padding:10px 0;}
+  .comment-item{border-bottom:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:flex-start;}
   .comment-item:last-child{border-bottom:none;}
-  .comment-head{display:flex;justify-content:space-between;gap:8px;font-size:13px;margin-bottom:3px;}
-  .comment-head b{color:var(--ink);}
+  .comment-avatar-btn{background:none;border:none;padding:0;margin:0;flex-shrink:0;line-height:0;cursor:pointer;}
+  .comment-avatar-btn:disabled{cursor:default;}
+  .comment-body{flex:1;min-width:0;}
+  .comment-bubble{background:var(--paper);border-radius:14px;padding:7px 12px;display:inline-block;max-width:100%;}
+  .comment-name-btn{background:none;border:none;padding:0;margin:0 0 1px;display:block;font:inherit;font-weight:700;font-size:13px;color:var(--ink);cursor:pointer;}
+  .comment-name-btn:disabled{cursor:default;}
   .comment-time{color:var(--muted);font-size:11.5px;flex-shrink:0;}
   .comment-msg{font-size:13.5px;color:var(--ink);white-space:pre-wrap;word-break:break-word;}
+  .comment-foot{display:flex;gap:10px;align-items:center;margin-top:4px;padding-left:2px;}
 
   .empty{text-align:center;padding:20px 10px;color:var(--muted);font-size:13.5px;}
   .lekker-flash{
@@ -1466,7 +1471,7 @@
             <p class="sub-heading">What to notify me about</p>
             <label class="check-row"><input type="checkbox" id="notify-pref-badge"> Badges I earn</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-follow"> New followers</label>
-            <label class="check-row"><input type="checkbox" id="notify-pref-social"> Comments and likes on my catches</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-social"> Comments and Lekkers on my catches and badges</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-competition"> Competition updates</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-friend_catch"> Catches from people I follow</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-friend_session"> Sessions from people I follow</label>
@@ -2381,6 +2386,7 @@
     <h3 id="badge-detail-title" style="margin:0 0 6px;"></h3>
     <p class="pc-line muted" id="badge-detail-desc" style="margin-bottom:4px;"></p>
     <p class="pc-line muted" id="badge-detail-when"></p>
+    <button type="button" class="lb-like-btn" id="badge-detail-like-btn" style="display:none;margin:8px auto 0;" aria-label="Give this badge a Lekker"><span aria-hidden="true">👌</span><span class="lb-like-count" id="badge-detail-like-count">0</span></button>
     <div id="badge-detail-history" style="text-align:left;margin-top:10px;"></div>
     <button class="mini-btn" id="badge-detail-close" style="margin-top:12px;">Close</button>
   </div>
@@ -6190,6 +6196,10 @@ async function notifyFollow(followedFishermanId){
 async function notifyCatchLike(catchId){
   try{ await sbRpc('notify_catch_like', {p_catch_id: catchId}); }
   catch(e){ console.error('notify_catch_like failed', e); }
+}
+async function notifyBadgeLike(fishermanId, badgeKey, badgeName){
+  try{ await sbRpc('notify_badge_like', {p_fisherman_id: fishermanId, p_badge_key: badgeKey, p_badge_name: badgeName}); }
+  catch(e){ console.error('notify_badge_like failed', e); }
 }
 async function notifyCompetitionAdd(competitionId, fishermanId){
   try{ await sbRpc('notify_competition_add', {p_competition_id: competitionId, p_fisherman_id: fishermanId}); }
@@ -13320,6 +13330,31 @@ function openBadgeDetailFor(def, count, whenText, personId, isComp){
               : whenText.replace('First earned', 'Earned');
   document.getElementById('badge-detail-modal').showModal();
 
+  // A mate's badge can be given a Lekker, same as a catch - but not your own,
+  // and competition badges live in a separate table this counter doesn't cover
+  const likeBtn = document.getElementById('badge-detail-like-btn');
+  const likeCountEl = document.getElementById('badge-detail-like-count');
+  likeBtn.style.display = 'none';
+  likeBtn.classList.remove('liked');
+  likeBtn.setAttribute('aria-pressed', 'false');
+  likeBtn.onclick = null;
+  const myId = getMyFishermanId();
+  if(personId && personId !== myId && !isComp && isSignedIn()){
+    likeBtn.dataset.fishermanId = personId;
+    likeBtn.dataset.badgeKey = def.key;
+    likeBtn.dataset.badgeName = def.name;
+    likeCountEl.textContent = '0';
+    likeBtn.style.display = 'inline-flex';
+    likeBtn.onclick = ()=> toggleBadgeLike(likeBtn);
+    Promise.all([
+      sbGet('badges_earned?select=likes&fisherman_id=eq.'+personId+'&badge_key=eq.'+def.key),
+      sbGet('badge_likes?select=id&fisherman_id=eq.'+personId+'&badge_key=eq.'+def.key+'&user_id=eq.'+session.user.id)
+    ]).then(([countRows, likeRows])=>{
+      likeCountEl.textContent = String((countRows[0] && countRows[0].likes) || 0);
+      if(likeRows.length){ likeBtn.classList.add('liked'); likeBtn.setAttribute('aria-pressed', 'true'); }
+    }).catch(e=> console.error('badge like state load failed', e));
+  }
+
   const histEl = document.getElementById('badge-detail-history');
   histEl.innerHTML = '';
   if(!personId) return;
@@ -14515,15 +14550,29 @@ async function renderPhotoComments(){
     const time = new Date(c.created_at).toLocaleString(dateLocale(), {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
     const isMine = myUserId && c.author_user_id === myUserId;
     const canManage = isMine || isSuperUser();
+    const person = c.author_user_id ? people.find(p=>p.user_id === c.author_user_id) : null;
+    const personAttr = person ? ` data-person-id="${person.id}"` : ' disabled';
     return `<div class="comment-item" data-comment-id="${c.id}">
-      <div class="comment-head"><b>${escapeHtml(c.author || 'Anonymous')}</b><span class="comment-time">${time}</span></div>
-      <div class="comment-msg" data-comment-msg="${c.id}">${escapeHtml(c.message)}</div>
-      ${canManage ? `<div style="display:flex;gap:10px;margin-top:4px;">
-        ${isMine ? `<button type="button" class="comment-edit-link" data-comment-edit="${c.id}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">Edit</button>` : ''}
-        <button type="button" class="comment-delete-link" data-comment-delete="${c.id}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">Remove</button>
-      </div>` : ''}
+      <button type="button" class="comment-avatar-btn"${personAttr} aria-label="${person ? 'View '+escapeHtml(person.name)+'’s profile' : 'Profile unavailable'}">
+        ${avatarHtml({name:c.author, avatar_url: person ? person.avatar_url : null}, 32)}
+      </button>
+      <div class="comment-body">
+        <div class="comment-bubble">
+          <button type="button" class="comment-name-btn"${personAttr}>${escapeHtml(c.author || 'Anonymous')}</button>
+          <div class="comment-msg" data-comment-msg="${c.id}">${escapeHtml(c.message)}</div>
+        </div>
+        <div class="comment-foot">
+          <span class="comment-time">${time}</span>
+          ${canManage ? `${isMine ? `<button type="button" class="comment-edit-link" data-comment-edit="${c.id}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">Edit</button>` : ''}
+          <button type="button" class="comment-delete-link" data-comment-delete="${c.id}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;text-decoration:underline;">Remove</button>` : ''}
+        </div>
+      </div>
     </div>`;
   }).join('');
+
+  el.querySelectorAll('.comment-avatar-btn[data-person-id], .comment-name-btn[data-person-id]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openProfile(btn.dataset.personId));
+  });
 
   el.querySelectorAll('[data-comment-delete]').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -15686,8 +15735,27 @@ async function renderHome(){
         likeRows.forEach(r=> likedIds.add(r.catch_id));
       }catch(e){ console.error('home likes lookup failed', e); }
     }
+    // Same thing for badges - Lekker counts and whether I've already given mine
+    const badgeFeedItems = recent.filter(it=> it.kind === 'badge');
+    const badgeLikeCounts = {}, likedBadgeKeys = new Set();
+    if(badgeFeedItems.length){
+      const fIds = [...new Set(badgeFeedItems.map(it=> it.fishermanId))];
+      const bKeys = [...new Set(badgeFeedItems.map(it=> it.badge.key))];
+      try{
+        const [countRows, likeRows] = await Promise.all([
+          sbGet('badges_earned?select=fisherman_id,badge_key,likes&fisherman_id=in.('+fIds.join(',')+')&badge_key=in.('+bKeys.join(',')+')'),
+          sbGet('badge_likes?select=fisherman_id,badge_key&user_id=eq.'+session.user.id+'&fisherman_id=in.('+fIds.join(',')+')&badge_key=in.('+bKeys.join(',')+')')
+        ]);
+        countRows.forEach(r=> badgeLikeCounts[r.fisherman_id+':'+r.badge_key] = r.likes || 0);
+        likeRows.forEach(r=> likedBadgeKeys.add(r.fisherman_id+':'+r.badge_key));
+      }catch(e){ console.error('home badge likes lookup failed', e); }
+    }
     feedWrap.innerHTML = recent.length
-      ? recent.map((it, idx)=> it.kind === 'badge' ? `
+      ? recent.map((it, idx)=> it.kind === 'badge' ? (()=>{
+        const bKey = it.fishermanId+':'+it.badge.key;
+        const count = badgeLikeCounts[bKey] || 0;
+        const liked = likedBadgeKeys.has(bKey);
+        return `
         <div class="profile-catch home-feed-item" data-feed-index="${idx}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;cursor:pointer;">
           ${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 34)}
           <div style="flex:1;">
@@ -15695,7 +15763,11 @@ async function renderHome(){
             <div class="pc-line muted">${formatTimeAgo(it.time)}</div>
           </div>
           <img src="${badgeImageSrc(it.badge.key, it.species)}?v=${BADGE_ASSET_VERSION}" alt="" style="width:34px;height:34px;object-fit:contain;" loading="lazy" decoding="async" onerror="this.outerHTML='<span style=&quot;font-size:24px;&quot;>${it.badge.emoji}</span>';">
-        </div>` : `
+          ${it.fishermanId === myId
+            ? (count ? `<span class="pc-line muted">👌${count}</span>` : '')
+            : `<button type="button" class="lb-like-btn home-badge-like-btn ${liked ? 'liked' : ''}" data-fisherman-id="${it.fishermanId}" data-badge-key="${it.badge.key}" data-badge-name="${escapeHtml(it.badge.name)}" aria-pressed="${liked}" aria-label="Give this badge a Lekker"><span aria-hidden="true">👌</span><span class="lb-like-count">${count}</span></button>`}
+        </div>`;
+      })() : `
         <div class="profile-catch home-feed-item" data-feed-index="${idx}" role="button" tabindex="0" style="display:flex;gap:10px;align-items:center;cursor:pointer;">
           ${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 34)}
           <div style="flex:1;min-width:0;">
@@ -15739,6 +15811,9 @@ async function renderHome(){
     feedWrap.querySelectorAll('.home-like-btn').forEach(btn=>{
       btn.addEventListener('click', e=>{ e.stopPropagation(); toggleHomeLike(btn); });
     });
+    feedWrap.querySelectorAll('.home-badge-like-btn').forEach(btn=>{
+      btn.addEventListener('click', e=>{ e.stopPropagation(); toggleBadgeLike(btn); });
+    });
     // A badge opens its pop-up; a catch opens the angler's profile
     feedWrap.querySelectorAll('.home-feed-item').forEach(row=>{
       const open = ()=>{
@@ -15753,7 +15828,7 @@ async function renderHome(){
       };
       // The like button and photo thumbnail do their own thing, so the row ignores them
       row.addEventListener('click', e=>{
-        if(e.target.closest('.home-like-btn, .pc-photo')) return;
+        if(e.target.closest('.home-like-btn, .home-badge-like-btn, .pc-photo')) return;
         open();
       });
       row.addEventListener('keydown', e=>{
@@ -16059,6 +16134,44 @@ async function toggleHomeLike(btn){
   btn.disabled = false;
 }
 
+async function toggleBadgeLike(btn){
+  if(!isSignedIn()) return;
+  const fishermanId = btn.dataset.fishermanId;
+  const badgeKey = btn.dataset.badgeKey;
+  const wasLiked = btn.classList.contains('liked');
+  const countEl = btn.querySelector('.lb-like-count');
+  const n = parseInt(countEl.textContent, 10) || 0;
+  btn.disabled = true;
+  try{
+    if(wasLiked){
+      await sbDelete('badge_likes', 'fisherman_id=eq.'+fishermanId+'&badge_key=eq.'+badgeKey+'&user_id=eq.'+session.user.id);
+      try{ await sbRpc('decrement_badge_likes', {p_fisherman_id: fishermanId, p_badge_key: badgeKey}); }
+      catch(e){ console.error('badge like counter decrement failed', e); }
+      btn.classList.remove('liked');
+      countEl.textContent = Math.max(0, n - 1);
+    }else{
+      await sbPost('badge_likes', {id: uid(), fisherman_id: fishermanId, badge_key: badgeKey, user_id: session.user.id});
+      try{ await sbRpc('increment_badge_likes', {p_fisherman_id: fishermanId, p_badge_key: badgeKey}); }
+      catch(e){ console.error('badge like counter increment failed', e); }
+      btn.classList.add('liked');
+      countEl.textContent = n + 1;
+      showLekkerFlash();
+      notifyBadgeLike(fishermanId, badgeKey, btn.dataset.badgeName);
+    }
+    btn.setAttribute('aria-pressed', String(btn.classList.contains('liked')));
+    clearDbError();
+  }catch(e){
+    console.error(e);
+    if(!wasLiked && String(e.message||'').includes('duplicate')){
+      btn.classList.add('liked');
+      btn.setAttribute('aria-pressed', 'true');
+    }else{
+      showDbError('Could not save like.');
+    }
+  }
+  btn.disabled = false;
+}
+
 document.getElementById('home-start-session').addEventListener('click', ()=> goToTab('timers'));
 document.getElementById('home-venue-map-btn').addEventListener('click', ()=>{
   pendingInsightsVenueMap = true;
@@ -16129,14 +16242,14 @@ async function renderFeed(refetch){
         `</div>`
       : '';
     return `<div class="profile-catch">
-      <div class="pc-head" style="display:flex;align-items:center;gap:8px;">${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 24)}${escapeHtml(it.fishermanName)}${feedRodLabel(it)}</div>
+      <button type="button" class="feed-person-btn" data-id="${it.fishermanId}" style="display:flex;align-items:center;gap:8px;background:none;border:none;padding:0;margin-bottom:2px;cursor:pointer;font:inherit;color:var(--ink);text-align:left;">${avatarHtml({name:it.fishermanName, avatar_url:it.fishermanAvatar}, 24)}<span class="pc-head" style="margin:0;">${escapeHtml(it.fishermanName)}${feedRodLabel(it)}</span></button>
       <div class="pc-line">${escapeHtml(it.type||'Fish')} — <b>${formatWeight(it.weight)}</b></div>
       <div class="pc-line muted">${escapeHtml(it.dam||'')} · ${escapeHtml(fmtCatchWhen(it.time, it.hasKnownTime))}${agoSuffix(it.time)}${it.likes ? ' · 👌'+it.likes : ''}</div>
       ${photoHtml}
     </div>`;
   }).join('');
   el.innerHTML = html;
-  el.querySelectorAll('.feed-angler-btn').forEach(btn=>{
+  el.querySelectorAll('.feed-angler-btn, .feed-person-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> openProfile(btn.dataset.id));
   });
 }
