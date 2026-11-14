@@ -614,6 +614,7 @@
   .lb-like-btn:disabled{cursor:default;opacity:0.55;}
   .lb-like-btn.liked:disabled{opacity:1;}
   .lb-like-count{font-size:12px;font-weight:700;color:var(--muted);}
+  .photo-actions-bar{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
   .comment-item{border-bottom:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:flex-start;}
   .comment-item:last-child{border-bottom:none;}
   .comment-avatar-btn{background:none;border:none;padding:0;margin:0;flex-shrink:0;line-height:0;cursor:pointer;}
@@ -2782,16 +2783,18 @@
     </div>
     <div id="photo-modal-when" style="display:none;font-size:13px;font-weight:600;color:var(--ink);margin-top:8px;"></div>
     <div style="font-size:11px;color:var(--muted);margin-top:6px;">Pinch or double-tap to zoom</div>
-    <div id="photo-modal-share-wrap" style="display:none;margin-top:8px;">
-      <button type="button" class="mini-btn" id="photo-modal-share-btn">Share this catch</button>
-      <div class="status" id="photo-modal-share-status"></div>
-    </div>
     <div id="photo-modal-nav" style="display:none;justify-content:space-between;align-items:center;margin-top:8px;">
       <button type="button" id="photo-prev-btn" class="mini-btn">‹ Prev</button>
       <span id="photo-modal-counter" style="font-size:12px;color:var(--muted);"></span>
       <button type="button" id="photo-next-btn" class="mini-btn">Next ›</button>
     </div>
-    <div id="photo-like-wrap" style="margin-top:8px;text-align:left;"></div>
+    <div id="photo-actions-bar" class="photo-actions-bar">
+      <div id="photo-like-wrap"></div>
+      <button type="button" class="lb-like-btn" id="photo-comment-jump-btn" aria-label="Jump to comments"><span aria-hidden="true">💬</span><span class="lb-like-count" id="photo-comment-count-text">0</span></button>
+      <button type="button" class="lb-like-btn" id="photo-modal-share-btn" style="display:none;" aria-label="Share this catch"><span aria-hidden="true">📤</span><span class="lb-like-count" id="photo-share-count-text">0</span></button>
+    </div>
+    <div class="status" id="photo-modal-share-status"></div>
+    <div id="photo-likers-list" style="display:none;margin-top:4px;text-align:left;"></div>
     <div id="photo-comment-section" style="text-align:left;margin-top:14px;display:none;">
       <p class="sub-heading" style="margin-bottom:8px;">Comments on this catch</p>
       <div class="field" id="photo-comment-author-wrap">
@@ -7870,6 +7873,7 @@ function mapCatchRow(c){
     // "no label for this one" rather than an error.
     photoLabels: c.photo_labels ? (typeof c.photo_labels === 'string' ? JSON.parse(c.photo_labels) : c.photo_labels) : [],
     likes: c.likes || 0,
+    shareCount: c.share_count || 0,
     netWeight: c.net_weight ?? null,
     verificationStatus: c.verification_status || 'pending'
   };
@@ -14303,26 +14307,35 @@ function openPhotoModal(src, catchId, index){
 // can too, but only once its owner has opted in via their own Sharing
 // preference - sharing someone else's photo isn't ours to decide for them.
 async function updatePhotoShareWrap(){
-  const wrap = document.getElementById('photo-modal-share-wrap');
-  if(!wrap) return;
-  wrap.style.display = 'none';
+  const btn = document.getElementById('photo-modal-share-btn');
+  if(!btn) return;
+  btn.style.display = 'none';
   if(!currentPhotoCatchId || !isSignedIn()) return;
   const myId = getMyFishermanId();
   if(!myId) return;
+  let shareCount = 0;
   try{
-    const rows = await sbGet('catches?id=eq.'+currentPhotoCatchId+'&select=fisherman_id&limit=1');
+    const rows = await sbGet('catches?id=eq.'+currentPhotoCatchId+'&select=fisherman_id,share_count&limit=1');
     const ownerId = rows[0] && rows[0].fisherman_id;
     if(!ownerId) return;
     if(ownerId !== myId){
       const owner = people.find(p=>p.id===ownerId);
       if(!owner || !owner.allow_mates_share_catches) return;
     }
+    shareCount = (rows[0] && rows[0].share_count) || 0;
   }catch(e){ console.error('updatePhotoShareWrap failed', e); return; }
-  document.getElementById('photo-modal-share-btn').textContent = 'Share this catch';
-  wrap.style.display = 'block';
+  const countEl = document.getElementById('photo-share-count-text');
+  if(countEl) countEl.textContent = shareCount;
+  btn.style.display = 'flex';
 }
 document.getElementById('photo-modal-x').addEventListener('click', ()=>{
   document.getElementById('photo-modal').close();
+});
+document.getElementById('photo-comment-jump-btn').addEventListener('click', ()=>{
+  const section = document.getElementById('photo-comment-section');
+  if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
+  const msgEl = document.getElementById('photo-comment-message');
+  if(msgEl) msgEl.focus();
 });
 
 // Profile and the photo viewer are the two dialogs people actually drill
@@ -14420,6 +14433,15 @@ document.getElementById('photo-modal-share-btn').addEventListener('click', async
     // isn't Pro usage worth logging in pro_feature_uses (that table is
     // specifically for refund-dispute evidence on paying accounts).
     pkTrack('record_image_shared', {kind: 'catch_card'});
+    // Counted the same way as the pkTrack call above - fired once the share
+    // sheet/download is handed off, not gated on the user actually completing
+    // it (there's no reliable signal for that), same tolerance this action
+    // already had before there was a visible count attached to it.
+    try{
+      await sbRpc('increment_catch_shares', {p_catch_id: catchId});
+      const shareCountEl = document.getElementById('photo-share-count-text');
+      if(shareCountEl) shareCountEl.textContent = (parseInt(shareCountEl.textContent, 10) || 0) + 1;
+    }catch(e){ console.error('increment_catch_shares failed', e); }
   }catch(e){
     console.error(e);
     st.textContent = 'Could not create the image: ' + (e.message || 'unknown error');
@@ -14457,12 +14479,25 @@ async function renderPhotoLike(errorMsg){
   const myName = isSignedIn() ? (people.find(p=>p.user_id===session.user.id)||{}).name : null;
   const alreadyLiked = myName ? likers.includes(myName) : false;
 
-  wrap.innerHTML = `
-    <button class="lb-like-btn ${alreadyLiked?'liked':''}" id="photo-like-btn" title="${alreadyLiked ? 'Tap to remove your Lekker' : 'Tap to give this a Lekker'}">👌</button>
-    <button type="button" class="lb-like-count" id="photo-like-count-btn" style="background:none;border:none;cursor:${likers.length ? 'pointer' : 'default'};font-family:inherit;font-size:inherit;color:inherit;padding:0;text-decoration:${likers.length ? 'underline' : 'none'};">${likers.length}</button>
-    <div id="photo-likers-list" style="display:none;margin-top:4px;"></div>
-    ${errorMsg ? `<div class="status" style="margin-top:6px;color:#c04;">${escapeHtml(errorMsg)}</div>` : ''}
-  `;
+  wrap.innerHTML = `<button type="button" class="lb-like-btn ${alreadyLiked?'liked':''}" id="photo-like-btn" title="${alreadyLiked ? 'Tap to remove your Lekker' : 'Tap to give this a Lekker'}"><span aria-hidden="true">👌</span><span class="lb-like-count">${likers.length}</span></button>`;
+
+  const statusEl = document.getElementById('photo-modal-share-status');
+  if(statusEl){
+    statusEl.textContent = errorMsg || '';
+    statusEl.style.color = errorMsg ? '#c04' : '';
+  }
+
+  const likersList = document.getElementById('photo-likers-list');
+  if(likersList){
+    if(likers.length){
+      likersList.textContent = 'Liked by ' + likers.join(', ');
+      likersList.className = 'pc-line muted';
+      likersList.style.display = 'block';
+    }else{
+      likersList.style.display = 'none';
+    }
+  }
+
   const btn = document.getElementById('photo-like-btn');
   if(btn){
     btn.addEventListener('click', async ()=>{
@@ -14471,21 +14506,6 @@ async function renderPhotoLike(errorMsg){
         await unlikeCurrentPhoto(catchId);
       }else{
         await likeCurrentPhoto(catchId);
-      }
-    });
-  }
-  const countBtn = document.getElementById('photo-like-count-btn');
-  if(countBtn && likers.length){
-    countBtn.addEventListener('click', ()=>{
-      const listEl = document.getElementById('photo-likers-list');
-      if(!listEl) return;
-      const open = listEl.style.display !== 'none';
-      if(open){
-        listEl.style.display = 'none';
-      }else{
-        listEl.textContent = 'Liked by ' + likers.join(', ');
-        listEl.className = 'pc-line muted';
-        listEl.style.display = 'block';
       }
     });
   }
@@ -14599,6 +14619,8 @@ async function renderPhotoComments(){
   if(!el || !currentPhotoCatchId) return;
   el.innerHTML = '<div class="empty">Loading...</div>';
   const rows = await loadComments(currentPhotoCatchId);
+  const countEl = document.getElementById('photo-comment-count-text');
+  if(countEl) countEl.textContent = rows.length;
   if(rows.length===0){ el.innerHTML = '<div class="empty">No comments yet — be the first to say something.</div>'; return; }
   const myUserId = isSignedIn() ? session.user.id : null;
   el.innerHTML = rows.map(c=>{
