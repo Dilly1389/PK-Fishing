@@ -14289,8 +14289,13 @@ function openPhotoModal(src, catchId, index){
     currentPhotoIndex = 0;
   }
   renderPhotoModalImage();
+  // Comments start collapsed every time this opens on a (possibly new)
+  // catch - only the count shows up front, the thread itself waits for
+  // a tap on the comment icon, same as the jump button that reveals it.
   const section = document.getElementById('photo-comment-section');
-  if(section) section.style.display = currentPhotoCatchId ? 'block' : 'none';
+  if(section) section.style.display = 'none';
+  const jumpBtn = document.getElementById('photo-comment-jump-btn');
+  if(jumpBtn) jumpBtn.style.display = currentPhotoCatchId ? 'flex' : 'none';
   const authorWrap = document.getElementById('photo-comment-author-wrap');
   if(authorWrap) authorWrap.style.display = isSignedIn() ? 'none' : 'block';
   const likeWrap = document.getElementById('photo-like-wrap');
@@ -14333,7 +14338,14 @@ document.getElementById('photo-modal-x').addEventListener('click', ()=>{
 });
 document.getElementById('photo-comment-jump-btn').addEventListener('click', ()=>{
   const section = document.getElementById('photo-comment-section');
-  if(section) section.scrollIntoView({behavior:'smooth', block:'start'});
+  if(!section) return;
+  const isOpen = section.style.display !== 'none';
+  if(isOpen){
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+  section.scrollIntoView({behavior:'smooth', block:'start'});
   const msgEl = document.getElementById('photo-comment-message');
   if(msgEl) msgEl.focus();
 });
