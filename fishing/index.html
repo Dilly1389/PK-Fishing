@@ -1469,6 +1469,7 @@
             <label class="check-row"><input type="checkbox" id="notify-pref-social"> Comments and likes on my catches</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-competition"> Competition updates</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-friend_catch"> Catches from people I follow</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-friend_session"> Sessions from people I follow</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-tackle_share"> Tackle sharing</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-tackle_restock"> Low tackle stock</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-tackle_nudge"> Mid-session bait/dip reminder</label>
@@ -6166,6 +6167,10 @@ async function notifyFriendsOfCatch(catchId){
   try{ await sbRpc('notify_friends_of_catch', {p_catch_id: catchId}); }
   catch(e){ console.error('notify_friends_of_catch failed', e); }
 }
+async function notifyFriendsOfSessionStart(sessionId){
+  try{ await sbRpc('notify_friends_of_session_start', {p_session_id: sessionId}); }
+  catch(e){ console.error('notify_friends_of_session_start failed', e); }
+}
 async function notifyCatchComment(catchId, commentId){
   try{ await sbRpc('notify_catch_comment', {p_catch_id: catchId, p_comment_id: commentId}); }
   catch(e){ console.error('notify_catch_comment failed', e); }
@@ -6209,10 +6214,10 @@ function urlBase64ToUint8Array(base64String){
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
-// The 13 notifications.type values collapse into these 8 user-facing
+// The 14 notifications.type values collapse into these 9 user-facing
 // toggles server-side (see TYPE_TO_PREFERENCE in send-notification-push) -
 // kept in sync with that mapping by hand, since they live in different runtimes.
-const NOTIFICATION_PREF_KEYS = ['badge','follow','social','competition','friend_catch','tackle_share','tackle_restock','tackle_nudge'];
+const NOTIFICATION_PREF_KEYS = ['badge','follow','social','competition','friend_catch','friend_session','tackle_share','tackle_restock','tackle_nudge'];
 
 async function loadAndRenderNotificationPrefs(){
   const enableBtn = document.getElementById('enable-push-btn');
@@ -6256,7 +6261,7 @@ async function loadAndRenderNotificationPrefs(){
 
   if(subscription && isSignedIn()){
     try{
-      const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_tackle_share,notify_push_tackle_restock,notify_push_tackle_nudge,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
+      const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_friend_session,notify_push_tackle_share,notify_push_tackle_restock,notify_push_tackle_nudge,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
       const f = rows[0];
       if(f){
         NOTIFICATION_PREF_KEYS.forEach(key=>{
@@ -9058,6 +9063,7 @@ document.getElementById('session-start-btn').addEventListener('click', async ()=
       try{
         await sbPost('sessions', sessionRecord);
         linkTripPlanToSession(venueId, sessionId);
+        notifyFriendsOfSessionStart(sessionId);
       }
       catch(e){ console.error(e); await offlinePut(OFFLINE_SESSION_STORE, {id: sessionId, record: sessionRecord}); }
     }else{
