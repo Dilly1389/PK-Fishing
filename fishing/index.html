@@ -625,6 +625,13 @@
   .comment-time{color:var(--muted);font-size:11.5px;flex-shrink:0;}
   .comment-msg{font-size:13.5px;color:var(--ink);white-space:pre-wrap;word-break:break-word;}
   .comment-foot{display:flex;gap:10px;align-items:center;margin-top:4px;padding-left:2px;}
+  .comment-send-btn{
+    width:44px;height:44px;border-radius:50%;border:none;flex-shrink:0;
+    background:var(--dam);color:#fff;font-size:18px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .comment-send-btn:active{transform:scale(0.92);}
+  .comment-send-btn:disabled{opacity:0.5;cursor:default;}
 
   .empty{text-align:center;padding:20px 10px;color:var(--muted);font-size:13.5px;}
   .lekker-flash{
@@ -1495,6 +1502,14 @@
             <div class="status" id="notification-prefs-status"></div>
           </div>
         </div>
+      </section>
+
+      <section class="card" id="sharing-card" style="display:none;">
+        <h2>Sharing</h2>
+        <p class="pc-line muted">A catch card is a nice way to show off a catch outside the app. Decide whether other anglers can share your catches too, or keep that to just you.</p>
+        <label class="check-row"><input type="checkbox" id="allow-mates-share-catches-pref"> Let other anglers share my catches</label>
+        <button class="mini-btn" id="save-sharing-pref-btn" style="margin-top:10px;">Save</button>
+        <div class="status" id="sharing-pref-status"></div>
       </section>
 
       <section class="card" id="appearance-card">
@@ -2782,10 +2797,12 @@
       <div class="field" id="photo-comment-author-wrap">
         <input type="text" maxlength="100" id="photo-comment-author" placeholder="Your name (optional)" autocomplete="pk-field-17" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
-      <div class="field">
-        <textarea maxlength="500" id="photo-comment-message" placeholder="Comment on this catch..." autocomplete="pk-x9" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+      <div style="display:flex;gap:8px;align-items:flex-end;">
+        <div class="field" style="flex:1;margin:0;">
+          <textarea maxlength="500" id="photo-comment-message" placeholder="Comment on this catch..." autocomplete="pk-x9" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-height:44px;"></textarea>
+        </div>
+        <button type="button" class="comment-send-btn" id="photo-comment-post-btn" aria-label="Post comment"><i class="ti ti-send-2" aria-hidden="true"></i></button>
       </div>
-      <button class="primary-btn" id="photo-comment-post-btn">Post comment</button>
       <div class="status" id="photo-comment-status"></div>
       <div id="photo-comments-list" style="margin-top:10px;"></div>
     </div>
@@ -5040,6 +5057,7 @@ function renderAccountArea(){
   const reelRecordsCard = document.getElementById('reel-records-settings-card');
   const pastCatchCard = document.getElementById('past-catch-card');
   const notificationsCard = document.getElementById('notifications-card');
+  const sharingCard = document.getElementById('sharing-card');
   if(session && session.user){
     if(authForms) authForms.style.display = 'none';
     if(signedInArea) signedInArea.style.display = 'block';
@@ -5066,6 +5084,13 @@ function renderAccountArea(){
     }
     if(reelRecordsCard) reelRecordsCard.style.display = 'block';
     if(notificationsCard) notificationsCard.style.display = 'block';
+    if(sharingCard){
+      sharingCard.style.display = 'block';
+      const myId = getMyFishermanId();
+      const me = myId ? people.find(p=>p.id===myId) : null;
+      const cb = document.getElementById('allow-mates-share-catches-pref');
+      if(cb) cb.checked = !!(me && me.allow_mates_share_catches);
+    }
     populateMyDetails();
     makeCardCollapsible('my-details-card', 'my-details-body', 'pk_fishing_collapse_details');
     makeCardCollapsible('reel-records-settings-card', 'reel-records-settings-body', 'pk_fishing_collapse_reelrecords');
@@ -5085,6 +5110,7 @@ function renderAccountArea(){
     if(exportCsvCard) exportCsvCard.style.display = 'none';
     if(reelRecordsCard) reelRecordsCard.style.display = 'none';
     if(notificationsCard) notificationsCard.style.display = 'none';
+    if(sharingCard) sharingCard.style.display = 'none';
   }
   updateTackleVisibility();
   updateTimersVisibility();
@@ -5616,7 +5642,7 @@ document.getElementById('sign-out-btn').addEventListener('click', async ()=>{
 // ---------- Data layer (backed by Supabase) ----------
 async function loadPeople(){
   try{
-    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,trophy_species,avatar_url,hide_from_directory,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
+    people = await sbGet('fishermen?select=id,name,dam,rods,competition,archived,likes,user_id,email,first_name,last_name,country,is_admin,trophy_species,avatar_url,hide_from_directory,allow_mates_share_catches,pb_carp_weight,pb_carp_photo,pb_barbel_weight,pb_barbel_photo&order=name.asc');
     clearDbError();
     // Keep a local copy so the app still knows who everyone is when offline
     try{ localStorage.setItem('pk_fishing_people_cache', JSON.stringify(people)); }catch(e){}
@@ -6402,6 +6428,24 @@ document.getElementById('save-notification-prefs-btn').addEventListener('click',
       currentPerson.rodAlertMinutes = patch.rod_alert_minutes;
       renderTimers();
     }
+    st.textContent = 'Saved.';
+    setTimeout(()=> st.textContent='', 1200);
+  }catch(e){
+    console.error(e);
+    st.textContent = 'Could not save: ' + (e.message || 'unknown error');
+  }
+});
+document.getElementById('save-sharing-pref-btn').addEventListener('click', async ()=>{
+  const st = document.getElementById('sharing-pref-status');
+  if(!isSignedIn()) return;
+  const myId = getMyFishermanId();
+  if(!myId) return;
+  const allow = document.getElementById('allow-mates-share-catches-pref').checked;
+  st.textContent = 'Saving...';
+  try{
+    await sbPatch('fishermen', 'id=eq.'+myId, {allow_mates_share_catches: allow});
+    const me = people.find(p=>p.id===myId);
+    if(me) me.allow_mates_share_catches = allow;
     st.textContent = 'Saved.';
     setTimeout(()=> st.textContent='', 1200);
   }catch(e){
@@ -14250,9 +14294,9 @@ function openPhotoModal(src, catchId, index){
   updatePhotoShareWrap();
   document.getElementById('photo-modal').showModal();
 }
-// Only your own catches can become a shareable card - a quick ownership
-// check rather than assuming, since this modal also opens other people's
-// photos (feed, following, friends' profiles).
+// Your own catches can always become a shareable card. A mate's catch
+// can too, but only once its owner has opted in via their own Sharing
+// preference - sharing someone else's photo isn't ours to decide for them.
 async function updatePhotoShareWrap(){
   const wrap = document.getElementById('photo-modal-share-wrap');
   if(!wrap) return;
@@ -14262,7 +14306,12 @@ async function updatePhotoShareWrap(){
   if(!myId) return;
   try{
     const rows = await sbGet('catches?id=eq.'+currentPhotoCatchId+'&select=fisherman_id&limit=1');
-    if(!rows[0] || rows[0].fisherman_id !== myId) return;
+    const ownerId = rows[0] && rows[0].fisherman_id;
+    if(!ownerId) return;
+    if(ownerId !== myId){
+      const owner = people.find(p=>p.id===ownerId);
+      if(!owner || !owner.allow_mates_share_catches) return;
+    }
   }catch(e){ console.error('updatePhotoShareWrap failed', e); return; }
   document.getElementById('photo-modal-share-btn').textContent = 'Share this catch';
   wrap.style.display = 'block';
@@ -14327,35 +14376,36 @@ document.getElementById('photo-modal-share-btn').addEventListener('click', async
   // Free for everyone, unlike the Personal Bests / Venue Board record
   // images: a single catch card is the one that functions as a growth
   // loop (shared to people who aren't users yet), not a vanity feature
-  // worth gating.
+  // worth gating. A mate can trigger this too (if the owner opted in via
+  // Sharing preferences), so everything below is resolved against the
+  // catch's OWNER, not whoever is signed in and tapping the button.
   const catchId = currentPhotoCatchId;
   if(!catchId) return;
   const st = document.getElementById('photo-modal-share-status');
   st.textContent = 'Preparing...';
   try{
-    const myId = getMyFishermanId();
-    const [rows, venues, allCatches] = await Promise.all([
-      sbGet('catches?id=eq.'+catchId+'&select=*'),
-      loadMyVenues(),
-      sbGet('catches?fisherman_id=eq.'+myId+'&caught=eq.true&select=id,fish_type,weight')
+    const rows = await sbGet('catches?id=eq.'+catchId+'&select=*');
+    const raw = rows[0];
+    if(!raw){ st.textContent = 'Could not load this catch.'; return; }
+    const ownerId = raw.fisherman_id;
+    const c = mapCatchRow(raw);
+    const [venueNameRow, allCatches] = await Promise.all([
+      c.venueId ? sbRpc('get_venue_name', {p_venue_id: c.venueId}) : Promise.resolve(null),
+      sbGet('catches?fisherman_id=eq.'+ownerId+'&caught=eq.true&select=id,fish_type,weight')
     ]);
-    const c = rows[0] ? mapCatchRow(rows[0]) : null;
-    if(!c){ st.textContent = 'Could not load this catch.'; return; }
-    const venueNames = {};
-    venues.forEach(v=> venueNames[v.id] = v.name);
-    const myName = (people.find(p=>p.id===myId) || {}).name || 'Angler';
+    const ownerName = (people.find(p=>p.id===ownerId) || {}).name || 'Angler';
     const best = bestPerSpeciesMap(allCatches.map(r=>({caught:true, type:r.fish_type, weight:r.weight})));
     const isPB = !!(c.type && best[c.type] && best[c.type].weight === c.weight);
     const photoSrc = fishPhotoSrc(c);
     const photoImg = photoSrc ? await loadImageSafe(photoSrc) : null;
     const weightText = formatWeight(c.weight);
-    const venueName = (c.venueId && venueNames[c.venueId]) || 'Unknown venue';
+    const venueName = venueNameRow || 'Unknown venue';
     const canvas = await drawCatchCardImage({
       species: c.type || 'Catch',
       weightText,
       venueName,
       dateText: new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'}),
-      anglerName: myName,
+      anglerName: ownerName,
       isPB, photoImg
     });
     const shareText = (c.type || 'Catch') + ' — ' + weightText + ' at ' + venueName + '\nLogged on PK Fishing — pksport.co.za/pk-fishing/';
@@ -14614,13 +14664,15 @@ async function renderPhotoComments(){
     });
   });
 }
-document.getElementById('photo-comment-post-btn').addEventListener('click', async ()=>{
+document.getElementById('photo-comment-post-btn').addEventListener('click', async (e)=>{
   if(!currentPhotoCatchId) return;
+  const btn = e.currentTarget;
   const authorEl = document.getElementById('photo-comment-author');
   const messageEl = document.getElementById('photo-comment-message');
   const st = document.getElementById('photo-comment-status');
   const message = messageEl.value.trim();
   if(!message){ st.textContent = 'Write something first.'; return; }
+  btn.disabled = true;
   st.textContent = 'Posting...';
   try{
     const commentId = await postComment(authorEl.value.trim(), message, currentPhotoCatchId);
@@ -14633,6 +14685,7 @@ document.getElementById('photo-comment-post-btn').addEventListener('click', asyn
     console.error(e);
     st.textContent = 'Could not post: ' + (e.message || 'unknown error');
   }
+  btn.disabled = false;
 });
 
 async function setActivePerson(id){
