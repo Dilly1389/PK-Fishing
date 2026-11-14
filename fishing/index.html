@@ -615,6 +615,8 @@
   .lb-like-btn.liked:disabled{opacity:1;}
   .lb-like-count{font-size:12px;font-weight:700;color:var(--muted);}
   .photo-actions-bar{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+  .storm-warning{background:#F5D6D6;color:#7A0611;border:1px solid #E0A8A8;border-radius:8px;padding:8px 10px;font-size:12.5px;font-weight:600;margin-bottom:10px;}
+  @media (prefers-color-scheme: dark){ .storm-warning{background:#4A1818;color:#FFB3B3;border-color:#6B2424;} }
   .comment-item{border-bottom:1px solid var(--line);padding:10px 0;display:flex;gap:10px;align-items:flex-start;}
   .comment-item:last-child{border-bottom:none;}
   .comment-avatar-btn{background:none;border:none;padding:0;margin:0;flex-shrink:0;line-height:0;cursor:pointer;}
@@ -8596,6 +8598,14 @@ function capturePosition(){
 // Open-Meteo — free, no API key, no backend needed. Same reasoning that
 // led us to it over Windy: nothing to expose in a public client-side app.
 // Hourly and daily forecast, for the detail view when the weather bar is tapped
+// Open-Meteo's WMO weather_code: 95/96/99 are thunderstorm (96/99 with hail).
+// Used to drive the "storm risk, stay safe" warning - a safety fact, not a
+// claim about fish, so it isn't subject to the no-folklore rule on badges.
+function isStormCode(code){ return code === 95 || code === 96 || code === 99; }
+function stormWarningHtml(){
+  return `<div class="storm-warning">⚠️ <b>Storm risk</b> — lightning possible. Stay safe, and get off the water if it closes in.</div>`;
+}
+
 async function fetchForecast(lat, lng){
   try{
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}`
@@ -8604,7 +8614,7 @@ async function fetchForecast(lat, lng){
       // (e.g. ~860hPa at Vaal Dam) which looks broken next to any normal
       // weather app. The rising/falling trend is identical either way, only
       // the absolute number changes.
-      + `&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl,precipitation_probability`
+      + `&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl,precipitation_probability,weather_code`
       + `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max`
       + `&forecast_days=7&timezone=auto`;
     const res = await fetch(url);
@@ -8615,7 +8625,7 @@ async function fetchForecast(lat, lng){
 
 async function fetchWeather(lat, lng){
   try{
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl,precipitation&hourly=pressure_msl&past_hours=3&forecast_hours=1`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl,precipitation,weather_code&hourly=pressure_msl,weather_code&past_hours=3&forecast_hours=4`;
     const res = await fetch(url);
     if(!res.ok) return null;
     const data = await res.json();
@@ -8625,6 +8635,12 @@ async function fetchWeather(lat, lng){
     const hp = data.hourly && data.hourly.pressure_msl;
     const earliest = Array.isArray(hp) && hp.length > 1 ? hp[0] : null;
     const pressureChange = (earliest != null && c.pressure_msl != null) ? Math.round((c.pressure_msl - earliest) * 10) / 10 : null;
+    // Storm risk: right now, or anywhere in the next few hours ahead
+    const times = (data.hourly && data.hourly.time) || [];
+    const codes = (data.hourly && data.hourly.weather_code) || [];
+    const nowIdx = times.findIndex(t=> new Date(t) >= new Date());
+    const upcoming = nowIdx >= 0 ? codes.slice(nowIdx) : [];
+    const stormRisk = isStormCode(c.weather_code) || upcoming.some(isStormCode);
     return {
       temp: c.temperature_2m,
       windSpeed: c.wind_speed_10m,
@@ -8632,7 +8648,8 @@ async function fetchWeather(lat, lng){
       cloudCover: c.cloud_cover,
       pressure: c.pressure_msl,
       precipitation: c.precipitation ?? null,
-      pressureChange
+      pressureChange,
+      stormRisk
     };
   }catch(e){ console.error('fetchWeather failed', e); return null; }
 }
@@ -8927,16 +8944,16 @@ async function renderSessionWeather(){
   if(moon) parts.push(`${moon.emoji} ${moon.label}`);
 
   el.style.cursor = weatherCache.coords ? 'pointer' : 'default';
-  // A floated "Forecast ›" here used to fight the weather text for the same
-  // line - fine when short, but wrapped and landed in odd spots once the
-  // text got long (wind, cloud and pressure all present). Flex keeps the
-  // two parts cleanly side by side regardless of length.
-  el.style.display = 'flex';
-  el.style.justifyContent = 'space-between';
-  el.style.alignItems = 'center';
-  el.style.gap = '8px';
-  el.innerHTML = `<span>${escapeHtml(parts.join(' · '))}</span>` +
-    (weatherCache.coords ? `<span style="opacity:.7;flex-shrink:0;">Forecast ›</span>` : '');
+  el.style.display = 'block';
+  el.innerHTML = (weather && weather.stormRisk ? stormWarningHtml() : '') +
+    // A floated "Forecast ›" here used to fight the weather text for the same
+    // line - fine when short, but wrapped and landed in odd spots once the
+    // text got long (wind, cloud and pressure all present). Flex keeps the
+    // two parts cleanly side by side regardless of length.
+    `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span>${escapeHtml(parts.join(' · '))}</span>
+      ${weatherCache.coords ? `<span style="opacity:.7;flex-shrink:0;">Forecast ›</span>` : ''}
+    </div>`;
   el.onclick = weatherCache.coords ? openForecast : null;
 }
 
@@ -8968,11 +8985,13 @@ async function openForecast(){
       windDir: data.hourly.wind_direction_10m?.[i],
       cloud: data.hourly.cloud_cover?.[i],
       pressure: data.hourly.pressure_msl?.[i],
-      rain: data.hourly.precipitation_probability?.[i]
+      rain: data.hourly.precipitation_probability?.[i],
+      code: data.hourly.weather_code?.[i]
     });
   }
 
-  let html = `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
+  let html = hours.some(h=> isStormCode(h.code)) ? stormWarningHtml() : '';
+  html += `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
   hours.forEach(h=>{
     html += `<li>
       <div class="who"><b>${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
@@ -16004,6 +16023,7 @@ async function renderHomeWeather(){
       const press = w.pressure != null ? box(`<div style="width:100%;min-height:32px;">${pressureGraphSvg(pressureNext)}</div><b style="font-size:14px;">${escapeHtml(fmtPressure(w.pressure))}</b><span>${escapeHtml(trend ? trend.trim() : 'pressure')}</span>`) : '';
       const moon = box(`<span style="font-size:32px;line-height:46px;" aria-hidden="true">${m.emoji}</span><b style="font-size:14px;">Moon</b><span>${escapeHtml(m.label)}</span>`);
       el.innerHTML = `
+        ${w.stormRisk ? stormWarningHtml() : ''}
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
           <span style="font-size:40px;line-height:1;" aria-hidden="true">${sky.icon}</span>
           <div style="flex:1;min-width:0;">
@@ -16022,10 +16042,12 @@ async function renderHomeWeather(){
       if(w.cloudCover != null) tiles.push(tile(Math.round(w.cloudCover) + '%', 'cloud'));
       tiles.push(tile(m.emoji, m.label));
       el.innerHTML = `
+        ${w.stormRisk ? stormWarningHtml() : ''}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;">${tiles.join('')}</div>
         <div style="font-size:12px;color:var(--muted);text-align:right;margin-top:8px;">Forecast ›</div>`;
     }else{
       el.innerHTML = `
+      ${w.stormRisk ? stormWarningHtml() : ''}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div style="font-size:13.5px;color:var(--ink);">
           ${w.temp != null ? fmtTemp(w.temp) : ''}
