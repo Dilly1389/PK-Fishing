@@ -5225,7 +5225,7 @@ document.getElementById('details-save-btn').addEventListener('click', async ()=>
       first_name: firstName || null, last_name: lastName || null, country: country || null
     };
     if(avatarInput && avatarInput.files[0]){
-      patch.avatar_url = await uploadPhoto(avatarInput.files[0], {maxDim: 400, quality: 0.85});
+      patch.avatar_url = await uploadPhoto(avatarInput.files[0], {maxDim: 900, quality: 0.85});
     }
     await sbPatch('fishermen', 'id=eq.'+p.id, patch);
     Object.assign(p, patch);
@@ -14296,14 +14296,25 @@ function openPhotoModal(src, catchId, index){
   if(section) section.style.display = 'none';
   const jumpBtn = document.getElementById('photo-comment-jump-btn');
   if(jumpBtn) jumpBtn.style.display = currentPhotoCatchId ? 'flex' : 'none';
+  // A profile photo or Personal Best has no Lekker/comments/share row at
+  // all, so the whole bar would just sit there empty - hide it, and let
+  // the photo itself use the room that frees up instead of capping at 60vh.
+  const actionsBar = document.getElementById('photo-actions-bar');
+  if(actionsBar) actionsBar.style.display = currentPhotoCatchId ? 'flex' : 'none';
+  const img = document.getElementById('photo-modal-img');
+  if(img) img.style.maxHeight = currentPhotoCatchId ? '60vh' : '78vh';
   const authorWrap = document.getElementById('photo-comment-author-wrap');
   if(authorWrap) authorWrap.style.display = isSignedIn() ? 'none' : 'block';
   const likeWrap = document.getElementById('photo-like-wrap');
   if(currentPhotoCatchId){
     renderPhotoComments();
     renderPhotoLike();
-  }else if(likeWrap){
-    likeWrap.innerHTML = '';
+  }else{
+    if(likeWrap) likeWrap.innerHTML = '';
+    const shareStatus = document.getElementById('photo-modal-share-status');
+    if(shareStatus) shareStatus.textContent = '';
+    const likersList = document.getElementById('photo-likers-list');
+    if(likersList) likersList.style.display = 'none';
   }
   updatePhotoShareWrap();
   document.getElementById('photo-modal').showModal();
