@@ -1201,6 +1201,11 @@
           <div id="plan-list"><div class="empty">No trips planned yet — add one above.</div></div>
         </section>
 
+        <section class="card" id="plan-shared-card" style="display:none;">
+          <h2>Shared with you</h2>
+          <div id="plan-shared-list"></div>
+        </section>
+
         <section class="card" id="plan-past-card" style="display:none;">
           <h2>Past plans</h2>
           <div id="plan-past-list"></div>
@@ -1505,6 +1510,7 @@
             <label class="check-row"><input type="checkbox" id="notify-pref-competition"> Competition updates</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-friend_catch"> Catches from people I follow</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-friend_session"> Sessions from people I follow</label>
+            <label class="check-row"><input type="checkbox" id="notify-pref-trip_plan"> Trip plans shared with me</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-tackle_share"> Tackle sharing</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-tackle_restock"> Low tackle stock</label>
             <label class="check-row"><input type="checkbox" id="notify-pref-tackle_nudge"> Mid-session bait/dip reminder</label>
@@ -6297,10 +6303,10 @@ function urlBase64ToUint8Array(base64String){
   return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
-// The 14 notifications.type values collapse into these 9 user-facing
+// The 15 notifications.type values collapse into these 10 user-facing
 // toggles server-side (see TYPE_TO_PREFERENCE in send-notification-push) -
 // kept in sync with that mapping by hand, since they live in different runtimes.
-const NOTIFICATION_PREF_KEYS = ['badge','follow','social','competition','friend_catch','friend_session','tackle_share','tackle_restock','tackle_nudge'];
+const NOTIFICATION_PREF_KEYS = ['badge','follow','social','competition','friend_catch','friend_session','trip_plan','tackle_share','tackle_restock','tackle_nudge'];
 
 async function loadAndRenderNotificationPrefs(){
   const enableBtn = document.getElementById('enable-push-btn');
@@ -6344,7 +6350,7 @@ async function loadAndRenderNotificationPrefs(){
 
   if(subscription && isSignedIn()){
     try{
-      const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_friend_session,notify_push_tackle_share,notify_push_tackle_restock,notify_push_tackle_nudge,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
+      const rows = await sbGet('fishermen?select=notify_push_badge,notify_push_follow,notify_push_social,notify_push_competition,notify_push_friend_catch,notify_push_friend_session,notify_push_trip_plan,notify_push_tackle_share,notify_push_tackle_restock,notify_push_tackle_nudge,notify_push_rod_alert,rod_alert_minutes&user_id=eq.'+session.user.id);
       const f = rows[0];
       if(f){
         NOTIFICATION_PREF_KEYS.forEach(key=>{
@@ -6656,6 +6662,13 @@ async function goToNotificationTarget(n){
     }catch(e){ console.error(e); }
   }else if(n.target_type === 'competitions'){
     switchToTab('competitions');
+  }else if(n.target_type === 'trip_plan'){
+    // switchToTab only finds a bottom-nav button, and Plan (like Tackle and
+    // Competitions above) lives under More with no such button - goToTab
+    // drives the panel directly instead, the same way the Home restock
+    // banner reaches the Tackle Box tab.
+    goToTab('plan');
+    openPlanDetail(n.target_id);
   }
 }
 
@@ -9594,6 +9607,54 @@ async function loadTripPlans(){
   }catch(e){ console.error('loadTripPlans failed', e); return []; }
 }
 
+// ---------- Trip plan sharing ----------
+// Free: a mate you share with can see and tick the checklist together - one
+// list, nobody packs the same gazebo twice. Pro (based on the OWNER's plan,
+// same reasoning as competition_is_pro): items can also be assigned to a
+// specific person, so the group can divide up who's bringing what.
+async function loadTripPlanShares(planId){
+  try{ return await sbGet('trip_plan_shares?select=shared_with_user_id&trip_plan_id=eq.'+planId); }
+  catch(e){ console.error('loadTripPlanShares failed', e); return []; }
+}
+async function shareTripPlanWith(planId, userId){
+  await sbPost('trip_plan_shares', {id: uid(), trip_plan_id: planId, owner_user_id: session.user.id, shared_with_user_id: userId});
+  notifyTripPlanShare(planId, userId);
+}
+async function unshareTripPlanWith(planId, userId){
+  await sbDelete('trip_plan_shares', 'trip_plan_id=eq.'+planId+'&shared_with_user_id=eq.'+userId);
+}
+async function notifyTripPlanShare(planId, userId){
+  try{ await sbRpc('notify_trip_plan_share', {p_trip_plan_id: planId, p_shared_with_user_id: userId}); }
+  catch(e){ console.error('notify_trip_plan_share failed', e); }
+}
+async function tripPlanIsPro(planId){
+  try{ return await sbRpc('trip_plan_is_pro', {p_trip_plan_id: planId}); }
+  catch(e){ console.error('trip_plan_is_pro failed', e); return false; }
+}
+// Plans someone else shared with me - readable now that trip_plans has a
+// shared-viewer select policy alongside the owner-only one.
+async function loadPlansSharedWithMe(){
+  if(!isSignedIn()) return [];
+  try{
+    const shareRows = await sbGet('trip_plan_shares?select=trip_plan_id&shared_with_user_id=eq.'+session.user.id);
+    if(!shareRows.length) return [];
+    const ids = shareRows.map(r=> r.trip_plan_id);
+    const plans = await sbGet('trip_plans?select=*&id=in.('+ids.join(',')+')&order=trip_date.asc');
+    return plans.map(p=>{
+      const owner = people.find(x=> x.user_id === p.owner_user_id);
+      return Object.assign({}, p, {ownerName: owner ? owner.name : 'A mate'});
+    });
+  }catch(e){ console.error('loadPlansSharedWithMe failed', e); return []; }
+}
+function renderPlanSharePickerHtml(shares){
+  const friends = getMutualFriends();
+  if(!friends.length) return '<div class="empty">No mutual friends yet — you both need to follow each other.</div>';
+  return friends.map(p=>
+    '<label class="check-row"><input type="checkbox" class="plan-share-check" data-user="' + escapeHtml(p.user_id) + '"'
+      + (shares.has(p.user_id) ? ' checked' : '') + '> ' + escapeHtml(p.name) + '</label>'
+  ).join('');
+}
+
 // Names (lowercased) of every bait/dip mentioned on a session's catches -
 // read straight off the catch rows rather than any rig/combo record, since
 // that's what was actually tied on at the time, combo or not.
@@ -9719,9 +9780,12 @@ function defaultPackingTicks(recap){
 
 async function loadPlanTicks(planId){
   try{
-    const rows = await sbGet('trip_plan_items?select=tackle_item_id,ticked&trip_plan_id=eq.'+planId);
-    return new Map(rows.map(r=>[r.tackle_item_id, !!r.ticked]));
-  }catch(e){ console.error('loadPlanTicks failed', e); return new Map(); }
+    const rows = await sbGet('trip_plan_items?select=tackle_item_id,ticked,assigned_user_id&trip_plan_id=eq.'+planId);
+    return {
+      ticks: new Map(rows.map(r=>[r.tackle_item_id, !!r.ticked])),
+      assignments: new Map(rows.filter(r=> r.assigned_user_id).map(r=>[r.tackle_item_id, r.assigned_user_id]))
+    };
+  }catch(e){ console.error('loadPlanTicks failed', e); return {ticks: new Map(), assignments: new Map()}; }
 }
 
 async function setPlanTick(planId, tackleItemId, ticked){
@@ -9730,7 +9794,22 @@ async function setPlanTick(planId, tackleItemId, ticked){
   }catch(e){ console.error('setPlanTick failed', e); }
 }
 
-function renderPlanChecklistHtml(items, ticks){
+// Pro only (based on the plan owner's account) - who's bringing this item
+async function setPlanItemAssignment(planId, tackleItemId, userId){
+  try{
+    await sbUpsert('trip_plan_items', {trip_plan_id: planId, tackle_item_id: tackleItemId, assigned_user_id: userId || null}, 'trip_plan_id,tackle_item_id');
+  }catch(e){ console.error('setPlanItemAssignment failed', e); }
+}
+
+function planAssignSelectHtml(cls, dataAttr, value, assignedTo, assignable){
+  if(!assignable || !assignable.length) return '';
+  return '<select class="' + cls + '" data-' + dataAttr + '="' + escapeHtml(value) + '" style="margin-left:auto;font-size:12px;padding:2px 4px;max-width:120px;">'
+    + '<option value="">Unassigned</option>'
+    + assignable.map(p=> '<option value="' + escapeHtml(p.user_id) + '"' + (p.user_id === assignedTo ? ' selected' : '') + '>' + escapeHtml(p.name) + '</option>').join('')
+    + '</select>';
+}
+
+function renderPlanChecklistHtml(items, ticks, assignments, assignable){
   const byCat = {};
   items.forEach(it=>{ const c = tackleCat(it); (byCat[c] = byCat[c] || []).push(it); });
   const cats = Object.keys(byCat).sort((a,b)=> a.localeCompare(b));
@@ -9738,9 +9817,12 @@ function renderPlanChecklistHtml(items, ticks){
   return cats.map(c=>{
     const rows = byCat[c].slice().sort((a,b)=> a.name.localeCompare(b.name)).map(it=>{
       const checked = ticks.has(it.id) ? ticks.get(it.id) : false;
+      const assignedTo = assignments ? assignments.get(it.id) : null;
       return '<label class="plan-item-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
         + '<input type="checkbox" class="plan-pack-check" data-item-id="' + escapeHtml(it.id) + '"' + (checked ? ' checked' : '') + '>'
-        + '<span>' + escapeHtml(it.name) + (it.brand ? ' <span class="pc-line muted">(' + escapeHtml(it.brand) + ')</span>' : '') + '</span></label>';
+        + '<span>' + escapeHtml(it.name) + (it.brand ? ' <span class="pc-line muted">(' + escapeHtml(it.brand) + ')</span>' : '') + '</span>'
+        + planAssignSelectHtml('plan-pack-assign', 'item-id', it.id, assignedTo, assignable)
+        + '</label>';
     }).join('');
     return '<div class="profile-catch plan-item-group"><div class="pc-head">' + escapeHtml(c) + '</div>' + rows + '</div>';
   }).join('');
@@ -9820,6 +9902,18 @@ async function setKitTick(planId, itemKey, category, ticked, label){
   }catch(e){ console.error('setKitTick failed', e); }
 }
 
+async function setKitItemAssignment(planId, itemKey, category, userId){
+  try{
+    // A kit item with no row yet reads as ticked by default (see
+    // renderKitSectionsHtml) - creating its first row here has to carry that
+    // forward explicitly, or assigning an untouched item would silently
+    // un-tick it (the row's own ticked column defaults to false on insert).
+    const existing = await sbGet('trip_plan_kit_items?select=ticked&trip_plan_id=eq.'+planId+'&item_key=eq.'+encodeURIComponent(itemKey));
+    const ticked = existing[0] ? existing[0].ticked : true;
+    await sbUpsert('trip_plan_kit_items', {trip_plan_id: planId, item_key: itemKey, category, ticked, assigned_user_id: userId || null}, 'trip_plan_id,item_key');
+  }catch(e){ console.error('setKitItemAssignment failed', e); }
+}
+
 async function deleteKitItem(planId, itemKey){
   try{ await sbDelete('trip_plan_kit_items', 'trip_plan_id=eq.'+planId+'&item_key=eq.'+encodeURIComponent(itemKey)); }
   catch(e){ console.error('deleteKitItem failed', e); }
@@ -9839,7 +9933,7 @@ function planDateRangeLabel(plan){
   return start + ' – ' + end;
 }
 
-function renderKitSectionsHtml(plan, kitRows){
+function renderKitSectionsHtml(plan, kitRows, isOwner, assignable){
   const byKey = new Map(kitRows.map(r=>[r.item_key, r]));
   return KIT_CATEGORIES.filter(cat=> !cat.multiDayOnly || isMultiDay(plan)).map(cat=>{
     const defaultRows = cat.items.map(it=>{
@@ -9848,17 +9942,23 @@ function renderKitSectionsHtml(plan, kitRows){
       const checked = row ? row.ticked : true; // defaults start ticked until you say otherwise
       return '<label class="plan-item-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
         + '<input type="checkbox" class="plan-kit-check" data-item-key="' + escapeHtml(fullKey) + '" data-category="' + escapeHtml(cat.key) + '"' + (checked ? ' checked' : '') + '>'
-        + '<span>' + escapeHtml(it.label) + '</span></label>';
+        + '<span>' + escapeHtml(it.label) + '</span>'
+        + planAssignSelectHtml('plan-kit-assign', 'item-key', fullKey, row ? row.assigned_user_id : null, assignable)
+        + '</label>';
     }).join('');
     const customRows = kitRows.filter(r=> r.category === cat.key && r.label).map(r=>
       '<label class="plan-item-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
         + '<input type="checkbox" class="plan-kit-check" data-item-key="' + escapeHtml(r.item_key) + '" data-category="' + escapeHtml(cat.key) + '" data-label="' + escapeHtml(r.label) + '"' + (r.ticked ? ' checked' : '') + '>'
         + '<span>' + escapeHtml(r.label) + '</span>'
-        + '<button type="button" class="mini-btn plan-kit-remove" data-item-key="' + escapeHtml(r.item_key) + '" style="margin-left:auto;padding:2px 8px;">Remove</button></label>'
+        + planAssignSelectHtml('plan-kit-assign', 'item-key', r.item_key, r.assigned_user_id, assignable)
+        + (isOwner ? '<button type="button" class="mini-btn plan-kit-remove" data-item-key="' + escapeHtml(r.item_key) + '" style="margin-left:8px;padding:2px 8px;">Remove</button>' : '') + '</label>'
     ).join('');
-    const addBtn = isPro()
+    // Structurally changing the checklist (adding/removing a custom item) stays
+    // owner-only, same as editing dates - a shared mate ticks and assigns, but
+    // doesn't reshape the list out from under the owner.
+    const addBtn = !isOwner ? '' : (isPro()
       ? '<button type="button" class="mini-btn plan-kit-add" data-category="' + escapeHtml(cat.key) + '" style="margin-top:4px;">+ Add item</button>'
-      : '<button type="button" class="mini-btn plan-kit-upgrade" style="margin-top:4px;">+ Add item (Pro)</button>';
+      : '<button type="button" class="mini-btn plan-kit-upgrade" style="margin-top:4px;">+ Add item (Pro)</button>');
     return '<details class="ins-group" data-plan-group="' + escapeHtml(cat.key) + '" open>'
       + '<summary><span class="ins-group-title">' + escapeHtml(cat.label) + '</span></summary>'
       + '<div class="ins-group-body">' + defaultRows + customRows + addBtn + '</div></details>';
@@ -9873,6 +9973,12 @@ function wireKitSectionEvents(){
     // lives in KIT_CATEGORIES, never in the row, so it never gets written here -
     // otherwise ticking a default would make it look like a custom item too.
     cb.addEventListener('change', ()=> setKitTick(planId, cb.dataset.itemKey, cb.dataset.category, cb.checked, cb.dataset.label || null));
+  });
+  kitBody.querySelectorAll('.plan-kit-assign').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const [cat] = sel.dataset.itemKey.split(':');
+      setKitItemAssignment(planId, sel.dataset.itemKey, cat, sel.value);
+    });
   });
   kitBody.querySelectorAll('.plan-kit-add').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -9898,11 +10004,11 @@ function wireKitSectionEvents(){
 async function refreshKitSection(){
   if(!planDetailCurrent) return;
   const kitRows = await loadKitRows(planDetailCurrent.plan.id);
-  document.getElementById('plan-kit-body').innerHTML = renderKitSectionsHtml(planDetailCurrent.plan, kitRows);
+  document.getElementById('plan-kit-body').innerHTML = renderKitSectionsHtml(planDetailCurrent.plan, kitRows, planDetailCurrent.isOwner, planDetailCurrent.assignable);
   wireKitSectionEvents();
 }
 
-let planDetailCurrent = null; // {plan, items} for whichever plan is open in the dialog
+let planDetailCurrent = null; // {plan, items, isOwner, assignable} for whichever plan is open in the dialog
 
 let planDetailMapInstance = null;
 // A quick "where am I headed" reference map on the trip plan - read-only,
@@ -9931,6 +10037,7 @@ async function openPlanDetail(planId){
     plan = rows[0];
   }catch(e){ console.error(e); }
   if(!plan){ body.innerHTML = '<div class="empty">Could not load this plan.</div>'; return; }
+  const isOwner = plan.owner_user_id === session.user.id;
   title.textContent = plan.venue_name + ' — ' + planDateRangeLabel(plan);
 
   tackleItemsCache = await loadTackleItems();
@@ -9940,39 +10047,94 @@ async function openPlanDetail(planId){
   const venues = await loadMyVenues();
   const venue = venues.find(v=>v.id===plan.venue_id) || null;
 
-  const [recap, forecastHtml, existingTicks, kitRows] = await Promise.all([
+  const [recap, forecastHtml, planTicks, kitRows, shareRows, ownerIsPro] = await Promise.all([
     loadVenueLastTrip(plan.venue_id),
     renderPlanForecastHtml(venue, plan),
     loadPlanTicks(plan.id),
-    loadKitRows(plan.id)
+    loadKitRows(plan.id),
+    loadTripPlanShares(plan.id),
+    tripPlanIsPro(plan.id)
   ]);
+  const existingTicks = planTicks.ticks;
 
   const items = activeTackleItems();
   // A brand new plan with no saved ticks yet starts from the smart default;
   // once anything has been saved, that's respected as-is, even if it's all unticked.
   const ticks = existingTicks.size ? existingTicks : new Map([...defaultPackingTicks(recap)].map(id=>[id, true]));
 
-  planDetailCurrent = {plan, items};
+  // Who the checklist can be assigned to (Pro only, based on the owner's
+  // plan) - the owner plus everyone the plan is shared with.
+  let assignable = [];
+  if(ownerIsPro){
+    const owner = people.find(p=> p.user_id === plan.owner_user_id);
+    if(owner) assignable.push({user_id: plan.owner_user_id, name: owner.name});
+    shareRows.forEach(r=>{
+      const p = people.find(x=> x.user_id === r.shared_with_user_id);
+      if(p) assignable.push({user_id: r.shared_with_user_id, name: p.name});
+    });
+  }
+
+  planDetailCurrent = {plan, items, isOwner, assignable};
 
   const hasCoords = venue && venue.latitude != null && venue.longitude != null;
+  const ownerName = isOwner ? null : (people.find(p=> p.user_id === plan.owner_user_id) || {}).name;
 
-  body.innerHTML = '<div class="profile-catch"><div class="row2">'
-      + '<div class="field"><label>Start date</label><input type="date" id="plan-detail-start" value="' + escapeHtml(plan.trip_date) + '"></div>'
-      + '<div class="field"><label>Return date (optional)</label><input type="date" id="plan-detail-return" value="' + escapeHtml(plan.return_date || '') + '"></div>'
+  const shareSectionHtml = !isOwner ? '' : '<section class="card" style="margin-bottom:14px;">'
+    + '<p class="sub-heading">Share this plan</p>'
+    + '<p class="pc-line muted">Mates you share with can see this plan and tick the checklist together.' + (ownerIsPro ? '' : ' 🔒 Pro also lets you assign items to specific people.') + '</p>'
+    + '<div id="plan-share-picker">' + renderPlanSharePickerHtml(new Set(shareRows.map(r=> r.shared_with_user_id))) + '</div>'
+    + '</section>';
+
+  body.innerHTML = (ownerName ? '<p class="pc-line muted" style="margin-bottom:8px;">Shared by ' + escapeHtml(ownerName) + '</p>' : '')
+    + '<div class="profile-catch"><div class="row2">'
+      + '<div class="field"><label>Start date</label><input type="date" id="plan-detail-start" value="' + escapeHtml(plan.trip_date) + '"' + (isOwner ? '' : ' disabled') + '></div>'
+      + '<div class="field"><label>Return date (optional)</label><input type="date" id="plan-detail-return" value="' + escapeHtml(plan.return_date || '') + '"' + (isOwner ? '' : ' disabled') + '></div>'
       + '</div><div class="status" id="plan-detail-date-status"></div></div>'
     + (hasCoords ? '<div id="plan-detail-map" style="height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;"></div>' : '')
+    + shareSectionHtml
     + renderPlanRecapHtml(recap) + '<div id="plan-detail-forecast">' + forecastHtml + '</div>'
-    + renderPlanRestockHtml()
-    + '<details class="ins-group" data-plan-group="tackle" open><summary><span class="ins-group-title">Tackle box</span></summary>'
-      + '<div class="ins-group-body">' + renderPlanChecklistHtml(items, ticks) + '</div></details>'
-    + '<div id="plan-kit-body">' + renderKitSectionsHtml(plan, kitRows) + '</div>';
+    // The Tackle box checklist and restock banner are the OWNER's own private
+    // gear - a shared mate's own tackle box has nothing to do with this trip,
+    // and may not even be visible to them (tackle sharing is a separate,
+    // per-item/per-box decision). The kit list below is plan data, not tied
+    // to anyone's private tackle box, so that's where the shared value is.
+    + (isOwner ? renderPlanRestockHtml()
+      + '<details class="ins-group" data-plan-group="tackle" open><summary><span class="ins-group-title">Tackle box</span></summary>'
+        + '<div class="ins-group-body">' + renderPlanChecklistHtml(items, ticks, planTicks.assignments, assignable) + '</div></details>' : '')
+    + '<div id="plan-kit-body">' + renderKitSectionsHtml(plan, kitRows, isOwner, assignable) + '</div>';
+
+  document.getElementById('plan-detail-delete').style.display = isOwner ? '' : 'none';
 
   if(hasCoords) renderPlanDetailMap(venue);
 
   body.querySelectorAll('.plan-pack-check').forEach(cb=>{
     cb.addEventListener('change', ()=> setPlanTick(plan.id, cb.dataset.itemId, cb.checked));
   });
+  body.querySelectorAll('.plan-pack-assign').forEach(sel=>{
+    sel.addEventListener('change', ()=> setPlanItemAssignment(plan.id, sel.dataset.itemId, sel.value));
+  });
   wireKitSectionEvents();
+
+  const sharePicker = document.getElementById('plan-share-picker');
+  if(sharePicker){
+    sharePicker.querySelectorAll('.plan-share-check').forEach(cb=>{
+      cb.addEventListener('change', async ()=>{
+        cb.disabled = true;
+        try{
+          if(cb.checked) await shareTripPlanWith(plan.id, cb.dataset.user);
+          else await unshareTripPlanWith(plan.id, cb.dataset.user);
+        }catch(e){
+          console.error(e);
+          cb.checked = !cb.checked;
+          alert('Could not save: ' + (e.message || 'unknown error'));
+        }
+        cb.disabled = false;
+      });
+    });
+  }
+
+  if(!isOwner) return; // dates, forecast-on-edit and deletion are owner-only below
+
   const onDateChange = async ()=>{
     const st2 = document.getElementById('plan-detail-date-status');
     const newStart = document.getElementById('plan-detail-start').value;
@@ -10002,6 +10164,7 @@ async function deleteTripPlanPrompt(){
   if(!window.confirm('Delete this trip plan?\n\nThis cannot be undone.')) return;
   try{
     await sbDelete('trip_plan_items', 'trip_plan_id=eq.'+planDetailCurrent.plan.id);
+    await sbDelete('trip_plan_kit_items', 'trip_plan_id=eq.'+planDetailCurrent.plan.id);
     await sbDelete('trip_plans', 'id=eq.'+planDetailCurrent.plan.id);
     document.getElementById('plan-detail-modal').close();
     renderPlanTab();
@@ -10011,28 +10174,36 @@ async function deleteTripPlanPrompt(){
   }
 }
 
-function renderPlanListHtml(plans){
-  if(!plans.length) return '<div class="empty">No trips planned yet — add one above.</div>';
+function renderPlanListHtml(plans, emptyText){
+  if(!plans.length) return '<div class="empty">' + escapeHtml(emptyText || 'No trips planned yet — add one above.') + '</div>';
   return '<ul class="people-list">' + plans.map(p=>{
     const when = planDateRangeLabel(p);
     return '<li class="plan-list-row" data-plan-id="' + escapeHtml(p.id) + '" style="cursor:pointer;">'
-      + '<div class="who"><b>' + escapeHtml(p.venue_name) + '</b><div class="pc-line muted">' + escapeHtml(when) + (p.session_id ? ' · fished' : '') + '</div></div>'
+      + '<div class="who"><b>' + escapeHtml(p.venue_name) + '</b><div class="pc-line muted">' + escapeHtml(when) + (p.session_id ? ' · fished' : '') + (p.ownerName ? ' · shared by ' + escapeHtml(p.ownerName) : '') + '</div></div>'
       + '</li>';
   }).join('') + '</ul>';
 }
 
 async function renderPlanTab(){
   const list = document.getElementById('plan-list');
+  const sharedCard = document.getElementById('plan-shared-card');
+  const sharedList = document.getElementById('plan-shared-list');
   const pastCard = document.getElementById('plan-past-card');
   const pastList = document.getElementById('plan-past-list');
   list.innerHTML = '<div class="empty">Loading...</div>';
-  const plans = await loadTripPlans();
+  const [plans, sharedPlans] = await Promise.all([loadTripPlans(), loadPlansSharedWithMe()]);
   const today = new Date().toISOString().slice(0, 10);
   // "Upcoming" lasts until the trip is fully over - a multi-day trip that
   // started yesterday but returns tomorrow shouldn't drop into Past early.
   const upcoming = plans.filter(p=> (p.return_date || p.trip_date) >= today);
   const past = plans.filter(p=> (p.return_date || p.trip_date) < today);
   list.innerHTML = renderPlanListHtml(upcoming);
+  if(sharedPlans.length){
+    sharedCard.style.display = 'block';
+    sharedList.innerHTML = renderPlanListHtml(sharedPlans, 'Nothing shared with you yet.');
+  }else{
+    sharedCard.style.display = 'none';
+  }
   if(past.length){
     pastCard.style.display = 'block';
     pastList.innerHTML = renderPlanListHtml(past.slice().reverse());
