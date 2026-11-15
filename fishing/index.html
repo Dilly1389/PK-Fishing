@@ -8902,8 +8902,8 @@ function myConditionsSignal(catches, opts){
   const pct = r=> Math.round(r * 100) + '%';
   const detail = `${top.fish} fish from ${top.total} casts (${pct(top.rate)}), against ${pct(overall)} overall for you.`;
   return diff > 0
-    ? {tone:'good', text: `Based on your own catches: ${top.what} has worked out for you before — ${detail}`}
-    : {tone:'quiet', text: `Based on your own catches: ${top.what} hasn't been your best combination — ${detail}`};
+    ? {tone:'good', label:'Bite Read', text: `based on your own catches, ${top.what} has worked out for you before — ${detail}`}
+    : {tone:'quiet', label:'Bite Read', text: `based on your own catches, ${top.what} hasn't been your best combination — ${detail}`};
 }
 async function myConditionsSignalForNow(weather){
   if(!isPro() || !isSignedIn() || !weather) return null;
@@ -9380,7 +9380,7 @@ async function openForecast(){
   })();
   if(sunMoonLine) html += `<p class="pc-line" style="margin-bottom:10px;">${escapeHtml(sunMoonLine)}</p>`;
   const signal = cachedWeather ? await myConditionsSignalForNow(cachedWeather) : null;
-  if(signal) html += `<p class="pc-line" style="margin-bottom:14px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${escapeHtml(signal.text)}</p>`;
+  if(signal) html += `<p class="pc-line" style="margin-bottom:14px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}"><b>${escapeHtml(signal.label)}:</b> ${escapeHtml(signal.text)}</p>`;
 
   // A subtle background tint for hours outside sunrise-sunset, same idea as
   // Yr.no's meteogram shading the night portion of its timeline - sunrise/
@@ -16678,7 +16678,7 @@ async function renderHomeWeather(){
     const sunMoon = combineSunMoon(w, rawSunMoon);
     const m = moonPhase();
     const signal = await myConditionsSignalForNow(w);
-    const signalHtml = signal ? `<div class="pc-line" style="margin-top:8px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${escapeHtml(signal.text)}</div>` : '';
+    const signalHtml = signal ? `<div class="pc-line" style="margin-top:8px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}"><b>${escapeHtml(signal.label)}:</b> ${escapeHtml(signal.text)}</div>` : '';
     // Shown in every display mode (visual/full/summary) and in ink, not muted
     // grey - a line easy to miss is as good as not shipped. Uses the current
     // moon phase emoji rather than a generic one, so it visually ties back to
