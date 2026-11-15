@@ -8749,6 +8749,18 @@ function windDirLabel(deg){
   return dirs[Math.round(deg/45) % 8];
 }
 
+// WHO's own global solar UV index bands - a bare number ("UV 8") means
+// nothing to most people without looking it up, same reason pressure is
+// shown as "rising/falling" and not just a raw hPa figure.
+function uvCategory(uv){
+  if(uv == null) return null;
+  return uv < 3 ? 'Low' : uv < 6 ? 'Moderate' : uv < 8 ? 'High' : uv < 11 ? 'Very High' : 'Extreme';
+}
+function uvLabel(uv){
+  if(uv == null) return '';
+  return 'UV ' + Math.round(uv) + ' · ' + uvCategory(uv);
+}
+
 // Pure date math — no API needed. Based on a known new moon reference date.
 function moonPhase(date){
   date = date || new Date();
@@ -9128,7 +9140,7 @@ async function renderSessionWeather(){
     if(weather.windSpeed != null) parts.push(`💨 ${fmtWind(weather.windSpeed)} ${windDirLabel(weather.windDir)}` + (weather.windGust != null ? ` (gusts ${fmtWind(weather.windGust)})` : ''));
     if(weather.cloudCover != null) parts.push(`☁️ ${Math.round(weather.cloudCover)}%`);
     if(weather.pressure != null) parts.push(fmtPressure(weather.pressure));
-    if(weather.uvIndex != null && weather.uvIndex >= 3) parts.push(`☀️ UV ${Math.round(weather.uvIndex)}`);
+    if(weather.uvIndex != null && weather.uvIndex >= 3) parts.push(`☀️ ${uvLabel(weather.uvIndex)}`);
   }
   if(moon) parts.push(`${moon.emoji} ${moon.label}`);
 
@@ -9211,7 +9223,7 @@ async function openForecast(){
         <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}${h.gust != null ? ' (gusts '+fmtWind(h.gust)+')' : ''}</span>
         ${h.rain != null ? `<span class="pill">🌧️ ${Math.round(h.rain)}%</span>` : ''}
         ${h.pressure != null ? `<span class="pill">${fmtPressure(h.pressure)}</span>` : ''}
-        ${h.uv != null && h.uv >= 3 ? `<span class="pill">☀️ UV ${Math.round(h.uv)}</span>` : ''}
+        ${h.uv != null && h.uv >= 3 ? `<span class="pill">☀️ ${uvLabel(h.uv)}</span>` : ''}
       </div>
     </li>`;
   });
@@ -9254,7 +9266,7 @@ async function openForecast(){
             <span class="pill">${tempValue(data.daily.temperature_2m_min[i])}–${fmtTemp(data.daily.temperature_2m_max[i])}</span>
             <span class="pill">💨 ${fmtWind(data.daily.wind_speed_10m_max[i])}${data.daily.wind_gusts_10m_max?.[i] != null ? ' (gusts '+fmtWind(data.daily.wind_gusts_10m_max[i])+')' : ''}</span>
             <span class="pill">🌧️ ${Math.round(data.daily.precipitation_probability_max[i])}%</span>
-            ${data.daily.uv_index_max?.[i] != null && data.daily.uv_index_max[i] >= 3 ? `<span class="pill">☀️ UV ${Math.round(data.daily.uv_index_max[i])}</span>` : ''}
+            ${data.daily.uv_index_max?.[i] != null && data.daily.uv_index_max[i] >= 3 ? `<span class="pill">☀️ ${uvLabel(data.daily.uv_index_max[i])}</span>` : ''}
           </div>
         </summary>
         <ul class="people-list fc-day-hours">${slots.map(h=>`<li>
@@ -9919,7 +9931,7 @@ async function renderPlanForecastHtml(venue, plan){
       + (max != null ? fmtTemp(max) + ' / ' + fmtTemp(min) : '—')
       + (wind != null ? ', wind up to ' + fmtWind(wind) + (gust != null ? ' (gusts ' + fmtWind(gust) + ')' : '') : '')
       + (rain != null ? ', ' + Math.round(rain) + '% rain chance' : '')
-      + (uv != null ? ', UV ' + Math.round(uv) : '') + '</div>';
+      + (uv != null ? ', ' + uvLabel(uv) : '') + '</div>';
   }).join('');
   // A trip longer than the 7-day forecast window still shows what it can
   const beyondWindow = endStr > times[times.length - 1];
@@ -16496,7 +16508,7 @@ async function renderHomeWeather(){
       const wind = w.windSpeed != null ? box(`${windCompassSvg(w.windDir)}<b style="font-size:14px;">${escapeHtml(fmtWind(w.windSpeed))}</b><span>${w.windDir != null ? 'from ' + escapeHtml(windDirLabel(w.windDir)) : 'wind'}${w.windGust != null ? ' · gusts ' + escapeHtml(fmtWind(w.windGust)) : ''}</span>`) : '';
       const press = w.pressure != null ? box(`<div style="width:100%;min-height:32px;">${pressureGraphSvg(pressureNext)}</div><b style="font-size:14px;">${escapeHtml(fmtPressure(w.pressure))}</b><span>${escapeHtml(trend ? trend.trim() : 'pressure')}</span>`) : '';
       const moon = box(`<span style="font-size:32px;line-height:46px;" aria-hidden="true">${m.emoji}</span><b style="font-size:14px;">Moon</b><span>${escapeHtml(m.label)}</span>`);
-      const uv = (w.uvIndex != null && w.uvIndex >= 3) ? box(`<span style="font-size:32px;line-height:46px;" aria-hidden="true">☀️</span><b style="font-size:14px;">UV ${Math.round(w.uvIndex)}</b><span>UV index</span>`) : '';
+      const uv = (w.uvIndex != null && w.uvIndex >= 3) ? box(`<span style="font-size:32px;line-height:46px;" aria-hidden="true">☀️</span><b style="font-size:14px;">UV ${Math.round(w.uvIndex)}</b><span>${escapeHtml(uvCategory(w.uvIndex))}</span>`) : '';
       el.innerHTML = `
         ${w.stormRisk ? stormWarningHtml() : ''}
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
@@ -16517,7 +16529,7 @@ async function renderHomeWeather(){
       if(w.windGust != null) tiles.push(tile(fmtWind(w.windGust), 'gusts'));
       if(w.pressure != null) tiles.push(tile(fmtPressure(w.pressure), trend ? trend.trim() : 'pressure'));
       if(w.cloudCover != null) tiles.push(tile(Math.round(w.cloudCover) + '%', 'cloud'));
-      if(w.uvIndex != null && w.uvIndex >= 3) tiles.push(tile(String(Math.round(w.uvIndex)), 'UV index'));
+      if(w.uvIndex != null && w.uvIndex >= 3) tiles.push(tile(String(Math.round(w.uvIndex)), 'UV · ' + uvCategory(w.uvIndex)));
       tiles.push(tile(m.emoji, m.label));
       el.innerHTML = `
         ${w.stormRisk ? stormWarningHtml() : ''}
@@ -16532,7 +16544,7 @@ async function renderHomeWeather(){
           ${w.temp != null ? fmtTemp(w.temp) : ''}
           ${w.windSpeed != null ? ' · 💨 '+fmtWind(w.windSpeed)+' '+windDirLabel(w.windDir)+(w.windGust != null ? ' (gusts '+fmtWind(w.windGust)+')' : '') : ''}
           ${w.pressure != null ? ' · '+fmtPressure(w.pressure)+trend : ''}
-          ${(w.uvIndex != null && w.uvIndex >= 3) ? ' · ☀️ UV '+Math.round(w.uvIndex) : ''}
+          ${(w.uvIndex != null && w.uvIndex >= 3) ? ' · ☀️ '+uvLabel(w.uvIndex) : ''}
           · <span title="${escapeHtml(m.label)}" aria-label="${escapeHtml(m.label)}">${m.emoji}</span>
         </div>
         <div style="font-size:12px;color:var(--muted);white-space:nowrap;">Forecast ›</div>
