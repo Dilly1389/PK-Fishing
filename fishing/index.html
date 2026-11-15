@@ -8710,7 +8710,7 @@ async function fetchSunMoon(lat, lng){
 
 async function fetchWeather(lat, lng){
   try{
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,precipitation,weather_code,cape,uv_index&hourly=pressure_msl,weather_code,cape&past_hours=3&forecast_hours=4`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,precipitation,weather_code,cape,uv_index&hourly=pressure_msl,weather_code,cape&daily=sunrise,sunset&past_hours=3&forecast_hours=4&timezone=auto`;
     const res = await fetch(url);
     if(!res.ok) return null;
     const data = await res.json();
@@ -8738,9 +8738,31 @@ async function fetchWeather(lat, lng){
       pressure: c.pressure_msl,
       precipitation: c.precipitation ?? null,
       pressureChange,
-      stormRisk
+      stormRisk,
+      // Same host as everything else above, so sunrise/sunset survive even
+      // on a network/ad-blocker that's fine with Open-Meteo but blocks the
+      // separate astronomy API (fetchSunMoon) - see combineSunMoon().
+      sunrise: data.daily && data.daily.sunrise && data.daily.sunrise[0] ? new Date(data.daily.sunrise[0]) : null,
+      sunset: data.daily && data.daily.sunset && data.daily.sunset[0] ? new Date(data.daily.sunset[0]) : null
     };
   }catch(e){ console.error('fetchWeather failed', e); return null; }
+}
+// Merges Open-Meteo's own sunrise/sunset (resilient - same host as the rest
+// of the weather data) with Sunrise-Sunset.org's moon-only extras, so a
+// network that blocks just the astronomy API still shows sun times instead
+// of the whole feature silently disappearing.
+function combineSunMoon(w, sunMoon){
+  const sunrise = (w && w.sunrise) || (sunMoon && sunMoon.sunrise) || null;
+  const sunset = (w && w.sunset) || (sunMoon && sunMoon.sunset) || null;
+  if(!sunrise && !sunset && !sunMoon) return null;
+  return {
+    sunrise, sunset,
+    moonrise: sunMoon ? sunMoon.moonrise : null,
+    moonset: sunMoon ? sunMoon.moonset : null,
+    moonIllumination: sunMoon ? sunMoon.moonIllumination : null,
+    goldenHourMorning: sunMoon ? sunMoon.goldenHourMorning : null,
+    goldenHourEvening: sunMoon ? sunMoon.goldenHourEvening : null
+  };
 }
 
 function windDirLabel(deg){
@@ -9127,7 +9149,8 @@ async function renderSessionWeather(){
       }catch(e){ console.error(e); }
     }
     if(!coords) coords = await capturePosition();
-    const [weather, sunMoon] = coords ? await Promise.all([fetchWeather(coords.lat, coords.lng), fetchSunMoon(coords.lat, coords.lng)]) : [null, null];
+    const [weather, rawSunMoon] = coords ? await Promise.all([fetchWeather(coords.lat, coords.lng), fetchSunMoon(coords.lat, coords.lng)]) : [null, null];
+    const sunMoon = combineSunMoon(weather, rawSunMoon);
     weatherCache = {sessionId: activeSession.id, weather, moon: moonPhase(), sunMoon, coords, fetchedAt: Date.now()};
   }
 
@@ -9156,6 +9179,140 @@ async function renderSessionWeather(){
       ${weatherCache.coords ? `<span style="opacity:.7;flex-shrink:0;">Forecast ›</span>` : ''}
     </div>`;
   el.onclick = weatherCache.coords ? openForecast : null;
+}
+
+// Remembered per device, like the Home weather display mode - List stays
+// the default so nobody's view changes under them; Chart is opt-in.
+function getForecastViewMode(){
+  try{ return localStorage.getItem('pk_fishing_forecast_view') || 'list'; }catch(e){ return 'list'; }
+}
+function setForecastViewMode(mode){
+  try{ localStorage.setItem('pk_fishing_forecast_view', mode); }catch(e){}
+}
+
+function renderHourlyListHtml(hours, isDaylight){
+  let out = '<ul class="people-list">';
+  hours.forEach(h=>{
+    const night = isDaylight && !isDaylight(h.time);
+    out += `<li${night ? ' style="background:rgba(0,0,0,.05);"' : ''}>
+      <div class="who"><b>${night ? '🌙 ' : ''}${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
+      <div class="actions">
+        <span class="pill">${h.temp != null ? fmtTemp(h.temp) : '—'}</span>
+        <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}${h.gust != null ? ' (gusts '+fmtWind(h.gust)+')' : ''}</span>
+        ${h.rain != null ? `<span class="pill">🌧️ ${Math.round(h.rain)}%</span>` : ''}
+        ${h.pressure != null ? `<span class="pill">${fmtPressure(h.pressure)}</span>` : ''}
+        ${h.uv != null && h.uv >= 3 ? `<span class="pill">☀️ ${uvLabel(h.uv)}</span>` : ''}
+      </div>
+    </li>`;
+  });
+  out += '</ul>';
+  return out;
+}
+
+// A Yr.no-style meteogram: temperature as one continuous line, rain chance
+// as bars, wind as rotated arrows, weather icons, and night/golden-hour
+// shading, all against one shared hour axis instead of 12 separate rows.
+// Hand-rolled SVG, same technique as pressureGraphSvg/windCompassSvg
+// elsewhere in this file - no charting library.
+function meteogramSvg(hours, sunMoon){
+  if(!hours || hours.length < 2) return '<p class="empty">Not enough data for a chart.</p>';
+  const n = hours.length, spacing = 64, padL = 34, padR = 34;
+  const width = padL + padR + (n - 1) * spacing;
+  const x = i=> padL + i * spacing;
+  const winStart = hours[0].time, winEnd = hours[n - 1].time;
+  const xForTime = d=>{
+    if(d <= winStart) return padL;
+    if(d >= winEnd) return x(n - 1);
+    for(let i = 0; i < n - 1; i++){
+      if(d >= hours[i].time && d <= hours[i + 1].time){
+        const t = (d - hours[i].time) / (hours[i + 1].time - hours[i].time);
+        return x(i) + t * spacing;
+      }
+    }
+    return padL;
+  };
+
+  const temps = hours.map(h=> h.temp).filter(v=> v != null);
+  const hasTemp = temps.length > 1;
+  const lo = Math.min(...temps), hi = Math.max(...temps), span = Math.max(hi - lo, 4), mid = (hi + lo) / 2;
+  const yTemp = t=> 70 - (t - mid) / span * 36;
+
+  const isNightAt = t=> sunMoon && sunMoon.sunrise && sunMoon.sunset ? !(t >= sunMoon.sunrise && t <= sunMoon.sunset) : false;
+  const hourIcon = (h, night)=>{
+    if(isStormRisk(h.code, h.cape)) return '⛈️';
+    if(h.rain != null && h.rain >= 50) return '🌧️';
+    if(h.cloud == null) return night ? '🌙' : '☀️';
+    if(h.cloud >= 80) return '☁️';
+    if(h.cloud >= 40) return night ? '☁️' : '⛅';
+    return night ? '🌙' : '☀️';
+  };
+
+  // Night shading - at most one morning run (start of window to sunrise) and
+  // one evening run (sunset to end of window), since the window is only 12h.
+  const shadeRects = [];
+  if(sunMoon && sunMoon.sunrise && sunMoon.sunrise > winStart && sunMoon.sunrise < winEnd) shadeRects.push([padL, xForTime(sunMoon.sunrise)]);
+  if(sunMoon && sunMoon.sunset && sunMoon.sunset > winStart && sunMoon.sunset < winEnd) shadeRects.push([xForTime(sunMoon.sunset), x(n - 1)]);
+  if(!shadeRects.length && isNightAt(hours[Math.floor(n / 2)].time)) shadeRects.push([padL, x(n - 1)]);
+  const goldRects = [];
+  [sunMoon && sunMoon.goldenHourMorning, sunMoon && sunMoon.goldenHourEvening].forEach(g=>{
+    if(g && g.begin && g.end && g.end > winStart && g.begin < winEnd) goldRects.push([xForTime(g.begin), xForTime(g.end)]);
+  });
+
+  let svg = `<svg viewBox="0 0 ${width} 234" width="${width}" height="234" style="display:block;" role="img" aria-label="Hour-by-hour forecast chart">`;
+  shadeRects.forEach(([x1, x2])=>{ svg += `<rect x="${x1.toFixed(1)}" y="26" width="${(x2 - x1).toFixed(1)}" height="142" fill="#2A1414" opacity="0.06"/>`; });
+  goldRects.forEach(([x1, x2])=>{ svg += `<rect x="${x1.toFixed(1)}" y="26" width="${(x2 - x1).toFixed(1)}" height="142" fill="#E63946" opacity="0.12"/>`; });
+
+  // Icons
+  svg += `<g font-size="18" text-anchor="middle">`;
+  hours.forEach((h, i)=>{ svg += `<text x="${x(i)}" y="20">${hourIcon(h, isNightAt(h.time))}</text>`; });
+  svg += `</g>`;
+
+  // Temperature line + labels
+  if(hasTemp){
+    const pts = hours.map((h, i)=> h.temp != null ? x(i) + ',' + yTemp(h.temp).toFixed(1) : null).filter(Boolean);
+    svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="#E63946" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    hours.forEach((h, i)=>{ if(h.temp != null) svg += `<circle cx="${x(i)}" cy="${yTemp(h.temp).toFixed(1)}" r="3" fill="#E63946"/>`; });
+    svg += `<g font-size="11" font-weight="700" fill="#2A1414" text-anchor="middle">`;
+    hours.forEach((h, i)=>{ if(h.temp != null) svg += `<text x="${x(i)}" y="${(yTemp(h.temp) - 7).toFixed(1)}">${Math.round(h.temp)}°</text>`; });
+    svg += `</g>`;
+  }
+
+  // Rain bars
+  svg += `<g fill="#B3121F" opacity="0.55">`;
+  hours.forEach((h, i)=>{
+    if(h.rain == null || h.rain <= 0) return;
+    const hgt = Math.max(2, Math.round(h.rain / 100 * 44));
+    svg += `<rect x="${(x(i) - 9).toFixed(1)}" y="${(160 - hgt)}" width="18" height="${hgt}" rx="2"/>`;
+  });
+  svg += `</g><g font-size="10" fill="#8A5555" text-anchor="middle">`;
+  hours.forEach((h, i)=>{ if(h.rain != null) svg += `<text x="${x(i)}" y="178">${Math.round(h.rain)}%</text>`; });
+  svg += `</g>`;
+
+  // Wind arrows (same "points where the wind is blowing toward" convention as windCompassSvg) + speed
+  svg += `<g fill="#8A5555">`;
+  hours.forEach((h, i)=>{
+    if(h.wind == null) return;
+    const deg = (h.windDir || 0) + 180;
+    svg += `<path d="M0,-8 L4,8 L0,5 L-4,8 Z" transform="translate(${x(i)},190) rotate(${Math.round(deg % 360)})"/>`;
+  });
+  svg += `</g><g font-size="10" fill="#8A5555" text-anchor="middle">`;
+  hours.forEach((h, i)=>{ if(h.wind != null) svg += `<text x="${x(i)}" y="206">${Math.round(h.wind)}</text>`; });
+  svg += `</g>`;
+
+  // Hour axis
+  svg += `<g font-size="11" fill="#8A5555" text-anchor="middle">`;
+  hours.forEach((h, i)=>{
+    const label = h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'});
+    svg += `<text x="${x(i)}" y="224"${i === 0 ? ' font-weight="700" fill="#2A1414"' : ''}>${label}</text>`;
+  });
+  svg += `</g></svg>`;
+
+  const legend = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:11px;color:var(--muted);">
+    <span>— Temperature</span><span>▮ Rain chance</span><span>↑ Wind speed (km/h)</span>
+    ${shadeRects.length ? '<span>▦ Night</span>' : ''}${goldRects.length ? '<span>▦ Golden hour</span>' : ''}
+  </div>`;
+
+  return `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:10px;padding:8px 2px 4px;">${svg}</div>${legend}`;
 }
 
 // Full forecast for wherever the session is — hourly for today, then a
@@ -9200,7 +9357,7 @@ async function openForecast(){
   // "Highlights" callout - translate the numbers into the one thing worth
   // knowing before the reader scans the grid themselves.
   const cachedWeather = weatherCache.weather;
-  const sunMoon = weatherCache.sunMoon || await fetchSunMoon(coords.lat, coords.lng);
+  const sunMoon = weatherCache.sunMoon || combineSunMoon(cachedWeather, await fetchSunMoon(coords.lat, coords.lng));
   const sunMoonLine = (()=>{
     if(!sunMoon) return '';
     const bits = [];
@@ -9214,28 +9371,22 @@ async function openForecast(){
   const signal = cachedWeather ? await myConditionsSignalForNow(cachedWeather) : null;
   if(signal) html += `<p class="pc-line" style="margin-bottom:14px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${escapeHtml(signal.text)}</p>`;
 
-  html += `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
   // A subtle background tint for hours outside sunrise-sunset, same idea as
   // Yr.no's meteogram shading the night portion of its timeline - sunrise/
-  // sunset becomes something you see at a glance in the list, not just a
-  // time you have to go read off the line above.
+  // sunset becomes something you see at a glance, not just a time you have
+  // to go read off the line above.
   const isDaylight = sunMoon && sunMoon.sunrise && sunMoon.sunset
     ? t=> t >= sunMoon.sunrise && t <= sunMoon.sunset
     : null;
-  hours.forEach(h=>{
-    const night = isDaylight && !isDaylight(h.time);
-    html += `<li${night ? ' style="background:rgba(0,0,0,.05);"' : ''}>
-      <div class="who"><b>${night ? '🌙 ' : ''}${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
-      <div class="actions">
-        <span class="pill">${h.temp != null ? fmtTemp(h.temp) : '—'}</span>
-        <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}${h.gust != null ? ' (gusts '+fmtWind(h.gust)+')' : ''}</span>
-        ${h.rain != null ? `<span class="pill">🌧️ ${Math.round(h.rain)}%</span>` : ''}
-        ${h.pressure != null ? `<span class="pill">${fmtPressure(h.pressure)}</span>` : ''}
-        ${h.uv != null && h.uv >= 3 ? `<span class="pill">☀️ ${uvLabel(h.uv)}</span>` : ''}
+  const viewMode = getForecastViewMode();
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
+      <p class="sub-heading" style="margin:0;">Next 12 hours</p>
+      <div class="metric-toggle" style="flex:0 0 auto;">
+        <button type="button" class="forecast-view-btn${viewMode === 'chart' ? '' : ' active'}" data-view="list" style="min-width:0;flex:none;padding:6px 14px;min-height:34px;font-size:12.5px;">List</button>
+        <button type="button" class="forecast-view-btn${viewMode === 'chart' ? ' active' : ''}" data-view="chart" style="min-width:0;flex:none;padding:6px 14px;min-height:34px;font-size:12.5px;">Chart</button>
       </div>
-    </li>`;
-  });
-  html += '</ul>';
+    </div>
+    <div id="forecast-12h-body">${viewMode === 'chart' ? meteogramSvg(hours, sunMoon) : renderHourlyListHtml(hours, isDaylight)}</div>`;
 
   // Pressure trend matters to carp anglers more than the raw number
   if(hours.length > 3 && hours[0].pressure != null){
@@ -9295,6 +9446,16 @@ async function openForecast(){
   html += `<p class="pc-line muted" style="margin-top:10px;">${m.emoji} ${escapeHtml(m.label)}</p>`;
   html += `<p class="pc-line muted" style="margin-top:14px;font-size:11px;">Weather by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>. Sun &amp; moon times by <a href="https://sunrise-sunset.org" target="_blank" rel="noopener">Sunrise-Sunset.org</a>.</p>`;
   body.innerHTML = html;
+
+  body.querySelectorAll('.forecast-view-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const mode = btn.dataset.view;
+      setForecastViewMode(mode);
+      body.querySelectorAll('.forecast-view-btn').forEach(b=> b.classList.toggle('active', b.dataset.view === mode));
+      const section = document.getElementById('forecast-12h-body');
+      if(section) section.innerHTML = mode === 'chart' ? meteogramSvg(hours, sunMoon) : renderHourlyListHtml(hours, isDaylight);
+    });
+  });
 }
 
 document.getElementById('session-start-btn').addEventListener('click', async ()=>{
@@ -16483,8 +16644,9 @@ async function renderHomeWeather(){
   try{
     const coords = lastKnownPosition || await capturePosition();
     if(!coords){ el.style.display = 'none'; return; }
-    const [w, sunMoon] = await Promise.all([fetchWeather(coords.lat, coords.lng), fetchSunMoon(coords.lat, coords.lng)]);
+    const [w, rawSunMoon] = await Promise.all([fetchWeather(coords.lat, coords.lng), fetchSunMoon(coords.lat, coords.lng)]);
     if(!w){ el.style.display = 'none'; return; }
+    const sunMoon = combineSunMoon(w, rawSunMoon);
     const m = moonPhase();
     const signal = await myConditionsSignalForNow(w);
     const signalHtml = signal ? `<div class="pc-line" style="margin-top:8px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${escapeHtml(signal.text)}</div>` : '';
