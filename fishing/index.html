@@ -9210,14 +9210,22 @@ async function openForecast(){
     if(eveGold && eveGold.begin && eveGold.end) bits.push(`🌇 Golden hour ${fmtClock(eveGold.begin)}–${fmtClock(eveGold.end)}`);
     return bits.join('   ');
   })();
-  if(sunMoonLine) html += `<p class="pc-line muted" style="margin-bottom:10px;">${escapeHtml(sunMoonLine)}</p>`;
+  if(sunMoonLine) html += `<p class="pc-line" style="margin-bottom:10px;">${escapeHtml(sunMoonLine)}</p>`;
   const signal = cachedWeather ? await myConditionsSignalForNow(cachedWeather) : null;
   if(signal) html += `<p class="pc-line" style="margin-bottom:14px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${escapeHtml(signal.text)}</p>`;
 
   html += `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
+  // A subtle background tint for hours outside sunrise-sunset, same idea as
+  // Yr.no's meteogram shading the night portion of its timeline - sunrise/
+  // sunset becomes something you see at a glance in the list, not just a
+  // time you have to go read off the line above.
+  const isDaylight = sunMoon && sunMoon.sunrise && sunMoon.sunset
+    ? t=> t >= sunMoon.sunrise && t <= sunMoon.sunset
+    : null;
   hours.forEach(h=>{
-    html += `<li>
-      <div class="who"><b>${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
+    const night = isDaylight && !isDaylight(h.time);
+    html += `<li${night ? ' style="background:rgba(0,0,0,.05);"' : ''}>
+      <div class="who"><b>${night ? '🌙 ' : ''}${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
       <div class="actions">
         <span class="pill">${h.temp != null ? fmtTemp(h.temp) : '—'}</span>
         <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}${h.gust != null ? ' (gusts '+fmtWind(h.gust)+')' : ''}</span>
@@ -16480,14 +16488,18 @@ async function renderHomeWeather(){
     const m = moonPhase();
     const signal = await myConditionsSignalForNow(w);
     const signalHtml = signal ? `<div class="pc-line" style="margin-top:8px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${escapeHtml(signal.text)}</div>` : '';
-    const sunMoonLine = (()=>{
+    // Shown in every display mode (visual/full/summary) and in ink, not muted
+    // grey - a line easy to miss is as good as not shipped. Uses the current
+    // moon phase emoji rather than a generic one, so it visually ties back to
+    // the Moon tile elsewhere on this same card.
+    const sunMoonHtml = (()=>{
       if(!sunMoon) return '';
       const bits = [];
       if(sunMoon.sunrise || sunMoon.sunset) bits.push(`☀️ ${fmtClock(sunMoon.sunrise) || '—'}–${fmtClock(sunMoon.sunset) || '—'}`);
-      if(sunMoon.moonrise || sunMoon.moonset) bits.push(`🌙 ${fmtClock(sunMoon.moonrise) || '—'}–${fmtClock(sunMoon.moonset) || '—'}`);
-      return bits.join('   ');
+      if(sunMoon.moonrise || sunMoon.moonset) bits.push(`${m.emoji} ${fmtClock(sunMoon.moonrise) || '—'}–${fmtClock(sunMoon.moonset) || '—'}`);
+      if(!bits.length) return '';
+      return `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink);margin:6px 0 2px;">${bits.map(b=>`<span>${escapeHtml(b)}</span>`).join('')}</div>`;
     })();
-    const sunMoonHtml = sunMoonLine ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;">${escapeHtml(sunMoonLine)}</div>` : '';
     const trend = w.pressureChange == null ? ''
       : (w.pressureChange >= 1 ? ' ↑ rising' : (w.pressureChange <= -1 ? ' ↓ falling' : ' → steady'));
     let pressureNext = null;
@@ -16519,8 +16531,9 @@ async function renderHomeWeather(){
           </div>
           <div style="font-size:12px;color:var(--muted);white-space:nowrap;align-self:flex-start;">Forecast ›</div>
         </div>
+        ${sunMoonHtml}
         <div style="display:grid;grid-template-columns:repeat(${uv ? 4 : 3},1fr);gap:8px;">${wind}${press}${moon}${uv}</div>
-        ${sunMoonHtml}${signalHtml}`;
+        ${signalHtml}`;
     }else if(getHomeWeatherMode() === 'full'){
       const tile = (big, small)=> `<div class="home-stat"><b style="font-size:16px;">${escapeHtml(big)}</b><span>${escapeHtml(small)}</span></div>`;
       const tiles = [];
@@ -16533,8 +16546,9 @@ async function renderHomeWeather(){
       tiles.push(tile(m.emoji, m.label));
       el.innerHTML = `
         ${w.stormRisk ? stormWarningHtml() : ''}
+        ${sunMoonHtml}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;">${tiles.join('')}</div>
-        ${sunMoonHtml}${signalHtml}
+        ${signalHtml}
         <div style="font-size:12px;color:var(--muted);text-align:right;margin-top:8px;">Forecast ›</div>`;
     }else{
       el.innerHTML = `
@@ -16549,7 +16563,7 @@ async function renderHomeWeather(){
         </div>
         <div style="font-size:12px;color:var(--muted);white-space:nowrap;">Forecast ›</div>
       </div>
-      ${signalHtml}`;
+      ${sunMoonHtml}${signalHtml}`;
     }
     // Same forecast view as the session weather bar — the coordinates are
     // stashed so openForecast has something to work with
