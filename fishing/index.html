@@ -1459,12 +1459,6 @@
         </div>
       </section>
 
-      <section class="card" id="my-insights-card" style="display:none;">
-        <h2>My insights</h2>
-        <p class="pc-line muted">See what's actually working — which rigs land fish, which baits perform, and how long your rods really soak.</p>
-        <button class="primary-btn" id="open-insights-btn">View my insights</button>
-      </section>
-
       <section class="card" id="notifications-card" style="display:none;">
         <h2>Notifications</h2>
         <div id="notifications-body">
@@ -5062,7 +5056,6 @@ function renderAccountArea(){
   const authForms = document.getElementById('auth-forms');
   const signedInArea = document.getElementById('account-signed-in');
   const detailsCard = document.getElementById('my-details-card');
-  const insightsCard = document.getElementById('my-insights-card');
   const dangerCard = document.getElementById('danger-zone-card');
   const exportCsvCard = document.getElementById('export-csv-card');
   const reelRecordsCard = document.getElementById('reel-records-settings-card');
@@ -5076,7 +5069,6 @@ function renderAccountArea(){
     if(label) label.textContent = 'Signed in as ' + session.user.email;
     renderAccountPlanLine();
     if(detailsCard) detailsCard.style.display = 'block';
-    if(insightsCard) insightsCard.style.display = 'block';
     if(pastCatchCard){
       pastCatchCard.style.display = 'block';
       // Offer the same species this angler has chosen for Reel Records
@@ -5115,7 +5107,6 @@ function renderAccountArea(){
     pkRenderCaptchas();
     if(signedInArea) signedInArea.style.display = 'none';
     if(detailsCard) detailsCard.style.display = 'none';
-    if(insightsCard) insightsCard.style.display = 'none';
     if(pastCatchCard) pastCatchCard.style.display = 'none';
     if(dangerCard) dangerCard.style.display = 'none';
     if(exportCsvCard) exportCsvCard.style.display = 'none';
@@ -13352,8 +13343,6 @@ document.getElementById('past-catch-save-btn').addEventListener('click', async (
     st.textContent = 'Could not save: ' + (e.message || 'unknown error');
   }
 });
-
-document.getElementById('open-insights-btn').addEventListener('click', ()=> goToTab('insights'));
 
 // Shows the actual people behind a follower/following count. idType is
 // 'user' for follower_user_id values, 'fisherman' for followed_fisherman_id
