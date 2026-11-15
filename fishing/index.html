@@ -1090,6 +1090,7 @@
       <div id="home-active-session" style="display:none;"></div>
       <div id="home-competitions" style="margin-bottom:14px;"></div>
       <div id="home-restock-banner" style="display:none;margin-bottom:14px;"></div>
+      <div id="home-forecast-reminder" style="display:none;margin-bottom:14px;"></div>
 
       <div id="home-weather" role="button" tabindex="0" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;"></div>
 
@@ -5899,6 +5900,23 @@ async function renderHomeRestockBanner(){
     el.querySelector('.home-restock-link').addEventListener('click', ()=> goToTab('tackle'));
   }catch(e){ console.error('home restock banner failed', e); el.style.display = 'none'; }
 }
+// Surfaces the soonest upcoming trip (owned by you - attaching is owner-only)
+// that's hit its forecast-screenshot deadline and still has nothing attached.
+async function renderHomeForecastReminderBanner(){
+  const el = document.getElementById('home-forecast-reminder');
+  if(!el || !isSignedIn()) return;
+  try{
+    const today = new Date().toISOString().slice(0, 10);
+    const plans = await sbGet('trip_plans?select=id,venue_name,trip_date,forecast_screenshot_url&owner_user_id=eq.'+session.user.id+'&forecast_screenshot_url=is.null&trip_date=gte.'+today+'&order=trip_date.asc');
+    const due = plans.find(p=> new Date() >= planForecastDeadline(p));
+    if(!due){ el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = 'block';
+    el.innerHTML = `<button type="button" class="home-restock-link" style="display:block;width:100%;text-align:left;background:var(--dam-deep);color:#fff;border:none;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13px;cursor:pointer;">
+      <i class="ti ti-camera" style="vertical-align:-2px;" aria-hidden="true"></i> Attach a forecast screenshot for <b>${escapeHtml(due.venue_name)}</b>
+    </button>`;
+    el.querySelector('button').addEventListener('click', ()=>{ goToTab('plan'); openPlanDetail(due.id); });
+  }catch(e){ console.error('home forecast reminder failed', e); el.style.display = 'none'; }
+}
 // Free accounts: true when these shared items may be ticked "Use"; otherwise explains why not
 function canUseMoreShared(newItems){
   if(isPro() || !isSignedIn()) return true;
@@ -9761,6 +9779,76 @@ async function renderPlanForecastHtml(venue, plan){
     + '</div>';
 }
 
+// The API forecast above stops at 7 days out (nothing free is reliable
+// further than that). Rather than fake a longer lookahead, let the owner
+// screenshot whatever 14-day outlook they're already checking elsewhere and
+// archive it against the plan - owner-only to attach/replace, same as dates,
+// but visible to anyone the plan is shared with.
+function planForecastDeadline(plan){
+  const d = new Date(plan.trip_date + 'T00:00');
+  d.setDate(d.getDate() - 7);
+  return d;
+}
+
+function renderPlanForecastScreenshotHtml(plan, isOwner){
+  const deadline = planForecastDeadline(plan);
+  const deadlineStr = deadline.toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+  let body;
+  if(plan.forecast_screenshot_url){
+    const capturedStr = plan.forecast_captured_at
+      ? new Date(plan.forecast_captured_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'})
+      : null;
+    body = '<img src="' + escapeHtml(plan.forecast_screenshot_url) + '" class="pc-photo" id="plan-forecast-photo" alt="Forecast screenshot" loading="lazy" decoding="async" style="width:100%;max-width:260px;border-radius:8px;cursor:pointer;display:block;margin-bottom:6px;">'
+      + (capturedStr ? '<div class="pc-line muted">Captured ' + escapeHtml(capturedStr) + '</div>' : '')
+      + (isOwner ? '<button type="button" class="mini-btn" id="plan-forecast-replace-btn" style="margin-top:6px;">Replace</button>' : '');
+  }else{
+    const overdue = new Date() >= deadline;
+    body = '<p class="pc-line" style="' + (overdue ? 'color:#c04;font-weight:600;' : 'color:var(--muted);') + '">'
+      + (overdue ? 'Not attached yet — ' : '') + 'Screenshot a longer-range forecast for this trip and attach it here, ideally by ' + escapeHtml(deadlineStr) + '.</p>'
+      + (isOwner ? '<button type="button" class="mini-btn" id="plan-forecast-attach-btn">Attach screenshot</button>' : '');
+  }
+  return '<div class="profile-catch" style="margin-bottom:14px;" id="plan-forecast-screenshot-wrap">'
+    + '<div class="pc-head">Longer-range forecast</div>' + body
+    + (isOwner ? '<input type="file" accept="image/*" id="plan-forecast-file-input" style="display:none;">' : '')
+    + '</div>';
+}
+
+async function attachPlanForecastScreenshot(planId, file){
+  const url = await uploadPhoto(file, {maxDim: 1200, quality: 0.9});
+  const capturedAt = new Date().toISOString();
+  await sbPatch('trip_plans', 'id=eq.'+planId, {forecast_screenshot_url: url, forecast_captured_at: capturedAt});
+  return {url, capturedAt};
+}
+
+function wirePlanForecastScreenshotEvents(planId, isOwner){
+  const photo = document.getElementById('plan-forecast-photo');
+  if(photo) photo.addEventListener('click', ()=> openPhotoModal(photo.src, null));
+  if(!isOwner) return;
+  const fileInput = document.getElementById('plan-forecast-file-input');
+  const triggerBtn = document.getElementById('plan-forecast-attach-btn') || document.getElementById('plan-forecast-replace-btn');
+  if(!fileInput || !triggerBtn) return;
+  triggerBtn.addEventListener('click', ()=> fileInput.click());
+  fileInput.addEventListener('change', async ()=>{
+    const file = fileInput.files[0];
+    if(!file) return;
+    triggerBtn.disabled = true;
+    triggerBtn.textContent = 'Uploading...';
+    try{
+      const {url, capturedAt} = await attachPlanForecastScreenshot(planId, file);
+      planDetailCurrent.plan.forecast_screenshot_url = url;
+      planDetailCurrent.plan.forecast_captured_at = capturedAt;
+      const wrap = document.getElementById('plan-forecast-screenshot-wrap');
+      if(wrap) wrap.outerHTML = renderPlanForecastScreenshotHtml(planDetailCurrent.plan, isOwner);
+      wirePlanForecastScreenshotEvents(planId, isOwner);
+    }catch(e){
+      console.error(e);
+      alert('Could not upload: ' + (e.message || 'unknown error'));
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = document.getElementById('plan-forecast-attach-btn') ? 'Attach screenshot' : 'Replace';
+    }
+  });
+}
+
 // What to pre-tick on a brand new plan: baits/dips actually used last time
 // at this venue (by name - the app has no other link from a past catch back
 // to a tackle item), and everything else currently active, since a free
@@ -10093,6 +10181,7 @@ async function openPlanDetail(planId){
     + (hasCoords ? '<div id="plan-detail-map" style="height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;"></div>' : '')
     + shareSectionHtml
     + renderPlanRecapHtml(recap) + '<div id="plan-detail-forecast">' + forecastHtml + '</div>'
+    + renderPlanForecastScreenshotHtml(plan, isOwner)
     // The Tackle box checklist and restock banner are the OWNER's own private
     // gear - a shared mate's own tackle box has nothing to do with this trip,
     // and may not even be visible to them (tackle sharing is a separate,
@@ -10114,6 +10203,7 @@ async function openPlanDetail(planId){
     sel.addEventListener('change', ()=> setPlanItemAssignment(plan.id, sel.dataset.itemId, sel.value));
   });
   wireKitSectionEvents();
+  wirePlanForecastScreenshotEvents(plan.id, isOwner);
 
   const sharePicker = document.getElementById('plan-share-picker');
   if(sharePicker){
@@ -16053,6 +16143,8 @@ async function renderHome(){
     if(weekWrapOut) weekWrapOut.style.display = 'none';
     const restockWrapOut = document.getElementById('home-restock-banner');
     if(restockWrapOut) restockWrapOut.style.display = 'none';
+    const forecastReminderOut = document.getElementById('home-forecast-reminder');
+    if(forecastReminderOut) forecastReminderOut.style.display = 'none';
     if(venueMapBtn) venueMapBtn.style.display = 'none';
     compWrap.innerHTML = '';
     feedWrap.innerHTML = '<div class="empty">Sign in to see what your mates are catching.</div>';
@@ -16087,6 +16179,7 @@ async function renderHome(){
   renderHomeStreak();
   renderHomeWeek();
   renderHomeRestockBanner();
+  renderHomeForecastReminderBanner();
 
   // Any competitions you're in that are live right now
   try{
