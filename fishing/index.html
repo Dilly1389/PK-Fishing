@@ -8685,7 +8685,7 @@ async function fetchForecast(lat, lng){
 
 async function fetchWeather(lat, lng){
   try{
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,precipitation,weather_code,cape,uv_index&hourly=pressure_msl,weather_code,cape&past_hours=3&forecast_hours=4`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,precipitation,weather_code,cape,uv_index&hourly=pressure_msl,weather_code,cape&daily=sunrise,sunset&past_hours=3&forecast_hours=4&timezone=auto`;
     const res = await fetch(url);
     if(!res.ok) return null;
     const data = await res.json();
@@ -8713,7 +8713,9 @@ async function fetchWeather(lat, lng){
       pressure: c.pressure_msl,
       precipitation: c.precipitation ?? null,
       pressureChange,
-      stormRisk
+      stormRisk,
+      sunrise: data.daily && data.daily.sunrise ? data.daily.sunrise[0] : null,
+      sunset: data.daily && data.daily.sunset ? data.daily.sunset[0] : null
     };
   }catch(e){ console.error('fetchWeather failed', e); return null; }
 }
@@ -8740,6 +8742,176 @@ function moonPhase(date){
   if(pct < 0.72) return {label:'Waning Gibbous', emoji:'🌖'};
   if(pct < 0.78) return {label:'Last Quarter', emoji:'🌗'};
   return {label:'Waning Crescent', emoji:'🌘'};
+}
+
+// Moonrise/moonset — Open-Meteo doesn't provide this (weather APIs don't do
+// astronomy), so it's computed locally with the same low-precision lunar
+// position formulas the open-source SunCalc library uses (good to within a
+// few minutes, which is plenty for planning a session around).
+const MOON_RAD = Math.PI / 180;
+function moonCoordsForDays(d){
+  const L = MOON_RAD * (218.316 + 13.176396 * d);
+  const M = MOON_RAD * (134.963 + 13.064993 * d);
+  const F = MOON_RAD * (93.272 + 13.229350 * d);
+  const l = L + MOON_RAD * 6.289 * Math.sin(M);
+  const b = MOON_RAD * 5.128 * Math.sin(F);
+  const e = MOON_RAD * 23.4397;
+  const ra = Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l));
+  const dec = Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l));
+  return {ra, dec};
+}
+function moonAltitudeAt(date, lat, lng){
+  const J1970 = 2440588, J2000 = 2451545, dayMs = 86400000;
+  const d = (date.valueOf() / dayMs - 0.5 + J1970) - J2000;
+  const lw = MOON_RAD * -lng, phi = MOON_RAD * lat;
+  const c = moonCoordsForDays(d);
+  const siderealTime = MOON_RAD * (280.16 + 360.9856235 * d) - lw;
+  const H = siderealTime - c.ra;
+  let h = Math.asin(Math.sin(phi) * Math.sin(c.dec) + Math.cos(phi) * Math.cos(c.dec) * Math.cos(H));
+  const pa = Math.atan2(Math.sin(H), Math.tan(phi) * Math.cos(c.dec) - Math.sin(c.dec) * Math.cos(H));
+  h += MOON_RAD * 0.017 * Math.sin(pa); // geocentric parallax correction
+  return h;
+}
+// Returns {rise, set} as Date objects (either may be null), or
+// {alwaysUp:true}/{alwaysDown:true} on the rare day the moon doesn't cross
+// the horizon at all.
+function moonTimes(date, lat, lng){
+  const dayMs = 86400000;
+  const t = new Date(date);
+  t.setHours(0, 0, 0, 0);
+  const hoursLater = h=> new Date(t.valueOf() + h * dayMs / 24);
+  const horizon = 0.133 * MOON_RAD; // standard altitude of the moon's upper limb at the horizon
+  let h0 = moonAltitudeAt(t, lat, lng) - horizon;
+  let rise = null, set = null, riseSet = null;
+  for(let i = 1; i <= 24; i += 2){
+    const h1 = moonAltitudeAt(hoursLater(i), lat, lng) - horizon;
+    const h2 = moonAltitudeAt(hoursLater(i + 1), lat, lng) - horizon;
+    const a = (h0 + h2) / 2 - h1;
+    const b = (h2 - h0) / 2;
+    const xe = -b / (2 * a);
+    const ye = (a * xe + b) * xe + h1;
+    const d = b * b - 4 * a * h1;
+    let roots = 0, x1 = null, x2 = null;
+    if(d >= 0){
+      const dx = Math.sqrt(d) / (Math.abs(a) * 2);
+      x1 = xe - dx; x2 = xe + dx;
+      if(Math.abs(x1) <= 1) roots++;
+      if(Math.abs(x2) <= 1) roots++;
+      if(x1 < -1) x1 = x2;
+    }
+    if(roots === 1){
+      if(h0 < 0) rise = i + x1; else set = i + x1;
+    }else if(roots === 2){
+      rise = i + (ye < 0 ? x2 : x1);
+      set = i + (ye < 0 ? x1 : x2);
+    }
+    riseSet = ye;
+    if(rise != null && set != null) break;
+    h0 = h2;
+  }
+  const result = {};
+  if(rise != null) result.rise = hoursLater(rise);
+  if(set != null) result.set = hoursLater(set);
+  if(rise == null && set == null) result[riseSet > 0 ? 'alwaysUp' : 'alwaysDown'] = true;
+  return result;
+}
+function fmtClock(date){
+  return date ? date.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'}) : null;
+}
+
+// ---------- "Based on your own catches" forward-looking signal ----------
+// Insights' "When and where" tables already correlate pressure trend, moon
+// phase and time of day against this angler's own logged catches, but only
+// retrospectively (after the fact, inside Insights). This reuses the exact
+// same bands/thresholds to answer the same question about right now,
+// surfaced on the Home weather card and forecast sheet instead. Pro only —
+// it's built entirely out of the same ingredients as the Pro-only "Pressure
+// trend and advice" table.
+let myConditionCatchesCache = {myId:null, at:0, catches:null};
+async function loadMyConditionCatches(){
+  const myId = getMyFishermanId();
+  if(!myId) return [];
+  if(myConditionCatchesCache.myId === myId && (Date.now() - myConditionCatchesCache.at) < 10*60*1000){
+    return myConditionCatchesCache.catches;
+  }
+  try{
+    const rows = await sbGet('catches?select=caught,time,has_known_time,moon_phase,weather_pressure,weather_pressure_change&fisherman_id=eq.'+encodeURIComponent(myId)+'&limit=5000');
+    const catches = rows.map(r=>({
+      caught: r.caught,
+      time: new Date(r.time).getTime(),
+      hasKnownTime: r.has_known_time !== false,
+      moonPhase: r.moon_phase || null,
+      weather: (r.weather_pressure != null || r.weather_pressure_change != null)
+        ? {pressure: r.weather_pressure, pressureChange: r.weather_pressure_change} : undefined
+    }));
+    myConditionCatchesCache = {myId, at: Date.now(), catches};
+    return catches;
+  }catch(e){ console.error('loadMyConditionCatches failed', e); return []; }
+}
+function currentPressureTrendBand(change){
+  if(change == null) return null;
+  return change <= -3.5 ? 'Falling fast' : change <= -1 ? 'Falling' : change < 1 ? 'Steady' : change < 3.5 ? 'Rising' : 'Rising fast';
+}
+function currentTimeBand(date){
+  const h = (date || new Date()).getHours();
+  return h < 6 ? 'Night (00:00–06:00)' : h < 12 ? 'Morning (06:00–12:00)' : h < 18 ? 'Afternoon (12:00–18:00)' : 'Evening (18:00–24:00)';
+}
+// Same methodology as Insights' pressure adviceFor(): needs 5+ casts in a
+// band before trusting it, and a 15-point gap from this angler's own overall
+// rate before calling it out - otherwise normal noise looks like a pattern.
+function myConditionsSignal(catches, opts){
+  if(!catches || catches.length < 30) return null;
+  opts = opts || {};
+  const totalFish = catches.filter(c=>c.caught).length;
+  const overall = totalFish / catches.length;
+
+  function rateFor(keyFn, label){
+    if(!label) return null;
+    let fish = 0, total = 0;
+    catches.forEach(c=>{ if(keyFn(c).includes(label)){ total++; if(c.caught) fish++; } });
+    if(total < 5) return null;
+    return {label, rate: fish / total, fish, total};
+  }
+
+  const trendKey = c=>{
+    const d = c.weather && c.weather.pressureChange;
+    return d == null ? [] : [currentPressureTrendBand(d)];
+  };
+  const timeKey = c=>{
+    if(!c.hasKnownTime) return [];
+    return [currentTimeBand(new Date(c.time))];
+  };
+  const moonKey = c=> c.moonPhase ? [c.moonPhase] : [];
+
+  const candidates = [];
+  if(opts.pressureChange != null){
+    const r = rateFor(trendKey, currentPressureTrendBand(opts.pressureChange));
+    if(r) candidates.push({...r, what: 'the pressure is ' + r.label.toLowerCase()});
+  }
+  const timeBand = currentTimeBand(opts.now);
+  const tr = rateFor(timeKey, timeBand);
+  if(tr) candidates.push({...tr, what: 'fishing in the ' + timeBand.split(' ')[0].toLowerCase()});
+  if(opts.moonLabel){
+    const mr = rateFor(moonKey, opts.moonLabel);
+    if(mr) candidates.push({...mr, what: "it's a " + mr.label.toLowerCase()});
+  }
+
+  if(!candidates.length) return null;
+  candidates.sort((a,b)=> Math.abs(b.rate - overall) - Math.abs(a.rate - overall));
+  const top = candidates[0];
+  const diff = top.rate - overall;
+  if(Math.abs(diff) < 0.15) return null;
+
+  const pct = r=> Math.round(r * 100) + '%';
+  const detail = `${top.fish} fish from ${top.total} casts (${pct(top.rate)}), against ${pct(overall)} overall for you.`;
+  return diff > 0
+    ? {tone:'good', text: `Based on your own catches: ${top.what} has worked out for you before — ${detail}`}
+    : {tone:'quiet', text: `Based on your own catches: ${top.what} hasn't been your best combination — ${detail}`};
+}
+async function myConditionsSignalForNow(weather){
+  if(!isPro() || !isSignedIn() || !weather) return null;
+  const catches = await loadMyConditionCatches();
+  return myConditionsSignal(catches, {pressureChange: weather.pressureChange, moonLabel: moonPhase().label, now: new Date()});
 }
 
 // Rough distance in metres between two coordinates
@@ -9059,6 +9231,24 @@ async function openForecast(){
   }
 
   let html = hours.some(h=> isStormRisk(h.code, h.cape)) ? stormWarningHtml() : '';
+
+  // A short plain-language line above the data, same idea as Apple Weather's
+  // "Highlights" callout - translate the numbers into the one thing worth
+  // knowing before the reader scans the grid themselves.
+  const cachedWeather = weatherCache.weather;
+  const sunMoonLine = (()=>{
+    const bits = [];
+    if(cachedWeather && (cachedWeather.sunrise || cachedWeather.sunset)) bits.push(`☀️ ${cachedWeather.sunrise ? fmtClock(new Date(cachedWeather.sunrise)) : '—'}–${cachedWeather.sunset ? fmtClock(new Date(cachedWeather.sunset)) : '—'}`);
+    const mt = moonTimes(new Date(), coords.lat, coords.lng);
+    if(mt.alwaysUp) bits.push('🌙 up all day');
+    else if(mt.alwaysDown) bits.push('🌙 down all day');
+    else if(mt.rise || mt.set) bits.push(`🌙 ${mt.rise ? fmtClock(mt.rise) : '—'}–${mt.set ? fmtClock(mt.set) : '—'}`);
+    return bits.join('   ');
+  })();
+  if(sunMoonLine) html += `<p class="pc-line muted" style="margin-bottom:10px;">${escapeHtml(sunMoonLine)}</p>`;
+  const signal = cachedWeather ? await myConditionsSignalForNow(cachedWeather) : null;
+  if(signal) html += `<p class="pc-line" style="margin-bottom:14px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${escapeHtml(signal.text)}</p>`;
+
   html += `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
   hours.forEach(h=>{
     html += `<li>
@@ -16321,6 +16511,18 @@ async function renderHomeWeather(){
     const w = await fetchWeather(coords.lat, coords.lng);
     if(!w){ el.style.display = 'none'; return; }
     const m = moonPhase();
+    const signal = await myConditionsSignalForNow(w);
+    const signalHtml = signal ? `<div class="pc-line" style="margin-top:8px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${escapeHtml(signal.text)}</div>` : '';
+    const sunMoonLine = (()=>{
+      const bits = [];
+      if(w.sunrise || w.sunset) bits.push(`☀️ ${w.sunrise ? fmtClock(new Date(w.sunrise)) : '—'}–${w.sunset ? fmtClock(new Date(w.sunset)) : '—'}`);
+      const mt = moonTimes(new Date(), coords.lat, coords.lng);
+      if(mt.alwaysUp) bits.push('🌙 up all day');
+      else if(mt.alwaysDown) bits.push('🌙 down all day');
+      else if(mt.rise || mt.set) bits.push(`🌙 ${mt.rise ? fmtClock(mt.rise) : '—'}–${mt.set ? fmtClock(mt.set) : '—'}`);
+      return bits.join('   ');
+    })();
+    const sunMoonHtml = sunMoonLine ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;">${escapeHtml(sunMoonLine)}</div>` : '';
     const trend = w.pressureChange == null ? ''
       : (w.pressureChange >= 1 ? ' ↑ rising' : (w.pressureChange <= -1 ? ' ↓ falling' : ' → steady'));
     let pressureNext = null;
@@ -16352,7 +16554,8 @@ async function renderHomeWeather(){
           </div>
           <div style="font-size:12px;color:var(--muted);white-space:nowrap;align-self:flex-start;">Forecast ›</div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(${uv ? 4 : 3},1fr);gap:8px;">${wind}${press}${moon}${uv}</div>`;
+        <div style="display:grid;grid-template-columns:repeat(${uv ? 4 : 3},1fr);gap:8px;">${wind}${press}${moon}${uv}</div>
+        ${sunMoonHtml}${signalHtml}`;
     }else if(getHomeWeatherMode() === 'full'){
       const tile = (big, small)=> `<div class="home-stat"><b style="font-size:16px;">${escapeHtml(big)}</b><span>${escapeHtml(small)}</span></div>`;
       const tiles = [];
@@ -16366,6 +16569,7 @@ async function renderHomeWeather(){
       el.innerHTML = `
         ${w.stormRisk ? stormWarningHtml() : ''}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;">${tiles.join('')}</div>
+        ${sunMoonHtml}${signalHtml}
         <div style="font-size:12px;color:var(--muted);text-align:right;margin-top:8px;">Forecast ›</div>`;
     }else{
       el.innerHTML = `
@@ -16379,7 +16583,8 @@ async function renderHomeWeather(){
           · <span title="${escapeHtml(m.label)}" aria-label="${escapeHtml(m.label)}">${m.emoji}</span>
         </div>
         <div style="font-size:12px;color:var(--muted);white-space:nowrap;">Forecast ›</div>
-      </div>`;
+      </div>
+      ${signalHtml}`;
     }
     // Same forecast view as the session weather bar — the coordinates are
     // stashed so openForecast has something to work with
