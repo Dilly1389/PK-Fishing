@@ -431,6 +431,15 @@
   .ins-tag{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--dam);color:#fff;font-size:11px;font-weight:700;vertical-align:middle;}
   .ins-more{margin-top:6px;}
   .ins-more > summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--dam);padding:10px 0;min-height:44px;box-sizing:border-box;}
+  .ins-row-expand{border-bottom:1px solid var(--line);}
+  .ins-list > .ins-row-expand:last-child{border-bottom:none;}
+  .ins-row-expand > summary{list-style:none;cursor:pointer;padding:10px 24px 10px 0;position:relative;min-height:44px;box-sizing:border-box;}
+  .ins-row-expand > summary::-webkit-details-marker{display:none;}
+  .ins-row-expand > summary::after{content:'';position:absolute;right:4px;top:18px;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);}
+  .ins-row-expand[open] > summary::after{top:21px;transform:rotate(-135deg);}
+  .ins-sub-list{list-style:none;margin:0 0 10px;padding:0;}
+  .ins-sub-row{padding:7px 0;border-top:1px dashed var(--line);font-size:13px;}
+  .ins-sub-row:first-child{border-top:none;}
   /* "What works" picks one pill at a time rather than showing every table */
   .ins-pillbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;}
   .ins-pill{
@@ -11271,22 +11280,32 @@ function buildInsightsHtml(catches, venues, sessions){
       {label:'4 – 8 hrs', max: 8*60*60000},
       {label:'8 hrs+', max: Infinity}
     ];
-    const counts = buckets.map(()=>0);
+    const bucketCatches = buckets.map(()=>[]);
     withTimer.forEach(c=>{
       const idx = buckets.findIndex(b=>c.timerElapsed <= b.max);
-      counts[idx >= 0 ? idx : buckets.length-1]++;
+      bucketCatches[idx >= 0 ? idx : buckets.length-1].push(c);
     });
+    const counts = bucketCatches.map(arr=>arr.length);
     const maxCount = Math.max(...counts, 1);
-    overview += `<div class="ins-sec"><p class="sub-heading">How long the rod was in the water before a fish</p><ul class="ins-list">` +
+    overview += `<div class="ins-sec"><p class="sub-heading">How long the rod was in the water before a fish</p>
+      <p class="ins-sub" style="margin:-4px 0 8px;">Tap a row to see which fish and bait.</p><ul class="ins-list">` +
       buckets.map((b,i)=>{
         if(counts[i] === 0) return '';
         const pct = Math.round(counts[i]/withTimer.length*100);
         const barPct = Math.round(counts[i]/maxCount*100);
-        return `<li class="ins-row">
-          <div class="ins-row-top"><div class="ins-main"><b>${escapeHtml(b.label)}</b></div>
-          <div class="ins-side">${counts[i]} fish (${pct}%)</div></div>
-          <div class="ins-bar"><span style="width:${barPct}%"></span></div>
-        </li>`;
+        const detailRows = bucketCatches[i].slice().sort((a,b)=> b.time - a.time).map(c=>{
+          const bait = catchingBaits(c).join(', ') || 'No bait logged';
+          const when = new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
+          return `<li class="ins-sub-row"><b>${escapeHtml(c.type || 'Fish')}</b>${c.weight ? ' · ' + formatWeight(c.weight) : ''} · ${escapeHtml(bait)}<div class="ins-sub">${escapeHtml(when)}</div></li>`;
+        }).join('');
+        return `<details class="ins-row-expand">
+          <summary>
+            <div class="ins-row-top"><div class="ins-main"><b>${escapeHtml(b.label)}</b></div>
+            <div class="ins-side">${counts[i]} fish (${pct}%)</div></div>
+            <div class="ins-bar"><span style="width:${barPct}%"></span></div>
+          </summary>
+          <ul class="ins-sub-list">${detailRows}</ul>
+        </details>`;
       }).join('') + `</ul></div>`;
   }
   overview += statTable('Species', groupStats(c=>[c.type]));
