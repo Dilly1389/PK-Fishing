@@ -2724,7 +2724,7 @@
     <div class="pc-line" id="upgrade-reason"></div>
     <div class="profile-catch">
       <div class="pc-head">Pro gives you</div>
-      <div class="pc-line muted">Unlimited rods, tackle, rigs and bait combinations, sharing your whole tackle box, deeper Insights, all badges, bigger competitions with organiser tools, and CSV export.</div>
+      <div class="pc-line muted">Unlimited rods, tackle, rigs, bait combinations and trip plans, sharing your whole tackle box, sharing a trip plan with mates, deeper Insights, all badges, and bigger competitions with organiser tools.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">Price</div>
@@ -6007,7 +6007,7 @@ function openTackleChoice(){
   };
   dlg.showModal();
 }
-const FREE_COMP_ANGLERS = 10;
+const FREE_COMP_ANGLERS = 4;
 function refreshCompetitionForm(){
   const pro = isPro();
   const note = document.getElementById('competition-photo-pro-note');
@@ -10108,8 +10108,11 @@ async function openPlanDetail(planId){
 
   const shareSectionHtml = !isOwner ? '' : '<section class="card" style="margin-bottom:14px;">'
     + '<p class="sub-heading">Share this plan</p>'
-    + '<p class="pc-line muted">Mates you share with can see this plan and tick the checklist together.' + (ownerIsPro ? '' : ' 🔒 Pro also lets you assign items to specific people.') + '</p>'
-    + '<div id="plan-share-picker">' + renderPlanSharePickerHtml(new Set(shareRows.map(r=> r.shared_with_user_id))) + '</div>'
+    + (ownerIsPro
+      ? '<p class="pc-line muted">Mates you share with can see this plan, tick the checklist together, and you can assign items to specific people.</p>'
+        + '<div id="plan-share-picker">' + renderPlanSharePickerHtml(new Set(shareRows.map(r=> r.shared_with_user_id))) + '</div>'
+      : '<p class="pc-line muted">🔒 Pro: share this plan with mates so they can see it and tick the checklist together.</p>'
+        + '<button type="button" class="mini-btn" id="plan-share-upgrade-btn">Upgrade to Pro</button>')
     + '</section>';
 
   body.innerHTML = (ownerName ? '<p class="pc-line muted" style="margin-bottom:8px;">Shared by ' + escapeHtml(ownerName) + '</p>' : '')
@@ -10141,6 +10144,9 @@ async function openPlanDetail(planId){
     sel.addEventListener('change', ()=> setPlanItemAssignment(plan.id, sel.dataset.itemId, sel.value));
   });
   wireKitSectionEvents();
+
+  const shareUpgradeBtn = document.getElementById('plan-share-upgrade-btn');
+  if(shareUpgradeBtn) shareUpgradeBtn.addEventListener('click', ()=> openUpgrade('Sharing a trip plan with mates is a Pro feature.'));
 
   const sharePicker = document.getElementById('plan-share-picker');
   if(sharePicker){
