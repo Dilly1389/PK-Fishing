@@ -8683,9 +8683,34 @@ async function fetchForecast(lat, lng){
   }catch(e){ console.error('fetchForecast failed', e); return null; }
 }
 
+// Sunrise-Sunset.org — free, no API key, CORS-enabled for direct client-side
+// calls, same reasoning that led us to Open-Meteo over a keyed provider.
+// Covers sun AND moon times/phase/illumination plus golden hour, which
+// Open-Meteo doesn't offer at all (it's a weather API, not an astronomy one).
+// Per their terms this needs visible credit - see the Forecast sheet footer
+// and Privacy Policy -> Third-party services.
+async function fetchSunMoon(lat, lng){
+  try{
+    const res = await fetch(`https://api.sunrise-sunset.org/v2?lat=${lat}&lng=${lng}&formatted=0`);
+    if(!res.ok) return null;
+    const data = await res.json();
+    const r = data.results;
+    if(!r) return null;
+    const d = s=> s ? new Date(s) : null;
+    return {
+      sunrise: d(r.sunrise), sunset: d(r.sunset),
+      dawn: d(r.civil_twilight_begin), dusk: d(r.civil_twilight_end),
+      moonrise: d(r.moonrise), moonset: d(r.moonset),
+      moonPhase: r.moon_phase || null, moonIllumination: r.moon_illumination ?? null,
+      goldenHourMorning: r.golden_hour && r.golden_hour.morning ? {begin: d(r.golden_hour.morning.begin), end: d(r.golden_hour.morning.end)} : null,
+      goldenHourEvening: r.golden_hour && r.golden_hour.evening ? {begin: d(r.golden_hour.evening.begin), end: d(r.golden_hour.evening.end)} : null
+    };
+  }catch(e){ console.error('fetchSunMoon failed', e); return null; }
+}
+
 async function fetchWeather(lat, lng){
   try{
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,precipitation,weather_code,cape,uv_index&hourly=pressure_msl,weather_code,cape&daily=sunrise,sunset&past_hours=3&forecast_hours=4&timezone=auto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,precipitation,weather_code,cape,uv_index&hourly=pressure_msl,weather_code,cape&past_hours=3&forecast_hours=4`;
     const res = await fetch(url);
     if(!res.ok) return null;
     const data = await res.json();
@@ -8713,9 +8738,7 @@ async function fetchWeather(lat, lng){
       pressure: c.pressure_msl,
       precipitation: c.precipitation ?? null,
       pressureChange,
-      stormRisk,
-      sunrise: data.daily && data.daily.sunrise ? data.daily.sunrise[0] : null,
-      sunset: data.daily && data.daily.sunset ? data.daily.sunset[0] : null
+      stormRisk
     };
   }catch(e){ console.error('fetchWeather failed', e); return null; }
 }
@@ -8744,77 +8767,6 @@ function moonPhase(date){
   return {label:'Waning Crescent', emoji:'🌘'};
 }
 
-// Moonrise/moonset — Open-Meteo doesn't provide this (weather APIs don't do
-// astronomy), so it's computed locally with the same low-precision lunar
-// position formulas the open-source SunCalc library uses (good to within a
-// few minutes, which is plenty for planning a session around).
-const MOON_RAD = Math.PI / 180;
-function moonCoordsForDays(d){
-  const L = MOON_RAD * (218.316 + 13.176396 * d);
-  const M = MOON_RAD * (134.963 + 13.064993 * d);
-  const F = MOON_RAD * (93.272 + 13.229350 * d);
-  const l = L + MOON_RAD * 6.289 * Math.sin(M);
-  const b = MOON_RAD * 5.128 * Math.sin(F);
-  const e = MOON_RAD * 23.4397;
-  const ra = Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l));
-  const dec = Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l));
-  return {ra, dec};
-}
-function moonAltitudeAt(date, lat, lng){
-  const J1970 = 2440588, J2000 = 2451545, dayMs = 86400000;
-  const d = (date.valueOf() / dayMs - 0.5 + J1970) - J2000;
-  const lw = MOON_RAD * -lng, phi = MOON_RAD * lat;
-  const c = moonCoordsForDays(d);
-  const siderealTime = MOON_RAD * (280.16 + 360.9856235 * d) - lw;
-  const H = siderealTime - c.ra;
-  let h = Math.asin(Math.sin(phi) * Math.sin(c.dec) + Math.cos(phi) * Math.cos(c.dec) * Math.cos(H));
-  const pa = Math.atan2(Math.sin(H), Math.tan(phi) * Math.cos(c.dec) - Math.sin(c.dec) * Math.cos(H));
-  h += MOON_RAD * 0.017 * Math.sin(pa); // geocentric parallax correction
-  return h;
-}
-// Returns {rise, set} as Date objects (either may be null), or
-// {alwaysUp:true}/{alwaysDown:true} on the rare day the moon doesn't cross
-// the horizon at all.
-function moonTimes(date, lat, lng){
-  const dayMs = 86400000;
-  const t = new Date(date);
-  t.setHours(0, 0, 0, 0);
-  const hoursLater = h=> new Date(t.valueOf() + h * dayMs / 24);
-  const horizon = 0.133 * MOON_RAD; // standard altitude of the moon's upper limb at the horizon
-  let h0 = moonAltitudeAt(t, lat, lng) - horizon;
-  let rise = null, set = null, riseSet = null;
-  for(let i = 1; i <= 24; i += 2){
-    const h1 = moonAltitudeAt(hoursLater(i), lat, lng) - horizon;
-    const h2 = moonAltitudeAt(hoursLater(i + 1), lat, lng) - horizon;
-    const a = (h0 + h2) / 2 - h1;
-    const b = (h2 - h0) / 2;
-    const xe = -b / (2 * a);
-    const ye = (a * xe + b) * xe + h1;
-    const d = b * b - 4 * a * h1;
-    let roots = 0, x1 = null, x2 = null;
-    if(d >= 0){
-      const dx = Math.sqrt(d) / (Math.abs(a) * 2);
-      x1 = xe - dx; x2 = xe + dx;
-      if(Math.abs(x1) <= 1) roots++;
-      if(Math.abs(x2) <= 1) roots++;
-      if(x1 < -1) x1 = x2;
-    }
-    if(roots === 1){
-      if(h0 < 0) rise = i + x1; else set = i + x1;
-    }else if(roots === 2){
-      rise = i + (ye < 0 ? x2 : x1);
-      set = i + (ye < 0 ? x1 : x2);
-    }
-    riseSet = ye;
-    if(rise != null && set != null) break;
-    h0 = h2;
-  }
-  const result = {};
-  if(rise != null) result.rise = hoursLater(rise);
-  if(set != null) result.set = hoursLater(set);
-  if(rise == null && set == null) result[riseSet > 0 ? 'alwaysUp' : 'alwaysDown'] = true;
-  return result;
-}
 function fmtClock(date){
   return date ? date.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'}) : null;
 }
@@ -9163,8 +9115,8 @@ async function renderSessionWeather(){
       }catch(e){ console.error(e); }
     }
     if(!coords) coords = await capturePosition();
-    const weather = coords ? await fetchWeather(coords.lat, coords.lng) : null;
-    weatherCache = {sessionId: activeSession.id, weather, moon: moonPhase(), coords, fetchedAt: Date.now()};
+    const [weather, sunMoon] = coords ? await Promise.all([fetchWeather(coords.lat, coords.lng), fetchSunMoon(coords.lat, coords.lng)]) : [null, null];
+    weatherCache = {sessionId: activeSession.id, weather, moon: moonPhase(), sunMoon, coords, fetchedAt: Date.now()};
   }
 
   const {weather, moon} = weatherCache;
@@ -9236,13 +9188,14 @@ async function openForecast(){
   // "Highlights" callout - translate the numbers into the one thing worth
   // knowing before the reader scans the grid themselves.
   const cachedWeather = weatherCache.weather;
+  const sunMoon = weatherCache.sunMoon || await fetchSunMoon(coords.lat, coords.lng);
   const sunMoonLine = (()=>{
+    if(!sunMoon) return '';
     const bits = [];
-    if(cachedWeather && (cachedWeather.sunrise || cachedWeather.sunset)) bits.push(`☀️ ${cachedWeather.sunrise ? fmtClock(new Date(cachedWeather.sunrise)) : '—'}–${cachedWeather.sunset ? fmtClock(new Date(cachedWeather.sunset)) : '—'}`);
-    const mt = moonTimes(new Date(), coords.lat, coords.lng);
-    if(mt.alwaysUp) bits.push('🌙 up all day');
-    else if(mt.alwaysDown) bits.push('🌙 down all day');
-    else if(mt.rise || mt.set) bits.push(`🌙 ${mt.rise ? fmtClock(mt.rise) : '—'}–${mt.set ? fmtClock(mt.set) : '—'}`);
+    if(sunMoon.sunrise || sunMoon.sunset) bits.push(`☀️ ${fmtClock(sunMoon.sunrise) || '—'}–${fmtClock(sunMoon.sunset) || '—'}`);
+    if(sunMoon.moonrise || sunMoon.moonset) bits.push(`🌙 ${fmtClock(sunMoon.moonrise) || '—'}–${fmtClock(sunMoon.moonset) || '—'}${sunMoon.moonIllumination != null ? ' (' + Math.round(sunMoon.moonIllumination) + '% lit)' : ''}`);
+    const eveGold = sunMoon.goldenHourEvening;
+    if(eveGold && eveGold.begin && eveGold.end) bits.push(`🌇 Golden hour ${fmtClock(eveGold.begin)}–${fmtClock(eveGold.end)}`);
     return bits.join('   ');
   })();
   if(sunMoonLine) html += `<p class="pc-line muted" style="margin-bottom:10px;">${escapeHtml(sunMoonLine)}</p>`;
@@ -9320,6 +9273,7 @@ async function openForecast(){
 
   const m = moonPhase();
   html += `<p class="pc-line muted" style="margin-top:10px;">${m.emoji} ${escapeHtml(m.label)}</p>`;
+  html += `<p class="pc-line muted" style="margin-top:14px;font-size:11px;">Weather by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>. Sun &amp; moon times by <a href="https://sunrise-sunset.org" target="_blank" rel="noopener">Sunrise-Sunset.org</a>.</p>`;
   body.innerHTML = html;
 }
 
@@ -16209,6 +16163,7 @@ function renderPrivacy(){
       <p class="pc-line"><b>Supabase</b> — database, authentication and photograph storage.</p>
       <p class="pc-line"><b>Google Sign-In</b> — used only if you choose to sign in with Google. Google receives that you signed in to this app; we receive your email address and name.</p>
       <p class="pc-line"><b>Open-Meteo</b> — weather data. Coordinates are sent to retrieve conditions; no account or identifying information accompanies the request.</p>
+      <p class="pc-line"><b>Sunrise-Sunset.org</b> — sunrise, sunset, moonrise, moonset and golden hour times. Coordinates are sent to retrieve this; no account or identifying information accompanies the request.</p>
       <p class="pc-line"><b>OpenStreetMap and Nominatim</b> — map tiles and place lookup. Coordinates or a search term are sent when you view a map or search for a venue.</p>
       <p class="pc-line">These providers process information under their own privacy policies.</p>
     </section>
@@ -16508,18 +16463,16 @@ async function renderHomeWeather(){
   try{
     const coords = lastKnownPosition || await capturePosition();
     if(!coords){ el.style.display = 'none'; return; }
-    const w = await fetchWeather(coords.lat, coords.lng);
+    const [w, sunMoon] = await Promise.all([fetchWeather(coords.lat, coords.lng), fetchSunMoon(coords.lat, coords.lng)]);
     if(!w){ el.style.display = 'none'; return; }
     const m = moonPhase();
     const signal = await myConditionsSignalForNow(w);
     const signalHtml = signal ? `<div class="pc-line" style="margin-top:8px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${escapeHtml(signal.text)}</div>` : '';
     const sunMoonLine = (()=>{
+      if(!sunMoon) return '';
       const bits = [];
-      if(w.sunrise || w.sunset) bits.push(`☀️ ${w.sunrise ? fmtClock(new Date(w.sunrise)) : '—'}–${w.sunset ? fmtClock(new Date(w.sunset)) : '—'}`);
-      const mt = moonTimes(new Date(), coords.lat, coords.lng);
-      if(mt.alwaysUp) bits.push('🌙 up all day');
-      else if(mt.alwaysDown) bits.push('🌙 down all day');
-      else if(mt.rise || mt.set) bits.push(`🌙 ${mt.rise ? fmtClock(mt.rise) : '—'}–${mt.set ? fmtClock(mt.set) : '—'}`);
+      if(sunMoon.sunrise || sunMoon.sunset) bits.push(`☀️ ${fmtClock(sunMoon.sunrise) || '—'}–${fmtClock(sunMoon.sunset) || '—'}`);
+      if(sunMoon.moonrise || sunMoon.moonset) bits.push(`🌙 ${fmtClock(sunMoon.moonrise) || '—'}–${fmtClock(sunMoon.moonset) || '—'}`);
       return bits.join('   ');
     })();
     const sunMoonHtml = sunMoonLine ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;">${escapeHtml(sunMoonLine)}</div>` : '';
@@ -16589,7 +16542,7 @@ async function renderHomeWeather(){
     // Same forecast view as the session weather bar — the coordinates are
     // stashed so openForecast has something to work with
     el.onclick = ()=>{
-      weatherCache = {sessionId: weatherCache.sessionId, weather: w, moon: m, coords, fetchedAt: Date.now()};
+      weatherCache = {sessionId: weatherCache.sessionId, weather: w, moon: m, sunMoon, coords, fetchedAt: Date.now()};
       openForecast();
     };
     el.onkeydown = e=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); el.onclick(); } };
