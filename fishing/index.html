@@ -751,6 +751,31 @@
     content:''; position:absolute; top:10px; left:50%; transform:translateX(-50%);
     width:40px; height:4px; border-radius:999px; background:var(--line);
   }
+  dialog#plan-detail-modal #plan-detail-x{
+    position:absolute; top:8px; left:auto; right:8px;
+    background:rgba(0,0,0,0.55); color:#fff; border:none; border-radius:50%;
+    width:30px; height:30px; font-size:16px; line-height:1; cursor:pointer; z-index:5;
+  }
+  /* A trip plan is a real screen you drill into, same reasoning as Profile
+     and the photo viewer - full-bleed on mobile, back-chevron fixed top-left.
+     Desktop keeps its existing centered wide card (with its own multi-column
+     layout for the packing list), untouched. */
+  body:not(.desk-mode) dialog#plan-detail-modal{
+    max-width:100vw; max-height:100dvh; width:100vw; height:100dvh; margin:0;
+  }
+  body:not(.desk-mode) dialog#plan-detail-modal::backdrop{
+    background:var(--card-bg);
+  }
+  body:not(.desk-mode) dialog#plan-detail-modal .modal-card{
+    max-width:100vw; width:100vw; max-height:100dvh; height:100dvh;
+    border-radius:0; border:none; margin:0; padding-top:56px;
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+  }
+  body:not(.desk-mode) dialog#plan-detail-modal #plan-detail-x{
+    position:fixed; top:14px; left:14px; right:auto;
+    background:rgba(0,0,0,0.55); color:#fff; border:none; border-radius:50%;
+    width:36px; height:36px; font-size:20px; line-height:1; cursor:pointer; z-index:6;
+  }
   dialog#competition-detail-modal .modal-card{max-width:min(92vw,560px);max-height:88vh;}
   /* The logbook page is a table, so it needs more width than the default
      320px modal-card to avoid every cell wrapping onto 3 lines. */
@@ -2351,7 +2376,7 @@
 
 <dialog id="plan-detail-modal" closedby="any" aria-label="Trip plan">
   <div class="modal-card wide" style="position:relative;">
-    <button type="button" id="plan-detail-x" aria-label="Close" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.55);color:#fff;border:none;border-radius:50%;width:30px;height:30px;font-size:16px;line-height:1;cursor:pointer;z-index:5;">×</button>
+    <button type="button" id="plan-detail-x" aria-label="Back">‹</button>
     <h3 style="margin-top:0;" id="plan-detail-title">Trip plan</h3>
     <div id="plan-detail-body"></div>
     <div style="margin-top:14px;text-align:right;">
@@ -14447,6 +14472,7 @@ window.addEventListener('popstate', ()=>{
 wireModalHistory(document.getElementById('profile-modal'), 'profile');
 wireModalHistory(document.getElementById('photo-modal'), 'photo');
 wireModalHistory(document.getElementById('forecast-modal'), 'forecast');
+wireModalHistory(document.getElementById('plan-detail-modal'), 'plan-detail');
 document.getElementById('photo-modal-share-btn').addEventListener('click', async ()=>{
   // Free for everyone, unlike the Personal Bests / Venue Board record
   // images: a single catch card is the one that functions as a growth
