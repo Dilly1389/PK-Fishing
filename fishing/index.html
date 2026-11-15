@@ -9651,25 +9651,53 @@ function renderPlanRecapHtml(recap){
   return html;
 }
 
-async function renderPlanForecastHtml(venue, tripDateStr){
+// Covers every day of the trip (start through return date), not just the
+// start date - a multi-day trip used to only ever show day 1's weather,
+// leaving the rest of the trip invisible until you checked the general
+// forecast sheet separately.
+async function renderPlanForecastHtml(venue, plan){
   if(!venue || venue.latitude == null || venue.longitude == null){
     return '<div class="profile-catch"><div class="pc-head">Weather</div><div class="pc-line muted">This venue has no saved location yet, so there\'s no forecast to show. Add one from Edit venue once you\'re there, or from Insights &rarr; your venues.</div></div>';
   }
-  const daysOut = Math.round((new Date(tripDateStr + 'T00:00') - new Date(new Date().toDateString())) / 86400000);
+  const startStr = plan.trip_date;
+  const endStr = plan.return_date || plan.trip_date;
+  const daysOut = Math.round((new Date(startStr + 'T00:00') - new Date(new Date().toDateString())) / 86400000);
   if(daysOut < 0 || daysOut > 6){
     return '<div class="profile-catch"><div class="pc-head">Weather</div><div class="pc-line muted">The forecast opens up once your trip is within a week away.</div></div>';
   }
   const data = await fetchForecast(venue.latitude, venue.longitude);
-  const idx = data && data.daily && data.daily.time ? data.daily.time.indexOf(tripDateStr) : -1;
-  if(idx < 0){
+  const times = data && data.daily && data.daily.time;
+  if(!times || !times.length){
     return '<div class="profile-catch"><div class="pc-head">Weather</div><div class="pc-line muted">Could not load the forecast right now.</div></div>';
   }
-  const max = data.daily.temperature_2m_max?.[idx], min = data.daily.temperature_2m_min?.[idx];
-  const rain = data.daily.precipitation_probability_max?.[idx], wind = data.daily.wind_speed_10m_max?.[idx];
-  return '<div class="profile-catch"><div class="pc-head">Weather for the day</div><div class="pc-line muted">'
-    + (max != null ? fmtTemp(max) + ' / ' + fmtTemp(min) : '—')
-    + (wind != null ? ', wind up to ' + fmtWind(wind) : '')
-    + (rain != null ? ', ' + Math.round(rain) + '% rain chance' : '') + '.</div></div>';
+  // Date strings sort/compare correctly as plain text - no need to round-trip
+  // through a Date object (and risk a timezone-driven off-by-one day) just to
+  // pick out the ones that fall inside the trip's own date range.
+  const dayIdxs = [];
+  times.forEach((t, i)=>{ if(t >= startStr && t <= endStr) dayIdxs.push(i); });
+  if(!dayIdxs.length){
+    return '<div class="profile-catch"><div class="pc-head">Weather</div><div class="pc-line muted">Could not load the forecast right now.</div></div>';
+  }
+  const anyStorm = dayIdxs.some(i=> isStormCode(data.daily.weather_code?.[i]));
+  const rows = dayIdxs.map(i=>{
+    const max = data.daily.temperature_2m_max?.[i], min = data.daily.temperature_2m_min?.[i];
+    const rain = data.daily.precipitation_probability_max?.[i], wind = data.daily.wind_speed_10m_max?.[i];
+    const dayLabel = dayIdxs.length > 1
+      ? '<b>' + escapeHtml(new Date(times[i] + 'T12:00').toLocaleDateString(dateLocale(), {weekday:'short', day:'numeric', month:'short'})) + ':</b> '
+      : '';
+    return '<div class="pc-line" style="padding:2px 0;">' + dayLabel
+      + (max != null ? fmtTemp(max) + ' / ' + fmtTemp(min) : '—')
+      + (wind != null ? ', wind up to ' + fmtWind(wind) : '')
+      + (rain != null ? ', ' + Math.round(rain) + '% rain chance' : '') + '</div>';
+  }).join('');
+  // A trip longer than the 7-day forecast window still shows what it can
+  const beyondWindow = endStr > times[times.length - 1];
+  return '<div class="profile-catch">'
+    + (anyStorm ? stormWarningHtml() : '')
+    + '<div class="pc-head">' + (dayIdxs.length > 1 ? 'Weather for your trip' : 'Weather for the day') + '</div>'
+    + rows
+    + (beyondWindow ? '<div class="pc-line muted" style="margin-top:6px;">The rest of your trip is still too far out for a forecast.</div>' : '')
+    + '</div>';
 }
 
 // What to pre-tick on a brand new plan: baits/dips actually used last time
@@ -9744,11 +9772,39 @@ const KIT_CATEGORIES = [
     {key:'forceps', label:'Forceps / disgorger'},
     {key:'batteries', label:'Spare batteries'}
   ]},
-  // Only worth asking about on a multi-day trip - on a day trip nobody ticks these anyway
-  {key:'food', label:'Food & drink', multiDayOnly:true, items:[
-    {key:'cooler', label:'Cooler box with ice'},
-    {key:'food', label:'Food for the session'},
-    {key:'extra_drinks', label:'Extra water/drinks'}
+  // The next three are only worth asking about on a multi-day trip - on a
+  // day trip nobody camps overnight, cooks a meal, or worries about a
+  // roadside breakdown kit, so they'd just be noise on every short session.
+  {key:'camping', label:'Camping gear', multiDayOnly:true, items:[
+    {key:'tent_bivvy', label:'Tent / bivvy'},
+    {key:'ground_sheet', label:'Ground sheet'},
+    {key:'pegs_straps', label:'Pegs and storm straps'},
+    {key:'bedchair', label:'Bedchair / sleeping gear'},
+    {key:'gas_stove', label:'Gas bottle and stove'},
+    {key:'cooler_box', label:'Cooler box'},
+    {key:'cookware', label:'Kettle, pots and pans'},
+    {key:'camp_table', label:'Table'},
+    {key:'camp_light', label:'Lantern / camp light'},
+    {key:'firewood', label:'Firewood, charcoal or firelighters'},
+    {key:'wash_basin', label:'Washing-up basin and cloth'}
+  ]},
+  {key:'groceries', label:'Groceries', multiDayOnly:true, items:[
+    {key:'drinking_water', label:'Drinking water'},
+    {key:'food', label:'Food for the trip'},
+    {key:'snacks', label:'Snacks'},
+    {key:'hot_drinks', label:'Coffee, tea, sugar, milk'},
+    {key:'cooking_basics', label:'Cooking basics (oil, salt, sauces)'},
+    {key:'toiletries', label:'Toiletries (toothbrush, soap, towel)'},
+    {key:'toilet_paper', label:'Toilet paper'}
+  ]},
+  {key:'emergency', label:'Emergency & vehicle', multiDayOnly:true, items:[
+    {key:'jumper_cables', label:'Jumper cables'},
+    {key:'spare_wheel', label:'Spare wheel (vehicle)'},
+    {key:'trailer_spare_wheel', label:'Trailer spare wheel'},
+    {key:'tool_kit', label:'Basic tool kit'},
+    {key:'cable_ties_tape', label:'Cable ties, tape, super glue'},
+    {key:'warning_triangle', label:'Warning triangle'},
+    {key:'fire_extinguisher', label:'Fire extinguisher'}
   ]}
 ];
 
@@ -9886,7 +9942,7 @@ async function openPlanDetail(planId){
 
   const [recap, forecastHtml, existingTicks, kitRows] = await Promise.all([
     loadVenueLastTrip(plan.venue_id),
-    renderPlanForecastHtml(venue, plan.trip_date),
+    renderPlanForecastHtml(venue, plan),
     loadPlanTicks(plan.id),
     loadKitRows(plan.id)
   ]);
@@ -9905,7 +9961,7 @@ async function openPlanDetail(planId){
       + '<div class="field"><label>Return date (optional)</label><input type="date" id="plan-detail-return" value="' + escapeHtml(plan.return_date || '') + '"></div>'
       + '</div><div class="status" id="plan-detail-date-status"></div></div>'
     + (hasCoords ? '<div id="plan-detail-map" style="height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;"></div>' : '')
-    + renderPlanRecapHtml(recap) + forecastHtml
+    + renderPlanRecapHtml(recap) + '<div id="plan-detail-forecast">' + forecastHtml + '</div>'
     + renderPlanRestockHtml()
     + '<details class="ins-group" data-plan-group="tackle" open><summary><span class="ins-group-title">Tackle box</span></summary>'
       + '<div class="ins-group-body">' + renderPlanChecklistHtml(items, ticks) + '</div></details>'
@@ -9930,6 +9986,8 @@ async function openPlanDetail(planId){
       title.textContent = plan.venue_name + ' — ' + planDateRangeLabel(planDetailCurrent.plan);
       st2.textContent = '';
       refreshKitSection();
+      const forecastWrap = document.getElementById('plan-detail-forecast');
+      if(forecastWrap) forecastWrap.innerHTML = await renderPlanForecastHtml(venue, planDetailCurrent.plan);
     }catch(err){
       console.error(err);
       st2.textContent = 'Could not save: ' + (err.message || 'unknown error');
