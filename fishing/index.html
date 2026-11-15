@@ -1064,6 +1064,7 @@
 
       <div id="home-active-session" style="display:none;"></div>
       <div id="home-competitions" style="margin-bottom:14px;"></div>
+      <div id="home-restock-banner" style="display:none;margin-bottom:14px;"></div>
 
       <div id="home-weather" role="button" tabindex="0" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;"></div>
 
@@ -5791,16 +5792,22 @@ function renderTackleActiveBanner(){
 // Bait and dips at 20% or under — a quick restock reminder, with a one-tap
 // way to mark them topped up again once you've bought more.
 const RESTOCK_THRESHOLD = 20;
+function lowStockTackleItems(items){
+  return items
+    .filter(it=> !it.inactive && (it.category === 'Bait' || it.category === 'Dips'))
+    .filter(it=> (it.fill_level ?? 100) <= RESTOCK_THRESHOLD)
+    .sort((a,b)=> (a.fill_level ?? 100) - (b.fill_level ?? 100));
+}
+// Two items can share a name ("Monster mix" as both a bait and a dip isn't
+// unusual) - singular so it reads naturally next to one item at a time.
+function tackleCategoryTag(category){ return category === 'Dips' ? 'Dip' : category; }
 // Same low-stock list as the Tackle Box banner, but for a trip you're
 // planning. Covers your own items plus anything shared with you that
 // you've ticked "Use" — you can't restock someone else's bait yourself,
 // but it's still worth knowing before the trip, so it's tagged by owner.
 function renderPlanRestockHtml(){
   const myUserId = isSignedIn() ? session.user.id : null;
-  const low = activeTackleItems()
-    .filter(it=> !it.inactive && (it.category === 'Bait' || it.category === 'Dips'))
-    .filter(it=> (it.fill_level ?? 100) <= RESTOCK_THRESHOLD)
-    .sort((a,b)=> (a.fill_level ?? 100) - (b.fill_level ?? 100));
+  const low = lowStockTackleItems(activeTackleItems());
   if(!low.length) return '';
   return '<div class="profile-catch" style="margin-bottom:14px;">'
     + '<div class="pc-head">Need to restock before this trip</div>'
@@ -5812,7 +5819,7 @@ function renderPlanRestockHtml(){
           const owner = people.find(p=>p.user_id===it.owner_user_id);
           ownerTag = ' <span class="ins-sub">(shared by ' + escapeHtml(owner ? owner.name : 'a friend') + ')</span>';
         }
-        return '<li><strong style="color:var(--ink);">' + escapeHtml(it.name) + '</strong>' + ownerTag + ' — '
+        return '<li><strong style="color:var(--ink);">' + escapeHtml(it.name) + '</strong> <span class="ins-sub">' + escapeHtml(tackleCategoryTag(it.category)) + '</span>' + ownerTag + ' — '
           + (it.fill_level === 0 ? 'empty' : it.fill_level + '% left') + '</li>';
       }).join('')
     + '</ul></div>';
@@ -5820,15 +5827,12 @@ function renderPlanRestockHtml(){
 function renderTackleRestockBanner(){
   const el = document.getElementById('tackle-restock-banner');
   if(!el) return;
-  const low = ownTackleItems()
-    .filter(it=> !it.inactive && (it.category === 'Bait' || it.category === 'Dips'))
-    .filter(it=> (it.fill_level ?? 100) <= RESTOCK_THRESHOLD)
-    .sort((a,b)=> (a.fill_level ?? 100) - (b.fill_level ?? 100));
+  const low = lowStockTackleItems(ownTackleItems());
   if(!low.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = 'block';
   el.innerHTML = '<div class="pc-head">Running low</div>'
     + '<ul style="margin:4px 0 8px;padding-left:18px;color:var(--muted);font-size:12.5px;">'
-    + low.map(it=> '<li><strong style="color:var(--ink);">' + escapeHtml(it.name) + '</strong> — '
+    + low.map(it=> '<li><strong style="color:var(--ink);">' + escapeHtml(it.name) + '</strong> <span class="ins-sub">' + escapeHtml(tackleCategoryTag(it.category)) + '</span> — '
       + (it.fill_level === 0 ? 'empty' : it.fill_level + '% left')
       + ' <button type="button" class="mini-btn" data-restock="' + it.id + '" style="margin-left:6px;padding:2px 8px;font-size:11px;">Restocked</button></li>').join('')
     + '</ul>'
@@ -5850,6 +5854,23 @@ function renderTackleRestockBanner(){
       }
     });
   });
+}
+// Home's heads-up for the same low-stock list - the Tackle Box tab's cache
+// is only filled once that tab has actually been opened, so this loads its
+// own copy rather than assuming it's already there.
+async function renderHomeRestockBanner(){
+  const el = document.getElementById('home-restock-banner');
+  if(!el || !isSignedIn()) return;
+  try{
+    tackleItemsCache = await loadTackleItems();
+    const low = lowStockTackleItems(ownTackleItems());
+    if(!low.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = 'block';
+    el.innerHTML = `<button type="button" class="home-restock-link" style="display:block;width:100%;text-align:left;background:var(--dam-deep);color:#fff;border:none;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13px;cursor:pointer;">
+      <i class="ti ti-droplet" style="vertical-align:-2px;" aria-hidden="true"></i> <b>${low.length}</b> bait/dip item${low.length===1?'':'s'} running low — tap to restock
+    </button>`;
+    el.querySelector('.home-restock-link').addEventListener('click', ()=> goToTab('tackle'));
+  }catch(e){ console.error('home restock banner failed', e); el.style.display = 'none'; }
 }
 // Free accounts: true when these shared items may be ticked "Use"; otherwise explains why not
 function canUseMoreShared(newItems){
@@ -15778,6 +15799,8 @@ async function renderHome(){
     weatherWrap.style.display = 'none';
     const weekWrapOut = document.getElementById('home-week');
     if(weekWrapOut) weekWrapOut.style.display = 'none';
+    const restockWrapOut = document.getElementById('home-restock-banner');
+    if(restockWrapOut) restockWrapOut.style.display = 'none';
     if(venueMapBtn) venueMapBtn.style.display = 'none';
     compWrap.innerHTML = '';
     feedWrap.innerHTML = '<div class="empty">Sign in to see what your mates are catching.</div>';
@@ -15811,6 +15834,7 @@ async function renderHome(){
   renderHomeWeather();
   renderHomeStreak();
   renderHomeWeek();
+  renderHomeRestockBanner();
 
   // Any competitions you're in that are live right now
   try{
