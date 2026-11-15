@@ -8702,9 +8702,11 @@ async function fetchSunMoon(lat, lng){
   try{
     const res = await fetch(`https://api.sunrise-sunset.org/v2?lat=${lat}&lng=${lng}&formatted=0`);
     if(!res.ok) return null;
-    const data = await res.json();
-    const r = data.results;
-    if(!r) return null;
+    // Fields come back flat on this endpoint - there is no "results" wrapper
+    // (unlike some other weather/astronomy APIs). Confirmed directly against
+    // a live response after this silently returned null for every call.
+    const r = await res.json();
+    if(!r || !r.sunrise) return null;
     const d = s=> s ? new Date(s) : null;
     return {
       sunrise: d(r.sunrise), sunset: d(r.sunset),
