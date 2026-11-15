@@ -11260,6 +11260,11 @@ function buildInsightsHtml(catches, venues, sessions){
   const biggest = caught.reduce((b,c)=> (c.weight||0) > (b?b.weight:0) ? c : b, null);
   const withTimer = caught.filter(c=>c.timerElapsed > 0);
   const avgSoak = withTimer.length ? withTimer.reduce((s,c)=>s+c.timerElapsed,0)/withTimer.length : 0;
+  // Hoisted above its first use (the time-in-water breakdown below) so that
+  // section's per-catch detail rows can show a venue name too; venueRows
+  // further down reuses this same map rather than rebuilding it.
+  const venueNames = {};
+  (venues||[]).forEach(v=>{ venueNames[v.id] = v.name; });
   overview += `<div class="profile-summary" style="margin-top:4px;">
       <div><b>${caught.length}</b>catches</div>
       <div><b>${formatWeight(totalWeight)}</b>total</div>
@@ -11296,7 +11301,8 @@ function buildInsightsHtml(catches, venues, sessions){
         const detailRows = bucketCatches[i].slice().sort((a,b)=> b.time - a.time).map(c=>{
           const bait = catchingBaits(c).join(', ') || 'No bait logged';
           const when = new Date(c.time).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
-          return `<li class="ins-sub-row"><b>${escapeHtml(c.type || 'Fish')}</b>${c.weight ? ' · ' + formatWeight(c.weight) : ''} · ${escapeHtml(bait)}<div class="ins-sub">${escapeHtml(when)}</div></li>`;
+          const venue = c.venueId && venueNames[c.venueId] ? venueNames[c.venueId] : null;
+          return `<li class="ins-sub-row"><b>${escapeHtml(c.type || 'Fish')}</b>${c.weight ? ' · ' + formatWeight(c.weight) : ''} · ${escapeHtml(bait)}<div class="ins-sub">${escapeHtml(when)}${venue ? ' · ' + escapeHtml(venue) : ''}</div></li>`;
         }).join('');
         return `<details class="ins-row-expand">
           <summary>
@@ -11535,8 +11541,6 @@ function buildInsightsHtml(catches, venues, sessions){
   // Pressure/Feed Methods bundle their own related tables - all three are
   // "where", not three separate questions.
   let venuesHtml = '';
-  const venueNames = {};
-  (venues||[]).forEach(v=>{ venueNames[v.id] = v.name; });
   const venueRows = groupStats(c=> c.venueId && venueNames[c.venueId] ? [c.venueId] : [], {casts:true, labels:venueNames});
   if(venueRows.length){
     venuesHtml += `<div class="ins-sec"><p class="sub-heading">Venues</p>
