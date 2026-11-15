@@ -1090,7 +1090,6 @@
       <div id="home-active-session" style="display:none;"></div>
       <div id="home-competitions" style="margin-bottom:14px;"></div>
       <div id="home-restock-banner" style="display:none;margin-bottom:14px;"></div>
-      <div id="home-forecast-reminder" style="display:none;margin-bottom:14px;"></div>
 
       <div id="home-weather" role="button" tabindex="0" style="display:none;background:var(--card-bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;"></div>
 
@@ -5900,23 +5899,6 @@ async function renderHomeRestockBanner(){
     el.querySelector('.home-restock-link').addEventListener('click', ()=> goToTab('tackle'));
   }catch(e){ console.error('home restock banner failed', e); el.style.display = 'none'; }
 }
-// Surfaces the soonest upcoming trip (owned by you - attaching is owner-only)
-// that's hit its forecast-screenshot deadline and still has nothing attached.
-async function renderHomeForecastReminderBanner(){
-  const el = document.getElementById('home-forecast-reminder');
-  if(!el || !isSignedIn()) return;
-  try{
-    const today = new Date().toISOString().slice(0, 10);
-    const plans = await sbGet('trip_plans?select=id,venue_name,trip_date,forecast_screenshot_url&owner_user_id=eq.'+session.user.id+'&forecast_screenshot_url=is.null&trip_date=gte.'+today+'&order=trip_date.asc');
-    const due = plans.find(p=> new Date() >= planForecastDeadline(p));
-    if(!due){ el.style.display = 'none'; el.innerHTML = ''; return; }
-    el.style.display = 'block';
-    el.innerHTML = `<button type="button" class="home-restock-link" style="display:block;width:100%;text-align:left;background:var(--dam-deep);color:#fff;border:none;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13px;cursor:pointer;">
-      <i class="ti ti-camera" style="vertical-align:-2px;" aria-hidden="true"></i> Attach a forecast screenshot for <b>${escapeHtml(due.venue_name)}</b>
-    </button>`;
-    el.querySelector('button').addEventListener('click', ()=>{ goToTab('plan'); openPlanDetail(due.id); });
-  }catch(e){ console.error('home forecast reminder failed', e); el.style.display = 'none'; }
-}
 // Free accounts: true when these shared items may be ticked "Use"; otherwise explains why not
 function canUseMoreShared(newItems){
   if(isPro() || !isSignedIn()) return true;
@@ -8675,6 +8657,11 @@ function capturePosition(){
 // Used to drive the "storm risk, stay safe" warning - a safety fact, not a
 // claim about fish, so it isn't subject to the no-folklore rule on badges.
 function isStormCode(code){ return code === 95 || code === 96 || code === 99; }
+// CAPE (Convective Available Potential Energy, J/kg) is a direct measure of
+// thunderstorm fuel, not just a forecaster's guess at a code bucket - 1000+
+// is the standard "moderate instability" threshold. Catches a storm risk the
+// weather_code alone sometimes misses or mistimes.
+function isStormRisk(code, cape){ return isStormCode(code) || (cape != null && cape >= 1000); }
 function stormWarningHtml(){
   return `<div class="storm-warning">⚠️ <b>Storm risk</b> — lightning possible. Stay safe, and get off the water if it closes in.</div>`;
 }
@@ -8687,8 +8674,8 @@ async function fetchForecast(lat, lng){
       // (e.g. ~860hPa at Vaal Dam) which looks broken next to any normal
       // weather app. The rising/falling trend is identical either way, only
       // the absolute number changes.
-      + `&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl,precipitation_probability,weather_code`
-      + `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max`
+      + `&hourly=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,precipitation_probability,weather_code,cape,uv_index`
+      + `&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max`
       + `&forecast_days=7&timezone=auto`;
     const res = await fetch(url);
     if(!res.ok) return null;
@@ -8698,7 +8685,7 @@ async function fetchForecast(lat, lng){
 
 async function fetchWeather(lat, lng){
   try{
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,pressure_msl,precipitation,weather_code&hourly=pressure_msl,weather_code&past_hours=3&forecast_hours=4`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,pressure_msl,precipitation,weather_code,cape,uv_index&hourly=pressure_msl,weather_code,cape&past_hours=3&forecast_hours=4`;
     const res = await fetch(url);
     if(!res.ok) return null;
     const data = await res.json();
@@ -8711,13 +8698,17 @@ async function fetchWeather(lat, lng){
     // Storm risk: right now, or anywhere in the next few hours ahead
     const times = (data.hourly && data.hourly.time) || [];
     const codes = (data.hourly && data.hourly.weather_code) || [];
+    const capes = (data.hourly && data.hourly.cape) || [];
     const nowIdx = times.findIndex(t=> new Date(t) >= new Date());
     const upcoming = nowIdx >= 0 ? codes.slice(nowIdx) : [];
-    const stormRisk = isStormCode(c.weather_code) || upcoming.some(isStormCode);
+    const upcomingCapes = nowIdx >= 0 ? capes.slice(nowIdx) : [];
+    const stormRisk = isStormRisk(c.weather_code, c.cape) || upcoming.some((code, i)=> isStormRisk(code, upcomingCapes[i]));
     return {
       temp: c.temperature_2m,
       windSpeed: c.wind_speed_10m,
       windDir: c.wind_direction_10m,
+      windGust: c.wind_gusts_10m,
+      uvIndex: c.uv_index,
       cloudCover: c.cloud_cover,
       pressure: c.pressure_msl,
       precipitation: c.precipitation ?? null,
@@ -9010,9 +9001,10 @@ async function renderSessionWeather(){
   const parts = [];
   if(weather){
     if(weather.temp != null) parts.push(fmtTemp(weather.temp));
-    if(weather.windSpeed != null) parts.push(`💨 ${fmtWind(weather.windSpeed)} ${windDirLabel(weather.windDir)}`);
+    if(weather.windSpeed != null) parts.push(`💨 ${fmtWind(weather.windSpeed)} ${windDirLabel(weather.windDir)}` + (weather.windGust != null ? ` (gusts ${fmtWind(weather.windGust)})` : ''));
     if(weather.cloudCover != null) parts.push(`☁️ ${Math.round(weather.cloudCover)}%`);
     if(weather.pressure != null) parts.push(fmtPressure(weather.pressure));
+    if(weather.uvIndex != null && weather.uvIndex >= 3) parts.push(`☀️ UV ${Math.round(weather.uvIndex)}`);
   }
   if(moon) parts.push(`${moon.emoji} ${moon.label}`);
 
@@ -9056,23 +9048,27 @@ async function openForecast(){
       temp: data.hourly.temperature_2m?.[i],
       wind: data.hourly.wind_speed_10m?.[i],
       windDir: data.hourly.wind_direction_10m?.[i],
+      gust: data.hourly.wind_gusts_10m?.[i],
       cloud: data.hourly.cloud_cover?.[i],
       pressure: data.hourly.pressure_msl?.[i],
       rain: data.hourly.precipitation_probability?.[i],
-      code: data.hourly.weather_code?.[i]
+      code: data.hourly.weather_code?.[i],
+      cape: data.hourly.cape?.[i],
+      uv: data.hourly.uv_index?.[i]
     });
   }
 
-  let html = hours.some(h=> isStormCode(h.code)) ? stormWarningHtml() : '';
+  let html = hours.some(h=> isStormRisk(h.code, h.cape)) ? stormWarningHtml() : '';
   html += `<p class="sub-heading">Next 12 hours</p><ul class="people-list">`;
   hours.forEach(h=>{
     html += `<li>
       <div class="who"><b>${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
       <div class="actions">
         <span class="pill">${h.temp != null ? fmtTemp(h.temp) : '—'}</span>
-        <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}</span>
+        <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}${h.gust != null ? ' (gusts '+fmtWind(h.gust)+')' : ''}</span>
         ${h.rain != null ? `<span class="pill">🌧️ ${Math.round(h.rain)}%</span>` : ''}
         ${h.pressure != null ? `<span class="pill">${fmtPressure(h.pressure)}</span>` : ''}
+        ${h.uv != null && h.uv >= 3 ? `<span class="pill">☀️ UV ${Math.round(h.uv)}</span>` : ''}
       </div>
     </li>`;
   });
@@ -9097,7 +9093,7 @@ async function openForecast(){
         if(new Date(t) < now - 3600000) return;
         slots.push({
           time: new Date(t), temp: data.hourly.temperature_2m?.[k], wind: data.hourly.wind_speed_10m?.[k],
-          windDir: data.hourly.wind_direction_10m?.[k], pressure: data.hourly.pressure_msl?.[k],
+          windDir: data.hourly.wind_direction_10m?.[k], gust: data.hourly.wind_gusts_10m?.[k], pressure: data.hourly.pressure_msl?.[k],
           rain: data.hourly.precipitation_probability?.[k]
         });
       });
@@ -9113,15 +9109,16 @@ async function openForecast(){
           <div class="who"><b>${escapeHtml(day)}</b></div>
           <div class="actions">
             <span class="pill">${tempValue(data.daily.temperature_2m_min[i])}–${fmtTemp(data.daily.temperature_2m_max[i])}</span>
-            <span class="pill">💨 ${fmtWind(data.daily.wind_speed_10m_max[i])}</span>
+            <span class="pill">💨 ${fmtWind(data.daily.wind_speed_10m_max[i])}${data.daily.wind_gusts_10m_max?.[i] != null ? ' (gusts '+fmtWind(data.daily.wind_gusts_10m_max[i])+')' : ''}</span>
             <span class="pill">🌧️ ${Math.round(data.daily.precipitation_probability_max[i])}%</span>
+            ${data.daily.uv_index_max?.[i] != null && data.daily.uv_index_max[i] >= 3 ? `<span class="pill">☀️ UV ${Math.round(data.daily.uv_index_max[i])}</span>` : ''}
           </div>
         </summary>
         <ul class="people-list fc-day-hours">${slots.map(h=>`<li>
           <div class="who"><b>${h.time.toLocaleTimeString(dateLocale(), {hour:'2-digit', minute:'2-digit'})}</b></div>
           <div class="actions">
             <span class="pill">${h.temp != null ? fmtTemp(h.temp) : '—'}</span>
-            <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}</span>
+            <span class="pill">💨 ${h.wind != null ? fmtWind(h.wind)+' '+windDirLabel(h.windDir) : '—'}${h.gust != null ? ' (gusts '+fmtWind(h.gust)+')' : ''}</span>
             ${h.rain != null ? `<span class="pill">🌧️ ${Math.round(h.rain)}%</span>` : ''}
             ${h.pressure != null ? `<span class="pill">${fmtPressure(h.pressure)}</span>` : ''}
           </div>
@@ -9757,17 +9754,28 @@ async function renderPlanForecastHtml(venue, plan){
   if(!dayIdxs.length){
     return '<div class="profile-catch"><div class="pc-head">Weather</div><div class="pc-line muted">Could not load the forecast right now.</div></div>';
   }
-  const anyStorm = dayIdxs.some(i=> isStormCode(data.daily.weather_code?.[i]));
+  // CAPE only comes back hourly, never as a daily figure - the worst (highest)
+  // hourly reading on a given date stands in for that day's storm potential.
+  const maxCapeByDay = {};
+  const hTimes = (data.hourly && data.hourly.time) || [];
+  const hCapes = (data.hourly && data.hourly.cape) || [];
+  hTimes.forEach((t, j)=>{
+    const d = t.slice(0, 10);
+    if(hCapes[j] != null && (maxCapeByDay[d] == null || hCapes[j] > maxCapeByDay[d])) maxCapeByDay[d] = hCapes[j];
+  });
+  const anyStorm = dayIdxs.some(i=> isStormRisk(data.daily.weather_code?.[i], maxCapeByDay[times[i]]));
   const rows = dayIdxs.map(i=>{
     const max = data.daily.temperature_2m_max?.[i], min = data.daily.temperature_2m_min?.[i];
     const rain = data.daily.precipitation_probability_max?.[i], wind = data.daily.wind_speed_10m_max?.[i];
+    const gust = data.daily.wind_gusts_10m_max?.[i], uv = data.daily.uv_index_max?.[i];
     const dayLabel = dayIdxs.length > 1
       ? '<b>' + escapeHtml(new Date(times[i] + 'T12:00').toLocaleDateString(dateLocale(), {weekday:'short', day:'numeric', month:'short'})) + ':</b> '
       : '';
     return '<div class="pc-line" style="padding:2px 0;">' + dayLabel
       + (max != null ? fmtTemp(max) + ' / ' + fmtTemp(min) : '—')
-      + (wind != null ? ', wind up to ' + fmtWind(wind) : '')
-      + (rain != null ? ', ' + Math.round(rain) + '% rain chance' : '') + '</div>';
+      + (wind != null ? ', wind up to ' + fmtWind(wind) + (gust != null ? ' (gusts ' + fmtWind(gust) + ')' : '') : '')
+      + (rain != null ? ', ' + Math.round(rain) + '% rain chance' : '')
+      + (uv != null ? ', UV ' + Math.round(uv) : '') + '</div>';
   }).join('');
   // A trip longer than the 7-day forecast window still shows what it can
   const beyondWindow = endStr > times[times.length - 1];
@@ -9779,75 +9787,6 @@ async function renderPlanForecastHtml(venue, plan){
     + '</div>';
 }
 
-// The API forecast above stops at 7 days out (nothing free is reliable
-// further than that). Rather than fake a longer lookahead, let the owner
-// screenshot whatever 14-day outlook they're already checking elsewhere and
-// archive it against the plan - owner-only to attach/replace, same as dates,
-// but visible to anyone the plan is shared with.
-function planForecastDeadline(plan){
-  const d = new Date(plan.trip_date + 'T00:00');
-  d.setDate(d.getDate() - 7);
-  return d;
-}
-
-function renderPlanForecastScreenshotHtml(plan, isOwner){
-  const deadline = planForecastDeadline(plan);
-  const deadlineStr = deadline.toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'});
-  let body;
-  if(plan.forecast_screenshot_url){
-    const capturedStr = plan.forecast_captured_at
-      ? new Date(plan.forecast_captured_at).toLocaleDateString(dateLocale(), {day:'numeric', month:'short', year:'numeric'})
-      : null;
-    body = '<img src="' + escapeHtml(plan.forecast_screenshot_url) + '" class="pc-photo" id="plan-forecast-photo" alt="Forecast screenshot" loading="lazy" decoding="async" style="width:100%;max-width:260px;border-radius:8px;cursor:pointer;display:block;margin-bottom:6px;">'
-      + (capturedStr ? '<div class="pc-line muted">Captured ' + escapeHtml(capturedStr) + '</div>' : '')
-      + (isOwner ? '<button type="button" class="mini-btn" id="plan-forecast-replace-btn" style="margin-top:6px;">Replace</button>' : '');
-  }else{
-    const overdue = new Date() >= deadline;
-    body = '<p class="pc-line" style="' + (overdue ? 'color:#c04;font-weight:600;' : 'color:var(--muted);') + '">'
-      + (overdue ? 'Not attached yet — ' : '') + 'Screenshot a longer-range forecast for this trip and attach it here, ideally by ' + escapeHtml(deadlineStr) + '.</p>'
-      + (isOwner ? '<button type="button" class="mini-btn" id="plan-forecast-attach-btn">Attach screenshot</button>' : '');
-  }
-  return '<div class="profile-catch" style="margin-bottom:14px;" id="plan-forecast-screenshot-wrap">'
-    + '<div class="pc-head">Longer-range forecast</div>' + body
-    + (isOwner ? '<input type="file" accept="image/*" id="plan-forecast-file-input" style="display:none;">' : '')
-    + '</div>';
-}
-
-async function attachPlanForecastScreenshot(planId, file){
-  const url = await uploadPhoto(file, {maxDim: 1200, quality: 0.9});
-  const capturedAt = new Date().toISOString();
-  await sbPatch('trip_plans', 'id=eq.'+planId, {forecast_screenshot_url: url, forecast_captured_at: capturedAt});
-  return {url, capturedAt};
-}
-
-function wirePlanForecastScreenshotEvents(planId, isOwner){
-  const photo = document.getElementById('plan-forecast-photo');
-  if(photo) photo.addEventListener('click', ()=> openPhotoModal(photo.src, null));
-  if(!isOwner) return;
-  const fileInput = document.getElementById('plan-forecast-file-input');
-  const triggerBtn = document.getElementById('plan-forecast-attach-btn') || document.getElementById('plan-forecast-replace-btn');
-  if(!fileInput || !triggerBtn) return;
-  triggerBtn.addEventListener('click', ()=> fileInput.click());
-  fileInput.addEventListener('change', async ()=>{
-    const file = fileInput.files[0];
-    if(!file) return;
-    triggerBtn.disabled = true;
-    triggerBtn.textContent = 'Uploading...';
-    try{
-      const {url, capturedAt} = await attachPlanForecastScreenshot(planId, file);
-      planDetailCurrent.plan.forecast_screenshot_url = url;
-      planDetailCurrent.plan.forecast_captured_at = capturedAt;
-      const wrap = document.getElementById('plan-forecast-screenshot-wrap');
-      if(wrap) wrap.outerHTML = renderPlanForecastScreenshotHtml(planDetailCurrent.plan, isOwner);
-      wirePlanForecastScreenshotEvents(planId, isOwner);
-    }catch(e){
-      console.error(e);
-      alert('Could not upload: ' + (e.message || 'unknown error'));
-      triggerBtn.disabled = false;
-      triggerBtn.textContent = document.getElementById('plan-forecast-attach-btn') ? 'Attach screenshot' : 'Replace';
-    }
-  });
-}
 
 // What to pre-tick on a brand new plan: baits/dips actually used last time
 // at this venue (by name - the app has no other link from a past catch back
@@ -10181,7 +10120,6 @@ async function openPlanDetail(planId){
     + (hasCoords ? '<div id="plan-detail-map" style="height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;"></div>' : '')
     + shareSectionHtml
     + renderPlanRecapHtml(recap) + '<div id="plan-detail-forecast">' + forecastHtml + '</div>'
-    + renderPlanForecastScreenshotHtml(plan, isOwner)
     // The Tackle box checklist and restock banner are the OWNER's own private
     // gear - a shared mate's own tackle box has nothing to do with this trip,
     // and may not even be visible to them (tackle sharing is a separate,
@@ -10203,7 +10141,6 @@ async function openPlanDetail(planId){
     sel.addEventListener('change', ()=> setPlanItemAssignment(plan.id, sel.dataset.itemId, sel.value));
   });
   wireKitSectionEvents();
-  wirePlanForecastScreenshotEvents(plan.id, isOwner);
 
   const sharePicker = document.getElementById('plan-share-picker');
   if(sharePicker){
@@ -16143,8 +16080,6 @@ async function renderHome(){
     if(weekWrapOut) weekWrapOut.style.display = 'none';
     const restockWrapOut = document.getElementById('home-restock-banner');
     if(restockWrapOut) restockWrapOut.style.display = 'none';
-    const forecastReminderOut = document.getElementById('home-forecast-reminder');
-    if(forecastReminderOut) forecastReminderOut.style.display = 'none';
     if(venueMapBtn) venueMapBtn.style.display = 'none';
     compWrap.innerHTML = '';
     feedWrap.innerHTML = '<div class="empty">Sign in to see what your mates are catching.</div>';
@@ -16179,7 +16114,6 @@ async function renderHome(){
   renderHomeStreak();
   renderHomeWeek();
   renderHomeRestockBanner();
-  renderHomeForecastReminderBanner();
 
   // Any competitions you're in that are live right now
   try{
@@ -16388,9 +16322,10 @@ async function renderHomeWeather(){
     if(getHomeWeatherMode() === 'visual'){
       const sky = skyLook(w);
       const box = (inner)=> `<div class="home-stat" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">${inner}</div>`;
-      const wind = w.windSpeed != null ? box(`${windCompassSvg(w.windDir)}<b style="font-size:14px;">${escapeHtml(fmtWind(w.windSpeed))}</b><span>${w.windDir != null ? 'from ' + escapeHtml(windDirLabel(w.windDir)) : 'wind'}</span>`) : '';
+      const wind = w.windSpeed != null ? box(`${windCompassSvg(w.windDir)}<b style="font-size:14px;">${escapeHtml(fmtWind(w.windSpeed))}</b><span>${w.windDir != null ? 'from ' + escapeHtml(windDirLabel(w.windDir)) : 'wind'}${w.windGust != null ? ' · gusts ' + escapeHtml(fmtWind(w.windGust)) : ''}</span>`) : '';
       const press = w.pressure != null ? box(`<div style="width:100%;min-height:32px;">${pressureGraphSvg(pressureNext)}</div><b style="font-size:14px;">${escapeHtml(fmtPressure(w.pressure))}</b><span>${escapeHtml(trend ? trend.trim() : 'pressure')}</span>`) : '';
       const moon = box(`<span style="font-size:32px;line-height:46px;" aria-hidden="true">${m.emoji}</span><b style="font-size:14px;">Moon</b><span>${escapeHtml(m.label)}</span>`);
+      const uv = (w.uvIndex != null && w.uvIndex >= 3) ? box(`<span style="font-size:32px;line-height:46px;" aria-hidden="true">☀️</span><b style="font-size:14px;">UV ${Math.round(w.uvIndex)}</b><span>UV index</span>`) : '';
       el.innerHTML = `
         ${w.stormRisk ? stormWarningHtml() : ''}
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
@@ -16401,14 +16336,16 @@ async function renderHomeWeather(){
           </div>
           <div style="font-size:12px;color:var(--muted);white-space:nowrap;align-self:flex-start;">Forecast ›</div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">${wind}${press}${moon}</div>`;
+        <div style="display:grid;grid-template-columns:repeat(${uv ? 4 : 3},1fr);gap:8px;">${wind}${press}${moon}${uv}</div>`;
     }else if(getHomeWeatherMode() === 'full'){
       const tile = (big, small)=> `<div class="home-stat"><b style="font-size:16px;">${escapeHtml(big)}</b><span>${escapeHtml(small)}</span></div>`;
       const tiles = [];
       if(w.temp != null) tiles.push(tile(fmtTemp(w.temp), 'temperature'));
       if(w.windSpeed != null) tiles.push(tile(fmtWind(w.windSpeed), 'wind ' + windDirLabel(w.windDir)));
+      if(w.windGust != null) tiles.push(tile(fmtWind(w.windGust), 'gusts'));
       if(w.pressure != null) tiles.push(tile(fmtPressure(w.pressure), trend ? trend.trim() : 'pressure'));
       if(w.cloudCover != null) tiles.push(tile(Math.round(w.cloudCover) + '%', 'cloud'));
+      if(w.uvIndex != null && w.uvIndex >= 3) tiles.push(tile(String(Math.round(w.uvIndex)), 'UV index'));
       tiles.push(tile(m.emoji, m.label));
       el.innerHTML = `
         ${w.stormRisk ? stormWarningHtml() : ''}
@@ -16420,8 +16357,9 @@ async function renderHomeWeather(){
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div style="font-size:13.5px;color:var(--ink);">
           ${w.temp != null ? fmtTemp(w.temp) : ''}
-          ${w.windSpeed != null ? ' · 💨 '+fmtWind(w.windSpeed)+' '+windDirLabel(w.windDir) : ''}
+          ${w.windSpeed != null ? ' · 💨 '+fmtWind(w.windSpeed)+' '+windDirLabel(w.windDir)+(w.windGust != null ? ' (gusts '+fmtWind(w.windGust)+')' : '') : ''}
           ${w.pressure != null ? ' · '+fmtPressure(w.pressure)+trend : ''}
+          ${(w.uvIndex != null && w.uvIndex >= 3) ? ' · ☀️ UV '+Math.round(w.uvIndex) : ''}
           · <span title="${escapeHtml(m.label)}" aria-label="${escapeHtml(m.label)}">${m.emoji}</span>
         </div>
         <div style="font-size:12px;color:var(--muted);white-space:nowrap;">Forecast ›</div>
