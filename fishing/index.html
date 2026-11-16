@@ -6996,6 +6996,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
       st.textContent = 'Saved.';
       setTimeout(()=> st.textContent='', 1200);
       renderTackleList();
+      if(document.getElementById('admin-tackle-list')) renderAdminTackleList();
       await loadGearOptions();
 await loadTackleCategoryOptions();
       if(currentPerson) renderAll();
@@ -18426,8 +18427,10 @@ async function renderAdminTackleList(){
         </div>
         <div class="actions">
           <span class="pc-line muted" style="margin-right:6px;">${escapeHtml(owner ? owner.name : 'Unknown owner')}</span>
+          <button type="button" class="mini-btn" data-admin-tackle-edit="${it.id}">Edit</button>
           <button type="button" class="mini-btn danger" data-admin-tackle-remove="${it.id}">Remove</button>
         </div>
+        <div class="tackle-edit-manager" data-item="${it.id}" style="display:none;margin-top:8px;"></div>
       </li>`;
     }).join('') + '</ul>';
 
@@ -18443,6 +18446,24 @@ async function renderAdminTackleList(){
         }catch(e){
           console.error(e);
           alert('Could not delete: ' + (e.message || 'unknown error'));
+        }
+      });
+    });
+    // Reuses the same per-item edit form (name/category/brand/flavour/notes/
+    // photo, with the known-flavour suggestion) the regular Tackle Box uses —
+    // admin only needs its own entry point into it, not its own copy.
+    el.querySelectorAll('[data-admin-tackle-edit]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const itemId = btn.dataset.adminTackleEdit;
+        const manager = el.querySelector('.tackle-edit-manager[data-item="'+itemId+'"]');
+        if(!manager) return;
+        const isOpen = manager.style.display !== 'none';
+        if(isOpen){
+          manager.style.display = 'none';
+        }else{
+          manager.style.display = 'block';
+          manager.innerHTML = '<div class="empty">Loading...</div>';
+          await renderTackleItemEditForm(itemId, manager);
         }
       });
     });
