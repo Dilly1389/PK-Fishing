@@ -2154,6 +2154,12 @@
               <option value="">All brands</option>
             </select>
           </div>
+          <div class="field" id="tackle-filter-flavour-wrap" style="display:none;">
+            <label>Flavour</label>
+            <select id="tackle-filter-flavour">
+              <option value="">All flavours</option>
+            </select>
+          </div>
           <div class="field">
             <label>Show</label>
             <select id="tackle-filter-visibility">
@@ -2175,6 +2181,8 @@
               <option value="">Anyone</option>
             </select>
           </div>
+          <button type="button" class="mini-btn" id="tackle-flavours-summary-btn" style="margin-bottom:10px;">List all my flavours</button>
+          <div id="tackle-flavours-summary" style="display:none;margin-bottom:10px;"></div>
           <div id="tackle-active-banner" class="profile-catch" style="display:none;margin-bottom:10px;"></div>
           <div id="tackle-list"><div class="empty">No tackle added yet — add your rods, reels, bait and dips above.</div></div>
           </div>
@@ -7445,7 +7453,47 @@ document.getElementById('tackle-filter-baittype').addEventListener('change', ren
 document.getElementById('tackle-filter-visibility').addEventListener('change', renderTackleList);
 document.getElementById('tackle-filter-sharedby').addEventListener('change', renderTackleList);
 document.getElementById('tackle-filter-brand').addEventListener('change', renderTackleList);
+document.getElementById('tackle-filter-flavour').addEventListener('change', renderTackleList);
 document.getElementById('tackle-sort').addEventListener('change', renderTackleList);
+document.getElementById('tackle-flavours-summary-btn').addEventListener('click', ()=>{
+  const panel = document.getElementById('tackle-flavours-summary');
+  const btn = document.getElementById('tackle-flavours-summary-btn');
+  if(panel.style.display !== 'none'){
+    panel.style.display = 'none';
+    btn.textContent = 'List all my flavours';
+  }else{
+    renderTackleFlavoursSummary();
+    panel.style.display = 'block';
+    btn.textContent = 'Hide flavours list';
+  }
+});
+// A flavour-first view across the user's own Bait/Dips, independent of
+// whatever the category/brand/flavour filters above are currently set to —
+// this answers "what flavours do I actually have", not "what's in this filter".
+function renderTackleFlavoursSummary(){
+  const panel = document.getElementById('tackle-flavours-summary');
+  if(!panel) return;
+  const mine = ownTackleItems().filter(it=> (it.category==='Bait' || it.category==='Dips') && it.flavour);
+  if(mine.length===0){
+    panel.innerHTML = '<div class="empty">No flavours tagged yet — add one when you edit a bait or dip.</div>';
+    return;
+  }
+  const byFlavour = {};
+  mine.forEach(it=>{
+    if(!byFlavour[it.flavour]) byFlavour[it.flavour] = [];
+    byFlavour[it.flavour].push(it);
+  });
+  const flavours = Object.keys(byFlavour).sort((a,b)=> byFlavour[b].length - byFlavour[a].length || a.localeCompare(b));
+  panel.innerHTML = flavours.map(f=>{
+    const group = byFlavour[f];
+    const brands = [...new Set(group.map(it=>it.brand).filter(Boolean))];
+    const countLabel = group.length + ' item' + (group.length===1 ? '' : 's') + (brands.length ? ' — ' + escapeHtml(brands.join(', ')) : '');
+    const names = group.map(it=>escapeHtml(it.name)).join(', ');
+    return `<div class="pc-line" style="padding:6px 0;border-bottom:1px solid var(--line);">`
+      + `<b>${escapeHtml(f)}</b> <span style="color:var(--muted);">(${countLabel})</span>`
+      + `<div style="color:var(--muted);font-size:12px;">${names}</div></div>`;
+  }).join('');
+}
 
 // How often each of my baits and dips was logged. Catches store the baits as
 // comma-separated names, so this matches by name (ignoring capitals); it is a
@@ -7547,6 +7595,23 @@ async function renderTackleList(){
   }else{
     brandWrap.style.display = 'none';
     brandSel.value = '';
+  }
+
+  // Flavour — same idea as Brand, narrowed by whatever's already picked above;
+  // only Bait/Dips items carry one, so this hides itself for other categories
+  const flavourWrap = document.getElementById('tackle-filter-flavour-wrap');
+  const flavourSel = document.getElementById('tackle-filter-flavour');
+  const flavoursPresent = [...new Set(items.map(it=>it.flavour).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  if(flavoursPresent.length > 1){
+    flavourWrap.style.display = 'block';
+    const currentFlavour = flavourSel.value;
+    flavourSel.innerHTML = '<option value="">All flavours</option>' +
+      flavoursPresent.map(f=>`<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+    if(flavoursPresent.includes(currentFlavour)) flavourSel.value = currentFlavour;
+    if(flavourSel.value) items = items.filter(it=> it.flavour === flavourSel.value);
+  }else{
+    flavourWrap.style.display = 'none';
+    flavourSel.value = '';
   }
 
   const visFilter = document.getElementById('tackle-filter-visibility').value;
