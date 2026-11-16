@@ -6806,6 +6806,37 @@ async function loadSharedWithMeTackleItemIds(){
     return new Map(rows.map(r=>[r.tackle_item_id, !!r.in_use]));
   }catch(e){ console.error(e); return new Map(); }
 }
+
+// A small, hand-researched reference of known bait/dip brand flavour names
+// (e.g. Super Cast's published catalog) — read-only reference data, not
+// user data, so it's loaded once and cached for the session. This is what
+// lets the app suggest "this looks like Super Cast's Perdeby" instead of
+// everyone having to look that up themselves.
+let knownBaitFlavoursCache = null;
+async function loadKnownBaitFlavours(){
+  if(knownBaitFlavoursCache) return knownBaitFlavoursCache;
+  try{
+    knownBaitFlavoursCache = await sbGet('known_bait_flavours?select=brand,flavour_name,description,source_url');
+  }catch(e){ console.error(e); knownBaitFlavoursCache = []; }
+  return knownBaitFlavoursCache;
+}
+function normalizeFlavourText(s){
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+// Brand must match exactly (normalized); name match is exact first, then
+// falls back to "item name contains this flavour name" so compound names
+// like "FX & Pandonium" or "Devilsfork & Stuttafords" still match one half.
+function matchKnownFlavour(brand, name, catalog){
+  if(!brand || !name || !catalog || !catalog.length) return null;
+  const nBrand = normalizeFlavourText(brand);
+  const nName = normalizeFlavourText(name);
+  if(!nBrand || !nName) return null;
+  const sameBrand = catalog.filter(f=> normalizeFlavourText(f.brand) === nBrand);
+  let hit = sameBrand.find(f=> normalizeFlavourText(f.flavour_name) === nName);
+  if(hit) return hit;
+  hit = sameBrand.find(f=> f.flavour_name.length > 3 && nName.includes(normalizeFlavourText(f.flavour_name)));
+  return hit || null;
+}
 async function insertTackleItem(item){
   await sbPost('tackle_items', item);
 }
@@ -6888,6 +6919,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
     <div class="field tackle-edit-flavour-wrap" style="display:${(item.category==='Bait'||item.category==='Dips')?'block':'none'};">
       <label>Flavour</label>
       <input type="text" maxlength="100" class="tackle-edit-flavour" list="tackle-flavour-suggestions" value="${escapeHtml(item.flavour||'')}" autocomplete="pk-field-34" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <div class="tackle-flavour-known-suggest" style="display:none;margin-top:6px;"></div>
     </div>
     <div class="field">
       <label>Notes</label>
@@ -6913,6 +6945,33 @@ async function renderTackleItemEditForm(itemId, containerEl){
     baitWrap.style.display = catSel.value === 'Bait' ? 'block' : 'none';
     flavourWrap.style.display = (catSel.value === 'Bait' || catSel.value === 'Dips') ? 'block' : 'none';
   });
+
+  // Known-flavour suggestion — only worth checking while there's no flavour
+  // typed yet; re-checks if the name/brand fields change, since fixing a
+  // typo there might turn a non-match into a match.
+  const nameInput = containerEl.querySelector('.tackle-edit-name');
+  const brandInput = containerEl.querySelector('.tackle-edit-brand');
+  const flavourInput = containerEl.querySelector('.tackle-edit-flavour');
+  const suggestBox = containerEl.querySelector('.tackle-flavour-known-suggest');
+  async function refreshKnownFlavourSuggestion(){
+    if(flavourInput.value.trim()){ suggestBox.style.display = 'none'; return; }
+    const catalog = await loadKnownBaitFlavours();
+    const hit = matchKnownFlavour(brandInput.value, nameInput.value, catalog);
+    if(!hit){ suggestBox.style.display = 'none'; return; }
+    suggestBox.style.display = 'block';
+    suggestBox.innerHTML = `💡 Looks like <b>${escapeHtml(hit.brand)}</b>'s <b>${escapeHtml(hit.flavour_name)}</b> flavour`
+      + (hit.description ? ` — ${escapeHtml(hit.description)}` : '')
+      + ` <button type="button" class="mini-btn tackle-flavour-use-suggest">Use this</button>`
+      + (hit.source_url ? ` <a href="${escapeHtml(hit.source_url)}" target="_blank" rel="noopener" style="font-size:11px;">source</a>` : '');
+    suggestBox.querySelector('.tackle-flavour-use-suggest').addEventListener('click', ()=>{
+      flavourInput.value = hit.flavour_name;
+      suggestBox.style.display = 'none';
+    });
+  }
+  refreshKnownFlavourSuggestion();
+  nameInput.addEventListener('change', refreshKnownFlavourSuggestion);
+  brandInput.addEventListener('change', refreshKnownFlavourSuggestion);
+  flavourInput.addEventListener('input', ()=>{ if(flavourInput.value.trim()) suggestBox.style.display = 'none'; });
 
   containerEl.querySelector('.tackle-edit-save-btn').addEventListener('click', async ()=>{
     const st = containerEl.querySelector('.tackle-edit-status');
@@ -7470,29 +7529,68 @@ document.getElementById('tackle-flavours-summary-btn').addEventListener('click',
 // A flavour-first view across the user's own Bait/Dips, independent of
 // whatever the category/brand/flavour filters above are currently set to —
 // this answers "what flavours do I actually have", not "what's in this filter".
-function renderTackleFlavoursSummary(){
+async function renderTackleFlavoursSummary(){
   const panel = document.getElementById('tackle-flavours-summary');
   if(!panel) return;
-  const mine = ownTackleItems().filter(it=> (it.category==='Bait' || it.category==='Dips') && it.flavour);
-  if(mine.length===0){
-    panel.innerHTML = '<div class="empty">No flavours tagged yet — add one when you edit a bait or dip.</div>';
-    return;
+  const mineAll = ownTackleItems().filter(it=> it.category==='Bait' || it.category==='Dips');
+  const mine = mineAll.filter(it=> it.flavour);
+  const missing = mineAll.filter(it=> !it.flavour);
+  const knownCatalog = missing.length ? await loadKnownBaitFlavours() : [];
+
+  let flavouredHtml = '<div class="empty">No flavours tagged yet — add one when you edit a bait or dip.</div>';
+  if(mine.length){
+    const byFlavour = {};
+    mine.forEach(it=>{
+      if(!byFlavour[it.flavour]) byFlavour[it.flavour] = [];
+      byFlavour[it.flavour].push(it);
+    });
+    const flavours = Object.keys(byFlavour).sort((a,b)=> byFlavour[b].length - byFlavour[a].length || a.localeCompare(b));
+    flavouredHtml = flavours.map(f=>{
+      const group = byFlavour[f];
+      const brands = [...new Set(group.map(it=>it.brand).filter(Boolean))];
+      const countLabel = group.length + ' item' + (group.length===1 ? '' : 's') + (brands.length ? ' — ' + escapeHtml(brands.join(', ')) : '');
+      const names = group.map(it=>escapeHtml(it.name)).join(', ');
+      return `<div class="pc-line" style="padding:6px 0;border-bottom:1px solid var(--line);">`
+        + `<b>${escapeHtml(f)}</b> <span style="color:var(--muted);">(${countLabel})</span>`
+        + `<div style="color:var(--muted);font-size:12px;">${names}</div></div>`;
+    }).join('');
   }
-  const byFlavour = {};
-  mine.forEach(it=>{
-    if(!byFlavour[it.flavour]) byFlavour[it.flavour] = [];
-    byFlavour[it.flavour].push(it);
+
+  const missingHtml = missing.length ? `
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);">
+      <b>No flavour yet (${missing.length})</b>
+      ${missing.map(it=>{
+        const hit = matchKnownFlavour(it.brand, it.name, knownCatalog);
+        const hint = hit ? `<div style="color:var(--muted);font-size:12px;">💡 Looks like ${escapeHtml(hit.brand)}'s ${escapeHtml(hit.flavour_name)}${hit.description ? ' — ' + escapeHtml(hit.description) : ''}</div>` : '';
+        return `
+        <div class="pc-line" style="padding:4px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <span>${escapeHtml(it.name)}</span>
+            <button type="button" class="mini-btn" data-flavour-gap-edit="${it.id}">Add flavour</button>
+          </div>
+          ${hint}
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  panel.innerHTML = flavouredHtml + missingHtml;
+  panel.querySelectorAll('[data-flavour-gap-edit]').forEach(btn=>{
+    btn.addEventListener('click', ()=> jumpToTackleItemEdit(btn.dataset.flavourGapEdit));
   });
-  const flavours = Object.keys(byFlavour).sort((a,b)=> byFlavour[b].length - byFlavour[a].length || a.localeCompare(b));
-  panel.innerHTML = flavours.map(f=>{
-    const group = byFlavour[f];
-    const brands = [...new Set(group.map(it=>it.brand).filter(Boolean))];
-    const countLabel = group.length + ' item' + (group.length===1 ? '' : 's') + (brands.length ? ' — ' + escapeHtml(brands.join(', ')) : '');
-    const names = group.map(it=>escapeHtml(it.name)).join(', ');
-    return `<div class="pc-line" style="padding:6px 0;border-bottom:1px solid var(--line);">`
-      + `<b>${escapeHtml(f)}</b> <span style="color:var(--muted);">(${countLabel})</span>`
-      + `<div style="color:var(--muted);font-size:12px;">${names}</div></div>`;
-  }).join('');
+}
+// Opens the existing per-item Edit panel down in the main Tackle Box list
+// (not a separate form) so filling in a missing flavour reuses the same
+// field everything else already goes through. Resets the filters first so
+// the item is guaranteed to actually be in that list, whatever was
+// selected when the "Add flavour" button was clicked.
+async function jumpToTackleItemEdit(itemId){
+  document.getElementById('tackle-filter-category').value = '';
+  document.getElementById('tackle-filter-visibility').value = 'private';
+  await renderTackleList();
+  const editBtn = document.querySelector('[data-tackle-edit="'+itemId+'"]');
+  if(!editBtn) return;
+  editBtn.scrollIntoView({behavior:'smooth', block:'center'});
+  editBtn.click();
 }
 
 // How often each of my baits and dips was logged. Catches store the baits as
