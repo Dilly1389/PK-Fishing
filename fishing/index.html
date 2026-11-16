@@ -10320,6 +10320,55 @@ function planDateRangeLabel(plan){
   return start + ' – ' + end;
 }
 
+// YYYY-MM-DD + days -> YYYY-MM-DD, via Date.UTC so this never drifts a day
+// in a positive UTC-offset timezone (South Africa included) the way
+// constructing a local Date and reading toISOString() back would.
+function dateStrPlusDays(dateStr, days){
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+function icsEscape(s){
+  return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+function downloadIcsFile(filename, text){
+  const blob = new Blob([text], {type: 'text/calendar;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+// A plain .ics download works on desktop, iOS and Android alike without
+// picking a calendar provider - no Google/Apple-specific link needed. The
+// trip is an all-day event; DTEND is exclusive per the iCalendar spec, so a
+// single 20 Nov trip needs DTEND 21 Nov to actually cover the 20th.
+function tripIcsText(plan){
+  const dtStart = plan.trip_date.replace(/-/g, '');
+  const dtEnd = dateStrPlusDays(plan.return_date || plan.trip_date, 1).replace(/-/g, '');
+  const dtStamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const uid = 'pkfishing-' + plan.id + '@pksport.co.za';
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//PK Fishing//Trip Plan//EN',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    'UID:' + uid,
+    'DTSTAMP:' + dtStamp,
+    'DTSTART;VALUE=DATE:' + dtStart,
+    'DTEND;VALUE=DATE:' + dtEnd,
+    'SUMMARY:' + icsEscape('Fishing trip - ' + plan.venue_name),
+    'DESCRIPTION:' + icsEscape('Planned with PK Fishing (pksport.co.za/fishing)'),
+    'LOCATION:' + icsEscape(plan.venue_name),
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+}
+
 function renderKitSectionsHtml(plan, kitRows, isOwner, assignable){
   const byKey = new Map(kitRows.map(r=>[r.item_key, r]));
   return KIT_CATEGORIES.filter(cat=> !cat.multiDayOnly || isMultiDay(plan)).map(cat=>{
@@ -10479,7 +10528,8 @@ async function openPlanDetail(planId){
     + '<div class="profile-catch"><div class="row2">'
       + '<div class="field"><label>Start date</label><input type="date" id="plan-detail-start" value="' + escapeHtml(plan.trip_date) + '"' + (isOwner ? '' : ' disabled') + '></div>'
       + '<div class="field"><label>Return date (optional)</label><input type="date" id="plan-detail-return" value="' + escapeHtml(plan.return_date || '') + '"' + (isOwner ? '' : ' disabled') + '></div>'
-      + '</div><div class="status" id="plan-detail-date-status"></div></div>'
+      + '</div><div class="status" id="plan-detail-date-status"></div>'
+      + '<button type="button" class="mini-btn" id="plan-detail-calendar-btn" style="margin-top:4px;">📅 Add to calendar</button></div>'
     + (hasCoords ? '<div id="plan-detail-map" style="height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;"></div>' : '')
     + shareSectionHtml
     + renderPlanRecapHtml(recap) + '<div id="plan-detail-forecast">' + forecastHtml + '</div>'
@@ -10504,6 +10554,13 @@ async function openPlanDetail(planId){
     sel.addEventListener('change', ()=> setPlanItemAssignment(plan.id, sel.dataset.itemId, sel.value));
   });
   wireKitSectionEvents();
+
+  const calendarBtn = document.getElementById('plan-detail-calendar-btn');
+  if(calendarBtn) calendarBtn.addEventListener('click', ()=>{
+    const p = planDetailCurrent.plan;
+    const safeName = (p.venue_name || 'trip').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'trip';
+    downloadIcsFile('pk-fishing-' + safeName + '.ics', tripIcsText(p));
+  });
 
   const shareUpgradeBtn = document.getElementById('plan-share-upgrade-btn');
   if(shareUpgradeBtn) shareUpgradeBtn.addEventListener('click', ()=> openUpgrade('Sharing a trip plan with mates is a Pro feature.'));
