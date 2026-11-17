@@ -6827,12 +6827,20 @@ let knownBaitFlavoursCache = null;
 async function loadKnownBaitFlavours(){
   if(knownBaitFlavoursCache) return knownBaitFlavoursCache;
   try{
-    knownBaitFlavoursCache = await sbGet('known_bait_flavours?select=brand,flavour_name,description,source_url');
+    knownBaitFlavoursCache = await sbGet('known_bait_flavours?select=brand,flavour_name,description,source_url,is_bait,is_dips');
   }catch(e){ console.error(e); knownBaitFlavoursCache = []; }
   return knownBaitFlavoursCache;
 }
 function normalizeFlavourText(s){
   return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+// A row with is_bait/is_dips left null hasn't been audited against its real
+// product line yet, so it still counts for both categories (safe default -
+// nothing disappears mid-audit); only an explicit false actually excludes it.
+function flavourAppliesToCategory(f, category){
+  if(category === 'Bait') return f.is_bait !== false;
+  if(category === 'Dips') return f.is_dips !== false;
+  return true;
 }
 // Brand match is exact (normalized) first - name match within it is exact,
 // then falls back to "item name contains this flavour name" so compound
@@ -6995,7 +7003,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
   const suggestBox = containerEl.querySelector('.tackle-flavour-known-suggest');
   async function refreshKnownFlavourSuggestion(){
     if(flavourInput.value.trim()){ suggestBox.style.display = 'none'; return; }
-    const catalog = await loadKnownBaitFlavours();
+    const catalog = (await loadKnownBaitFlavours()).filter(f=> flavourAppliesToCategory(f, catSel.value));
     const hit = matchKnownFlavour(brandInput.value, nameInput.value, catalog);
     if(!hit){ suggestBox.style.display = 'none'; return; }
     suggestBox.style.display = 'block';
@@ -7577,7 +7585,7 @@ async function refreshTackleQuickChips(){
   }
   const catalog = await loadKnownBaitFlavours();
   const nBrand = normalizeFlavourText(brandVal);
-  const matches = catalog.filter(f=> normalizeFlavourText(f.brand) === nBrand)
+  const matches = catalog.filter(f=> normalizeFlavourText(f.brand) === nBrand && flavourAppliesToCategory(f, category))
     .sort((a,b)=> a.flavour_name.localeCompare(b.flavour_name));
   if(!matches.length){ wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
@@ -7673,7 +7681,7 @@ async function renderTackleFlavoursSummary(){
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line);">
       <b>No flavour yet (${missing.length})</b>
       ${missing.map(it=>{
-        const hit = matchKnownFlavour(it.brand, it.name, knownCatalog);
+        const hit = matchKnownFlavour(it.brand, it.name, knownCatalog.filter(f=> flavourAppliesToCategory(f, it.category)));
         const hint = hit ? `<div style="color:var(--muted);font-size:12px;">💡 ${knownFlavourSuggestionLabel(hit)}</div>` : '';
         // Only the owner (or an admin) can actually edit someone else's
         // item - for a shared one that isn't mine, show it for awareness
@@ -7747,16 +7755,15 @@ async function renderTackleNameSuggestions(){
   // anglers' gear, and the known-flavour quick-chips below already cover
   // Bait/Dips properly. Still used here for the Brand/Flavour lists below.
   const mine = activeTackleItems();
-  // Brands I've already used, plus every brand in the known-flavour catalog
-  // - so a brand nobody's tackle box has yet still shows up as a pick, not
-  // just something typed often enough to be remembered locally.
+  // Only brands we actually have flavour data for in known_bait_flavours -
+  // not every brand anyone's ever typed (which includes typos and
+  // placeholders like "Fish" or "Sup"). Keeps the picklist itself a clean
+  // signal of what's recognised, and it grows automatically as the catalog
+  // does - add a new brand's flavours there and it shows up here for free.
   const brandList = document.getElementById('tackle-brand-suggestions');
   if(brandList){
     const catalog = await loadKnownBaitFlavours();
-    const brands = [...new Set([
-      ...mine.map(it=>it.brand).filter(Boolean),
-      ...catalog.map(f=>f.brand)
-    ])].sort((a,b)=>a.localeCompare(b));
+    const brands = [...new Set(catalog.map(f=>f.brand))].sort((a,b)=>a.localeCompare(b));
     brandList.innerHTML = brands.map(b=>`<option value="${escapeHtml(b)}"></option>`).join('');
   }
   // Same idea for flavours I've already tagged
