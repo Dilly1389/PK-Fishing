@@ -1949,6 +1949,10 @@
             <input type="text" maxlength="100" id="tackle-brand" list="tackle-brand-suggestions" placeholder="e.g. Korda, Nash, Dynamite" autocomplete="pk-field-13" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             <datalist id="tackle-brand-suggestions"></datalist>
           </div>
+          <div class="field" id="tackle-quick-chips-wrap" style="display:none;">
+            <label>Known <span id="tackle-quick-chips-brand"></span> flavours — tap to fill in</label>
+            <div id="tackle-quick-chips" style="display:flex;flex-wrap:wrap;gap:6px;max-height:140px;overflow-y:auto;"></div>
+          </div>
           <div class="field" id="tackle-baittype-wrap" style="display:none;">
             <label>Bait type</label>
             <select id="tackle-baittype">
@@ -7548,7 +7552,44 @@ document.getElementById('tackle-category').addEventListener('change', (e)=>{
   const isConsumable = e.target.value === 'Bait' || e.target.value === 'Dips';
   document.getElementById('tackle-fill-wrap').style.display = isConsumable ? 'block' : 'none';
   document.getElementById('tackle-flavour-wrap').style.display = isConsumable ? 'block' : 'none';
+  refreshTackleQuickChips();
 });
+document.getElementById('tackle-brand').addEventListener('input', refreshTackleQuickChips);
+// Known-brand quick chips on the Add Tackle form - a brand that matches one
+// in known_bait_flavours shows its real products as tap-to-fill chips, so
+// entering e.g. "Super Cast" + "Perdeby" doesn't need typing either once the
+// brand's recognised. Picking a chip sets Name and Flavour together, since
+// for most of these brands the product name IS what someone types as the
+// item's own name (confirmed repeatedly across real tackle boxes this
+// catalog was built from).
+async function refreshTackleQuickChips(){
+  const wrap = document.getElementById('tackle-quick-chips-wrap');
+  const chipsEl = document.getElementById('tackle-quick-chips');
+  const category = document.getElementById('tackle-category').value;
+  const brandVal = document.getElementById('tackle-brand').value.trim();
+  if(!wrap || (category !== 'Bait' && category !== 'Dips') || !brandVal){
+    if(wrap) wrap.style.display = 'none';
+    return;
+  }
+  const catalog = await loadKnownBaitFlavours();
+  const nBrand = normalizeFlavourText(brandVal);
+  const matches = catalog.filter(f=> normalizeFlavourText(f.brand) === nBrand)
+    .sort((a,b)=> a.flavour_name.localeCompare(b.flavour_name));
+  if(!matches.length){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  document.getElementById('tackle-quick-chips-brand').textContent = matches[0].brand;
+  chipsEl.innerHTML = matches.map((f, i)=>
+    `<button type="button" class="mini-btn" data-chip="${i}" style="font-size:12px;padding:4px 10px;">${escapeHtml(f.flavour_name)}</button>`
+  ).join('');
+  chipsEl.querySelectorAll('[data-chip]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const f = matches[Number(btn.dataset.chip)];
+      document.getElementById('tackle-name').value = f.flavour_name;
+      const flavourInput = document.getElementById('tackle-flavour');
+      if(flavourInput) flavourInput.value = f.description || f.flavour_name;
+    });
+  });
+}
 document.getElementById('tackle-fill-slider').addEventListener('input', (e)=>{
   const v = parseInt(e.target.value, 10);
   document.getElementById('tackle-fill-bar').style.height = v + '%';
@@ -7696,16 +7737,22 @@ async function loadTackleUseCounts(){
 
 let tackleItemsCache = [];
 
-function renderTackleNameSuggestions(){
+async function renderTackleNameSuggestions(){
   const list = document.getElementById('tackle-name-suggestions');
   if(list){
     const names = [...new Set(tackleItemsCache.map(it=>it.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
     list.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
   }
-  // Brands you've already used, so they're one tap rather than retyped
+  // Brands you've already used, plus every brand in the known-flavour
+  // catalog - so a brand nobody's tackle box has yet still shows up as a
+  // pick, not just something typed often enough to be remembered locally.
   const brandList = document.getElementById('tackle-brand-suggestions');
   if(brandList){
-    const brands = [...new Set(tackleItemsCache.map(it=>it.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    const catalog = await loadKnownBaitFlavours();
+    const brands = [...new Set([
+      ...tackleItemsCache.map(it=>it.brand).filter(Boolean),
+      ...catalog.map(f=>f.brand)
+    ])].sort((a,b)=>a.localeCompare(b));
     brandList.innerHTML = brands.map(b=>`<option value="${escapeHtml(b)}"></option>`).join('');
   }
   // Same idea for flavours you've already tagged
