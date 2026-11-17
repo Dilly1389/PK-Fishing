@@ -1925,8 +1925,7 @@
           <div class="row2">
             <div class="field">
               <label>Name</label>
-              <input type="text" maxlength="100" id="tackle-name" list="tackle-name-suggestions" placeholder="e.g. Size 6 Barbel hook" autocomplete="pk-field-12" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
-              <datalist id="tackle-name-suggestions"></datalist>
+              <input type="text" maxlength="100" id="tackle-name" placeholder="e.g. Size 6 Barbel hook" autocomplete="pk-field-12" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
             </div>
             <div class="field">
               <label>Category</label>
@@ -2691,6 +2690,10 @@
     <div class="profile-catch">
       <div class="pc-head">Bait combinations</div>
       <div class="pc-line muted">Give a bait a category, and tag a bait or dip's flavour, when you add it (Scopex, Tuna & Krill, whatever it is), then build a combination further down — a rig with a bait picked per hook, saved under one name. Apply it on Timers in a single tap instead of picking rig, baits and hooks separately every time you cast out.</div>
+    </div>
+    <div class="profile-catch">
+      <div class="pc-head">Know the flavour even if the label doesn't say</div>
+      <div class="pc-line muted">For a bunch of real SA bait/dip brands, typing a recognised Brand on a Bait or Dip shows tap-to-fill chips for that brand's known products — picking one fills in Name and Flavour together. If you've already named the item but left Flavour blank, a "Looks like..." suggestion appears there too, with a "Not right?" link if it's ever wrong.</div>
     </div>
     <div class="profile-catch">
       <div class="pc-head">The Rig Library</div>
@@ -7553,6 +7556,7 @@ document.getElementById('tackle-category').addEventListener('change', (e)=>{
   document.getElementById('tackle-fill-wrap').style.display = isConsumable ? 'block' : 'none';
   document.getElementById('tackle-flavour-wrap').style.display = isConsumable ? 'block' : 'none';
   refreshTackleQuickChips();
+  renderTackleNameSuggestions();
 });
 document.getElementById('tackle-brand').addEventListener('input', refreshTackleQuickChips);
 // Known-brand quick chips on the Add Tackle form - a brand that matches one
@@ -7738,27 +7742,27 @@ async function loadTackleUseCounts(){
 let tackleItemsCache = [];
 
 async function renderTackleNameSuggestions(){
-  const list = document.getElementById('tackle-name-suggestions');
-  if(list){
-    const names = [...new Set(tackleItemsCache.map(it=>it.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-    list.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
-  }
-  // Brands you've already used, plus every brand in the known-flavour
-  // catalog - so a brand nobody's tackle box has yet still shows up as a
-  // pick, not just something typed often enough to be remembered locally.
+  // No plain "names you've typed before" suggestion on Name any more - it
+  // mixed in every category and (via shared/admin visibility) other
+  // anglers' gear, and the known-flavour quick-chips below already cover
+  // Bait/Dips properly. Still used here for the Brand/Flavour lists below.
+  const mine = activeTackleItems();
+  // Brands I've already used, plus every brand in the known-flavour catalog
+  // - so a brand nobody's tackle box has yet still shows up as a pick, not
+  // just something typed often enough to be remembered locally.
   const brandList = document.getElementById('tackle-brand-suggestions');
   if(brandList){
     const catalog = await loadKnownBaitFlavours();
     const brands = [...new Set([
-      ...tackleItemsCache.map(it=>it.brand).filter(Boolean),
+      ...mine.map(it=>it.brand).filter(Boolean),
       ...catalog.map(f=>f.brand)
     ])].sort((a,b)=>a.localeCompare(b));
     brandList.innerHTML = brands.map(b=>`<option value="${escapeHtml(b)}"></option>`).join('');
   }
-  // Same idea for flavours you've already tagged
+  // Same idea for flavours I've already tagged
   const flavourList = document.getElementById('tackle-flavour-suggestions');
   if(flavourList){
-    const flavours = [...new Set(tackleItemsCache.map(it=>it.flavour).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    const flavours = [...new Set(mine.map(it=>it.flavour).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
     flavourList.innerHTML = flavours.map(f=>`<option value="${escapeHtml(f)}"></option>`).join('');
   }
 }
