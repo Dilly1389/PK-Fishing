@@ -6823,19 +6823,48 @@ async function loadKnownBaitFlavours(){
 function normalizeFlavourText(s){
   return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
-// Brand must match exactly (normalized); name match is exact first, then
-// falls back to "item name contains this flavour name" so compound names
-// like "FX & Pandonium" or "Devilsfork & Stuttafords" still match one half.
+// Brand match is exact (normalized) first - name match within it is exact,
+// then falls back to "item name contains this flavour name" so compound
+// names like "FX & Pandonium" or "Devilsfork & Stuttafords" still match one
+// half. With no same-brand hit (including when there's no brand typed at
+// all), falls back to a name-only match across every brand - a lot of SA
+// bait names (Perdeby, Tjop Tjop, Schalla's...) carry the same flavour
+// regardless of maker, a shared hobbyist naming convention rather than
+// something brand-exclusive. Only suggested cross-brand when every brand
+// that uses the name agrees on the flavour - if they conflict, it's too
+// risky to guess and this returns nothing rather than pick one.
 function matchKnownFlavour(brand, name, catalog){
-  if(!brand || !name || !catalog || !catalog.length) return null;
-  const nBrand = normalizeFlavourText(brand);
+  if(!name || !catalog || !catalog.length) return null;
   const nName = normalizeFlavourText(name);
-  if(!nBrand || !nName) return null;
-  const sameBrand = catalog.filter(f=> normalizeFlavourText(f.brand) === nBrand);
-  let hit = sameBrand.find(f=> normalizeFlavourText(f.flavour_name) === nName);
-  if(hit) return hit;
-  hit = sameBrand.find(f=> f.flavour_name.length > 3 && nName.includes(normalizeFlavourText(f.flavour_name)));
-  return hit || null;
+  if(!nName) return null;
+  if(brand){
+    const nBrand = normalizeFlavourText(brand);
+    if(nBrand){
+      const sameBrand = catalog.filter(f=> normalizeFlavourText(f.brand) === nBrand);
+      let hit = sameBrand.find(f=> normalizeFlavourText(f.flavour_name) === nName);
+      if(hit) return hit;
+      hit = sameBrand.find(f=> f.flavour_name.length > 3 && nName.includes(normalizeFlavourText(f.flavour_name)));
+      if(hit) return hit;
+    }
+  }
+  const nameMatches = catalog.filter(f=> normalizeFlavourText(f.flavour_name) === nName);
+  if(!nameMatches.length) return null;
+  const descKey = f=> (f.description || '').trim().toLowerCase();
+  const distinctDescs = [...new Set(nameMatches.map(descKey))];
+  if(distinctDescs.length > 1) return null;
+  const otherBrands = [...new Set(nameMatches.map(f=> f.brand))];
+  return {...nameMatches[0], crossBrand: true, otherBrands};
+}
+// Shared wording for both places a suggestion shows (the per-item edit form
+// and the Tackle Box's "no flavour yet" list) - same-brand reads as a direct
+// hit, cross-brand is phrased as a weaker "seen elsewhere" signal since it's
+// a guess across makers, not a match on this item's actual brand.
+function knownFlavourSuggestionLabel(hit){
+  const flavourBit = `<b>${escapeHtml(hit.flavour_name)}</b> flavour` + (hit.description ? ` — ${escapeHtml(hit.description)}` : '');
+  if(hit.crossBrand){
+    return `Looks like a known ${flavourBit} (seen under ${escapeHtml(hit.otherBrands.join(', '))})`;
+  }
+  return `Looks like <b>${escapeHtml(hit.brand)}</b>'s ${flavourBit}`;
 }
 async function insertTackleItem(item){
   await sbPost('tackle_items', item);
@@ -6959,8 +6988,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
     const hit = matchKnownFlavour(brandInput.value, nameInput.value, catalog);
     if(!hit){ suggestBox.style.display = 'none'; return; }
     suggestBox.style.display = 'block';
-    suggestBox.innerHTML = `💡 Looks like <b>${escapeHtml(hit.brand)}</b>'s <b>${escapeHtml(hit.flavour_name)}</b> flavour`
-      + (hit.description ? ` — ${escapeHtml(hit.description)}` : '')
+    suggestBox.innerHTML = `💡 ${knownFlavourSuggestionLabel(hit)}`
       + ` <button type="button" class="mini-btn tackle-flavour-use-suggest">Use this</button>`
       + ` <button type="button" class="mini-btn tackle-flavour-wrong-report" style="opacity:0.7;">Not right?</button>`;
     suggestBox.querySelector('.tackle-flavour-use-suggest').addEventListener('click', ()=>{
@@ -6974,7 +7002,7 @@ async function renderTackleItemEditForm(itemId, containerEl){
     suggestBox.querySelector('.tackle-flavour-wrong-report').addEventListener('click', async ()=>{
       try{
         await sbPost('flavour_suggestion_reports', {
-          brand: hit.brand, item_name: nameInput.value.trim(),
+          brand: brandInput.value.trim() || hit.brand, item_name: nameInput.value.trim(),
           suggested_flavour_name: hit.flavour_name, suggested_description: hit.description || null
         });
         suggestBox.innerHTML = '<span style="color:var(--muted);">Thanks, flagged for review.</span>';
@@ -7576,7 +7604,7 @@ async function renderTackleFlavoursSummary(){
       <b>No flavour yet (${missing.length})</b>
       ${missing.map(it=>{
         const hit = matchKnownFlavour(it.brand, it.name, knownCatalog);
-        const hint = hit ? `<div style="color:var(--muted);font-size:12px;">💡 Looks like ${escapeHtml(hit.brand)}'s ${escapeHtml(hit.flavour_name)}${hit.description ? ' — ' + escapeHtml(hit.description) : ''}</div>` : '';
+        const hint = hit ? `<div style="color:var(--muted);font-size:12px;">💡 ${knownFlavourSuggestionLabel(hit)}</div>` : '';
         return `
         <div class="pc-line" style="padding:4px 0;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
