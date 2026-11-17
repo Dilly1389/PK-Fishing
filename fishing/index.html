@@ -6992,7 +6992,10 @@ async function renderTackleItemEditForm(itemId, containerEl){
       + ` <button type="button" class="mini-btn tackle-flavour-use-suggest">Use this</button>`
       + ` <button type="button" class="mini-btn tackle-flavour-wrong-report" style="opacity:0.7;">Not right?</button>`;
     suggestBox.querySelector('.tackle-flavour-use-suggest').addEventListener('click', ()=>{
-      flavourInput.value = hit.flavour_name;
+      // The real scent when one's known (e.g. "RBS" -> "Garlic/TCP"), not just
+      // the product's own marketing name again - that would just restate
+      // what's already in the Name field for every brand that isn't self-named.
+      flavourInput.value = hit.description || hit.flavour_name;
       suggestBox.style.display = 'none';
     });
     // A quality-control queue, not a user-facing correction - this just lets a
