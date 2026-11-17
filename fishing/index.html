@@ -2161,6 +2161,10 @@
             </select>
           </div>
           <div class="field">
+            <label>Search flavour (across every brand)</label>
+            <input type="text" maxlength="100" id="tackle-filter-flavour-search" placeholder="e.g. garlic" autocomplete="pk-field-35" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          </div>
+          <div class="field">
             <label>Show</label>
             <select id="tackle-filter-visibility">
               <option value="private" selected>My list (mine + items I'm using)</option>
@@ -7559,6 +7563,15 @@ document.getElementById('tackle-filter-visibility').addEventListener('change', r
 document.getElementById('tackle-filter-sharedby').addEventListener('change', renderTackleList);
 document.getElementById('tackle-filter-brand').addEventListener('change', renderTackleList);
 document.getElementById('tackle-filter-flavour').addEventListener('change', renderTackleList);
+// Debounced - renderTackleList re-fetches from the server every call, and
+// this is the first text filter here that fires on every keystroke rather
+// than a dropdown's 'change', so typing "garlic" without this would be 6
+// network round trips instead of one.
+let tackleFlavourSearchDebounce = null;
+document.getElementById('tackle-filter-flavour-search').addEventListener('input', ()=>{
+  clearTimeout(tackleFlavourSearchDebounce);
+  tackleFlavourSearchDebounce = setTimeout(renderTackleList, 300);
+});
 document.getElementById('tackle-sort').addEventListener('change', renderTackleList);
 document.getElementById('tackle-flavours-summary-btn').addEventListener('click', ()=>{
   const panel = document.getElementById('tackle-flavours-summary');
@@ -7772,6 +7785,15 @@ async function renderTackleList(){
     flavourWrap.style.display = 'none';
     flavourSel.value = '';
   }
+
+  // A free-text, case-insensitive "contains" search on top of the exact-match
+  // dropdown above - the real payoff for comparing across brands, since the
+  // same scent rarely comes out as the exact same typed string everywhere
+  // ("Garlic", "Strong Garlic" and "Garlic/TCP" are all genuinely Garlic, but
+  // none of them equal each other). Independent of category/brand/flavour
+  // filters - always available, always searches the whole visible set.
+  const flavourSearch = document.getElementById('tackle-filter-flavour-search').value.trim().toLowerCase();
+  if(flavourSearch) items = items.filter(it=> (it.flavour || '').toLowerCase().includes(flavourSearch));
 
   const visFilter = document.getElementById('tackle-filter-visibility').value;
   if(visFilter === 'shared-with-me'){
