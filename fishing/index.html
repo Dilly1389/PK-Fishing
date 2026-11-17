@@ -6962,10 +6962,24 @@ async function renderTackleItemEditForm(itemId, containerEl){
     suggestBox.innerHTML = `💡 Looks like <b>${escapeHtml(hit.brand)}</b>'s <b>${escapeHtml(hit.flavour_name)}</b> flavour`
       + (hit.description ? ` — ${escapeHtml(hit.description)}` : '')
       + ` <button type="button" class="mini-btn tackle-flavour-use-suggest">Use this</button>`
-      + (hit.source_url ? ` <a href="${escapeHtml(hit.source_url)}" target="_blank" rel="noopener" style="font-size:11px;">source</a>` : '');
+      + ` <button type="button" class="mini-btn tackle-flavour-wrong-report" style="opacity:0.7;">Not right?</button>`;
     suggestBox.querySelector('.tackle-flavour-use-suggest').addEventListener('click', ()=>{
       flavourInput.value = hit.flavour_name;
       suggestBox.style.display = 'none';
+    });
+    // A quality-control queue, not a user-facing correction - this just lets a
+    // bad catalog entry surface for review instead of silently misleading
+    // whoever sees it next. No feedback loop beyond a quick thank-you; the
+    // actual fix happens later, by hand, in the reference table.
+    suggestBox.querySelector('.tackle-flavour-wrong-report').addEventListener('click', async ()=>{
+      try{
+        await sbPost('flavour_suggestion_reports', {
+          brand: hit.brand, item_name: nameInput.value.trim(),
+          suggested_flavour_name: hit.flavour_name, suggested_description: hit.description || null
+        });
+        suggestBox.innerHTML = '<span style="color:var(--muted);">Thanks, flagged for review.</span>';
+        setTimeout(()=> suggestBox.style.display = 'none', 1500);
+      }catch(e){ console.error(e); }
     });
   }
   refreshKnownFlavourSuggestion();
