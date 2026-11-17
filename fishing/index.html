@@ -7578,7 +7578,16 @@ document.getElementById('tackle-flavours-summary-btn').addEventListener('click',
 async function renderTackleFlavoursSummary(){
   const panel = document.getElementById('tackle-flavours-summary');
   if(!panel) return;
-  const mineAll = ownTackleItems().filter(it=> it.category==='Bait' || it.category==='Dips');
+  // Own items plus anything shared with me that I've ticked "Use" on - same
+  // scope as the rest of "My list" elsewhere in the Tackle Box, so this
+  // summary doesn't quietly leave out gear I'm actually using just because
+  // someone else owns it.
+  const mineAll = activeTackleItems().filter(it=> it.category==='Bait' || it.category==='Dips');
+  const ownerTag = it=>{
+    if(isSignedIn() && it.owner_user_id === session.user.id) return '';
+    const owner = people.find(p=>p.user_id===it.owner_user_id);
+    return owner ? ` (${escapeHtml(owner.name)})` : '';
+  };
   const mine = mineAll.filter(it=> it.flavour);
   const missing = mineAll.filter(it=> !it.flavour);
   const knownCatalog = missing.length ? await loadKnownBaitFlavours() : [];
@@ -7595,7 +7604,7 @@ async function renderTackleFlavoursSummary(){
       const group = byFlavour[f];
       const brands = [...new Set(group.map(it=>it.brand).filter(Boolean))];
       const countLabel = group.length + ' item' + (group.length===1 ? '' : 's') + (brands.length ? ' — ' + escapeHtml(brands.join(', ')) : '');
-      const names = group.map(it=>escapeHtml(it.name)).join(', ');
+      const names = group.map(it=>escapeHtml(it.name) + ownerTag(it)).join(', ');
       return `<div class="pc-line" style="padding:6px 0;border-bottom:1px solid var(--line);">`
         + `<b>${escapeHtml(f)}</b> <span style="color:var(--muted);">(${countLabel})</span>`
         + `<div style="color:var(--muted);font-size:12px;">${names}</div></div>`;
@@ -7608,11 +7617,17 @@ async function renderTackleFlavoursSummary(){
       ${missing.map(it=>{
         const hit = matchKnownFlavour(it.brand, it.name, knownCatalog);
         const hint = hit ? `<div style="color:var(--muted);font-size:12px;">💡 ${knownFlavourSuggestionLabel(hit)}</div>` : '';
+        // Only the owner (or an admin) can actually edit someone else's
+        // item - for a shared one that isn't mine, show it for awareness
+        // but skip the button rather than offer an edit that'll silently
+        // do nothing when tapped.
+        const canEditThis = (isSignedIn() && it.owner_user_id === session.user.id) || isSuperUser();
+        const editBtn = canEditThis ? `<button type="button" class="mini-btn" data-flavour-gap-edit="${it.id}">Add flavour</button>` : '';
         return `
         <div class="pc-line" style="padding:4px 0;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-            <span>${escapeHtml(it.name)}</span>
-            <button type="button" class="mini-btn" data-flavour-gap-edit="${it.id}">Add flavour</button>
+            <span>${escapeHtml(it.name)}${ownerTag(it)}</span>
+            ${editBtn}
           </div>
           ${hint}
         </div>`;
