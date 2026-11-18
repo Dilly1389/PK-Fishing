@@ -3830,11 +3830,21 @@ document.addEventListener('click', async (e)=>{
   await saveRodState(currentPersonId, rod);
   renderMultiPickerPills(rod, key);
   if(noteEl){
-    noteEl.textContent = '🎲 ' + pick.name + ' — checking...';
-    const insight = await loadBaitInsight(pick.name);
-    noteEl.textContent = '🎲 ' + pick.name + ': ' + (insight
-      ? insight.fish + ' fish from ' + insight.casts + ' cast' + (insight.casts===1?'':'s') + ' (' + insight.rate + '%) for you so far'
-      : 'no logged casts with this one yet — worth a go');
+    noteEl.innerHTML = '🎲 ' + escapeHtml(pick.name) + ' — checking...';
+    const venueId = activeSession ? activeSession.venue_id : null;
+    const [mine, others] = await Promise.all([
+      loadBaitInsight(pick.name),
+      loadVenueBaitInsight(venueId, pick.name)
+    ]);
+    const mineLine = mine
+      ? mine.fish + ' fish from ' + mine.casts + ' cast' + (mine.casts===1?'':'s') + ' (' + mine.rate + '%) for you so far'
+      : 'no logged casts with this one yet — worth a go';
+    // Kept as two separate lines on purpose, never blended into one number -
+    // whose data is whose should always stay obvious.
+    const othersLine = others
+      ? '<div>Other anglers here: ' + others.fish + ' fish from ' + others.casts + ' cast' + (others.casts===1?'':'s') + ' (' + others.rate + '%, ' + others.anglers + ' anglers)</div>'
+      : '';
+    noteEl.innerHTML = '<div>🎲 ' + escapeHtml(pick.name) + ': ' + escapeHtml(mineLine) + '</div>' + othersLine;
   }
 });
 
@@ -7841,6 +7851,24 @@ async function loadBaitInsight(itemName){
     if(!casts) return null;
     return {fish, casts, rate: Math.round(fish / casts * 100)};
   }catch(e){ console.error('loadBaitInsight failed', e); return null; }
+}
+// What OTHER anglers at this venue have done with a given bait - the
+// server-side venue_bait_insights() function does the real privacy work
+// (minimum distinct-angler count, never a per-person breakdown); this just
+// calls it and picks out the one bait name asked for. Returns null both
+// when there's no venue to check and when the venue simply doesn't have
+// enough data yet to clear the anonymity threshold - those look the same
+// from here on purpose, since "not enough data" and "no data" shouldn't be
+// distinguishable to the caller either way.
+async function loadVenueBaitInsight(venueId, itemName){
+  const needle = (itemName || '').trim().toLowerCase();
+  if(!venueId || !needle) return null;
+  try{
+    const rows = await sbRpc('venue_bait_insights', {p_venue_id: venueId});
+    const hit = (rows || []).find(r=> r.bait_name === needle);
+    if(!hit) return null;
+    return {anglers: hit.anglers, casts: hit.casts, fish: hit.fish, rate: Math.round(Number(hit.rate))};
+  }catch(e){ console.error('loadVenueBaitInsight failed', e); return null; }
 }
 
 let tackleItemsCache = [];
