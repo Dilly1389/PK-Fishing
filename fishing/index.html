@@ -3831,20 +3831,11 @@ document.addEventListener('click', async (e)=>{
   renderMultiPickerPills(rod, key);
   if(noteEl){
     noteEl.innerHTML = '🎲 ' + escapeHtml(pick.name) + ' — checking...';
-    const venueId = activeSession ? activeSession.venue_id : null;
-    const [mine, others] = await Promise.all([
-      loadBaitInsight(pick.name),
-      loadVenueBaitInsight(venueId, pick.name)
-    ]);
+    const mine = await loadBaitInsight(pick.name);
     const mineLine = mine
       ? mine.fish + ' fish from ' + mine.casts + ' cast' + (mine.casts===1?'':'s') + ' (' + mine.rate + '%) for you so far'
       : 'no logged casts with this one yet — worth a go';
-    // Kept as two separate lines on purpose, never blended into one number -
-    // whose data is whose should always stay obvious.
-    const othersLine = others
-      ? '<div>Other anglers here: ' + others.fish + ' fish from ' + others.casts + ' cast' + (others.casts===1?'':'s') + ' (' + others.rate + '%, ' + others.anglers + ' anglers)</div>'
-      : '';
-    noteEl.innerHTML = '<div>🎲 ' + escapeHtml(pick.name) + ': ' + escapeHtml(mineLine) + '</div>' + othersLine;
+    noteEl.innerHTML = '🎲 ' + escapeHtml(pick.name) + ': ' + escapeHtml(mineLine);
   }
 });
 
@@ -7852,23 +7843,18 @@ async function loadBaitInsight(itemName){
     return {fish, casts, rate: Math.round(fish / casts * 100)};
   }catch(e){ console.error('loadBaitInsight failed', e); return null; }
 }
-// What OTHER anglers at this venue have done with a given bait - the
-// server-side venue_bait_insights() function does the real privacy work
+// What OTHER anglers at this venue have caught on, across every bait/dip -
+// the server-side venue_bait_insights() function does the real privacy work
 // (minimum distinct-angler count, never a per-person breakdown); this just
-// calls it and picks out the one bait name asked for. Returns null both
-// when there's no venue to check and when the venue simply doesn't have
-// enough data yet to clear the anonymity threshold - those look the same
-// from here on purpose, since "not enough data" and "no data" shouldn't be
-// distinguishable to the caller either way.
-async function loadVenueBaitInsight(venueId, itemName){
-  const needle = (itemName || '').trim().toLowerCase();
-  if(!venueId || !needle) return null;
+// calls it and returns the ranked list. Surfaced on the Trip Planner's plan
+// detail page, not mid-session - deciding what to pack is the moment this
+// is useful, and it keeps the Timer screen free of anyone else's data.
+async function loadVenueBaitInsights(venueId){
+  if(!venueId) return [];
   try{
     const rows = await sbRpc('venue_bait_insights', {p_venue_id: venueId});
-    const hit = (rows || []).find(r=> r.bait_name === needle);
-    if(!hit) return null;
-    return {anglers: hit.anglers, casts: hit.casts, fish: hit.fish, rate: Math.round(Number(hit.rate))};
-  }catch(e){ console.error('loadVenueBaitInsight failed', e); return null; }
+    return rows || [];
+  }catch(e){ console.error('loadVenueBaitInsights failed', e); return []; }
 }
 
 let tackleItemsCache = [];
@@ -10523,6 +10509,24 @@ function renderPlanRecapHtml(recap){
   return html;
 }
 
+// AI Venue Insights - ranked list of what other anglers have caught at this
+// venue (or its GPS cluster). Free for now, no Pro gate; always rendered,
+// with a quiet placeholder below threshold, so the feature stays discoverable
+// rather than only ever appearing once a venue happens to have enough data.
+function renderVenueInsightsHtml(rows){
+  let html = '<div class="profile-catch"><div class="pc-head">What’s working here</div>';
+  if(!rows.length){
+    html += '<div class="pc-line muted">Not enough shared data from other anglers at this venue yet.</div>';
+  }else{
+    html += '<div class="pc-line muted">From other anglers who’ve logged catches here — totals only, never anyone’s individual data.</div>';
+    rows.slice(0, 5).forEach(r=>{
+      html += '<div class="pc-line">' + escapeHtml(r.bait_name) + ' — ' + r.fish + ' fish from ' + r.casts + ' cast' + (r.casts===1?'':'s') + ' (' + Math.round(Number(r.rate)) + '%), ' + r.anglers + ' anglers</div>';
+    });
+  }
+  html += '</div>';
+  return html;
+}
+
 // Covers every day of the trip (start through return date), not just the
 // start date - a multi-day trip used to only ever show day 1's weather,
 // leaving the rest of the trip invisible until you checked the general
@@ -10920,8 +10924,9 @@ async function openPlanDetail(planId){
   const venues = await loadMyVenues();
   const venue = venues.find(v=>v.id===plan.venue_id) || null;
 
-  const [recap, forecastHtml, planTicks, kitRows, shareRows, ownerIsPro] = await Promise.all([
+  const [recap, venueInsightRows, forecastHtml, planTicks, kitRows, shareRows, ownerIsPro] = await Promise.all([
     loadVenueLastTrip(plan.venue_id),
+    loadVenueBaitInsights(plan.venue_id),
     renderPlanForecastHtml(venue, plan),
     loadPlanTicks(plan.id),
     loadKitRows(plan.id),
@@ -10969,7 +10974,7 @@ async function openPlanDetail(planId){
       + '<button type="button" class="mini-btn" id="plan-detail-calendar-btn" style="margin-top:4px;">📅 Add to calendar</button></div>'
     + (hasCoords ? '<div id="plan-detail-map" style="height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;"></div>' : '')
     + shareSectionHtml
-    + renderPlanRecapHtml(recap) + '<div id="plan-detail-forecast">' + forecastHtml + '</div>'
+    + renderPlanRecapHtml(recap) + renderVenueInsightsHtml(venueInsightRows) + '<div id="plan-detail-forecast">' + forecastHtml + '</div>'
     // The Tackle box checklist and restock banner are the OWNER's own private
     // gear - a shared mate's own tackle box has nothing to do with this trip,
     // and may not even be visible to them (tackle sharing is a separate,
