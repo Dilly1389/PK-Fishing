@@ -2190,6 +2190,8 @@
           </div>
           <button type="button" class="mini-btn" id="tackle-flavours-summary-btn" style="margin-bottom:10px;">List all my flavours</button>
           <div id="tackle-flavours-summary" style="display:none;margin-bottom:10px;"></div>
+          <button type="button" class="mini-btn" id="tackle-bait-randomiser-btn" style="margin-bottom:10px;">🎲 Surprise me (pick a bait)</button>
+          <div id="tackle-bait-randomiser-result" style="display:none;margin-bottom:10px;"></div>
           <div id="tackle-active-banner" class="profile-catch" style="display:none;margin-bottom:10px;"></div>
           <div id="tackle-list"><div class="empty">No tackle added yet — add your rods, reels, bait and dips above.</div></div>
           </div>
@@ -3612,7 +3614,11 @@ function multiPickerFieldHtml(rod, key, label){
   return `<div class="field">
     <label>${escapeHtml(label)}</label>
     ${typeFilter}
-    <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search name or brand — add as many as you like" autocomplete="pk-bait-search" autocorrect="off" autocapitalize="off" spellcheck="false" name="pk-bait-${rod}-${key}" role="presentation" data-form-type="other">
+    <div style="display:flex;gap:6px;align-items:center;">
+      <input type="text" maxlength="100" class="multi-picker-search" data-rod="${rod}" data-key="${key}" placeholder="Search name or brand — add as many as you like" autocomplete="pk-bait-search" autocorrect="off" autocapitalize="off" spellcheck="false" name="pk-bait-${rod}-${key}" role="presentation" data-form-type="other" style="flex:1;">
+      <button type="button" class="mini-btn multi-picker-dice" data-rod="${rod}" data-key="${key}" title="Surprise me" style="flex-shrink:0;">🎲</button>
+    </div>
+    <div class="multi-picker-dice-note" data-rod="${rod}" data-key="${key}" style="font-size:11px;color:var(--muted);min-height:14px;margin-top:2px;"></div>
     <div class="multi-picker-results" data-rod="${rod}" data-key="${key}"></div>
     <div class="multi-picker-pills" data-rod="${rod}" data-key="${key}" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
   </div>`;
@@ -3798,6 +3804,37 @@ document.addEventListener('input', (e)=>{
 document.addEventListener('change', (e)=>{
   if(e.target.matches('.multi-picker-type')){
     renderMultiPickerResults(e.target.dataset.rod, e.target.dataset.key);
+  }
+});
+// The dice at the rod — same pool and type filter as the search results
+// above, picked at random and added the same way "Add" would, plus the
+// same real catch-rate insight the Tackle Box's Bait Randomiser shows.
+// This is the actually useful spot for it: deciding what to put on, not
+// browsing gear.
+document.addEventListener('click', async (e)=>{
+  const btn = e.target.closest('.multi-picker-dice');
+  if(!btn || !currentPerson) return;
+  const rod = btn.dataset.rod, key = btn.dataset.key;
+  const typeEl = document.querySelector('.multi-picker-type[data-rod="'+rod+'"][data-key="'+key+'"]');
+  const typeFilter = typeEl ? typeEl.value : '';
+  const pool = multiPickerSourceList(key).filter(item => !typeFilter || item.type === typeFilter);
+  const noteEl = document.querySelector('.multi-picker-dice-note[data-rod="'+rod+'"][data-key="'+key+'"]');
+  if(!pool.length){
+    if(noteEl) noteEl.textContent = 'Nothing in your tackle box to pick from.';
+    return;
+  }
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  const arr = parseMultiValue(currentPerson.notes[rod][key]);
+  arr.push(pick.name);
+  currentPerson.notes[rod][key] = joinMultiValue(arr);
+  await saveRodState(currentPersonId, rod);
+  renderMultiPickerPills(rod, key);
+  if(noteEl){
+    noteEl.textContent = '🎲 ' + pick.name + ' — checking...';
+    const insight = await loadBaitInsight(pick.name);
+    noteEl.textContent = '🎲 ' + pick.name + ': ' + (insight
+      ? insight.fish + ' fish from ' + insight.casts + ' cast' + (insight.casts===1?'':'s') + ' (' + insight.rate + '%) for you so far'
+      : 'no logged casts with this one yet — worth a go');
   }
 });
 
@@ -7638,6 +7675,38 @@ document.getElementById('tackle-flavours-summary-btn').addEventListener('click',
     btn.textContent = 'Hide flavours list';
   }
 });
+document.getElementById('tackle-bait-randomiser-btn').addEventListener('click', runBaitRandomiser);
+// Picks a random active Bait/Dips item from your own box (skips empty ones -
+// no point suggesting something with nothing left in it) and attaches your
+// own real catch-rate for it, if you've got one, via loadBaitInsight. A pick
+// with no logged history yet is framed as "worth a go", not left blank.
+async function runBaitRandomiser(){
+  const resultEl = document.getElementById('tackle-bait-randomiser-result');
+  const candidates = ownTackleItems().filter(it=>
+    (it.category === 'Bait' || it.category === 'Dips') && !it.inactive
+    && (it.fill_level === null || it.fill_level === undefined || it.fill_level > 0)
+  );
+  if(!candidates.length){
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = '<div class="empty">No active Bait or Dips in your box yet to pick from.</div>';
+    return;
+  }
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div class="empty">Picking...</div>';
+  const pick = candidates[Math.floor(Math.random() * candidates.length)];
+  const insight = await loadBaitInsight(pick.name);
+  const tagBits = [pick.brand, pick.flavour].filter(Boolean).join(' — ');
+  const insightLine = insight
+    ? `${insight.fish} fish from ${insight.casts} cast${insight.casts===1?'':'s'} (${insight.rate}%) for you so far`
+    : 'No logged casts with this one yet — worth a go';
+  resultEl.innerHTML = `<div class="profile-catch">
+    <div class="pc-head">🎲 ${escapeHtml(pick.name)}</div>
+    ${tagBits ? `<div class="pc-line muted">${escapeHtml(tagBits)}</div>` : ''}
+    <div class="pc-line">${escapeHtml(insightLine)}</div>
+    <button type="button" class="mini-btn" id="tackle-bait-randomiser-again" style="margin-top:6px;">Pick another</button>
+  </div>`;
+  document.getElementById('tackle-bait-randomiser-again').addEventListener('click', runBaitRandomiser);
+}
 // A flavour-first view across the user's own Bait/Dips, independent of
 // whatever the category/brand/flavour filters above are currently set to —
 // this answers "what flavours do I actually have", not "what's in this filter".
@@ -7745,6 +7814,33 @@ async function loadTackleUseCounts(){
     });
   }catch(e){ console.error('tackle use counts failed', e); }
   return counts;
+}
+
+// Same matching convention as loadTackleUseCounts (split on comma, trim,
+// lowercase, exact-part match against the bait/rig text fields a catch
+// carries) - just also keeping the caught flag, so this answers not just
+// "how often did I use this" but "how often did it actually work".
+async function loadBaitInsight(itemName){
+  const myId = getMyFishermanId();
+  const needle = (itemName || '').trim().toLowerCase();
+  if(!isSignedIn() || !myId || !needle) return null;
+  try{
+    const textCols = ['bom','hook1_note','hook2_note','hook3_note','hook4_note','hook5_note','hook6_note'];
+    const rows = await sbGet('catches?select=' + textCols.join(',') + ',feed_contents,caught&fisherman_id=eq.' + encodeURIComponent(myId) + '&limit=5000');
+    let casts = 0, fish = 0;
+    rows.forEach(r=>{
+      const texts = textCols.map(c=> r[c]);
+      const feed = unpackFeedContents(r.feed_contents, {});
+      FEED_CONTENT_KEYS.forEach(k=> texts.push(feed[k]));
+      const matched = texts.some(txt=> String(txt || '').toLowerCase().split(',').some(part=> part.trim() === needle));
+      if(matched){
+        casts++;
+        if(r.caught) fish++;
+      }
+    });
+    if(!casts) return null;
+    return {fish, casts, rate: Math.round(fish / casts * 100)};
+  }catch(e){ console.error('loadBaitInsight failed', e); return null; }
 }
 
 let tackleItemsCache = [];
@@ -7961,7 +8057,7 @@ async function renderTackleList(){
           ${baitTag}
           ${flavourTag}
           ${sharedTag}
-          ${(isMine && isConsumable) ? `<span class="pill" style="opacity:0.85;">${usedCount(it) ? 'Used ' + usedCount(it) + (usedCount(it) === 1 ? ' time' : ' times') : 'Not used yet'}</span>` : ''}
+          ${isConsumable ? `<span class="pill" style="opacity:0.85;">${usedCount(it) ? 'Used ' + usedCount(it) + (usedCount(it) === 1 ? ' time' : ' times') : 'Not used yet'}</span>` : ''}
         </div>
         ${useToggleHtml}
         <div class="actions">
