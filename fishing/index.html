@@ -9333,6 +9333,24 @@ async function myConditionsSignalForNow(weather){
   return myConditionsSignal(catches, {pressureChange: weather.pressureChange, moonLabel: moonPhase().label, now: new Date()});
 }
 
+// Shared by the Home weather card and the forecast sheet - both just drop
+// this inside whatever wrapper tag/styling they already use. The explainer
+// stays collapsed by default (the line is meant to feel like a quiet perk,
+// not an extra thing to read every time) and only appears once someone taps
+// the info icon to ask what it actually means.
+function biteReadInnerHtml(signal){
+  return '<b>' + escapeHtml(signal.label) + '</b> '
+    + '<button type="button" class="bite-read-info" aria-label="What is Bite Read?" style="border:none;background:none;padding:0 2px;cursor:pointer;color:inherit;font-size:12px;vertical-align:2px;">ⓘ</button>'
+    + ': ' + escapeHtml(signal.text)
+    + '<div class="bite-read-explainer" style="display:none;margin-top:4px;font-size:12px;font-weight:400;color:var(--muted);">Pulled from your own logged catches — Pro only, needs 30+ logged casts. Compares your catch rate right now’s pressure trend, time of day and moon phase against your overall average, and only speaks up when one stands out by 15 points or more.</div>';
+}
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('.bite-read-info');
+  if(!btn) return;
+  const note = btn.parentElement.querySelector('.bite-read-explainer');
+  if(note) note.style.display = note.style.display === 'none' ? 'block' : 'none';
+});
+
 // Rough distance in metres between two coordinates
 function distanceMeters(a, b){
   const R = 6371000;
@@ -9826,7 +9844,7 @@ async function openForecast(){
   })();
   if(sunMoonLine) html += `<p class="pc-line" style="margin-bottom:10px;">${escapeHtml(sunMoonLine)}</p>`;
   const signal = cachedWeather ? await myConditionsSignalForNow(cachedWeather) : null;
-  if(signal) html += `<p class="pc-line" style="margin-bottom:14px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}"><b>${escapeHtml(signal.label)}:</b> ${escapeHtml(signal.text)}</p>`;
+  if(signal) html += `<p class="pc-line" style="margin-bottom:14px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${biteReadInnerHtml(signal)}</p>`;
 
   // A subtle background tint for hours outside sunrise-sunset, same idea as
   // Yr.no's meteogram shading the night portion of its timeline - sunrise/
@@ -17202,7 +17220,7 @@ async function renderHomeWeather(){
     const sunMoon = combineSunMoon(w, rawSunMoon);
     const m = moonPhase();
     const signal = await myConditionsSignalForNow(w);
-    const signalHtml = signal ? `<div class="pc-line" style="margin-top:8px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}"><b>${escapeHtml(signal.label)}:</b> ${escapeHtml(signal.text)}</div>` : '';
+    const signalHtml = signal ? `<div class="pc-line" style="margin-top:8px;${signal.tone === 'good' ? 'color:#1a7f37;' : 'color:var(--muted);'}">${biteReadInnerHtml(signal)}</div>` : '';
     // Shown in every display mode (visual/full/summary) and in ink, not muted
     // grey - a line easy to miss is as good as not shipped. Uses the current
     // moon phase emoji rather than a generic one, so it visually ties back to
