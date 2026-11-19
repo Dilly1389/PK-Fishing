@@ -7030,6 +7030,10 @@ async function renderTackleItemEditForm(itemId, containerEl){
   catSel.addEventListener('change', ()=>{
     baitWrap.style.display = catSel.value === 'Bait' ? 'block' : 'none';
     flavourWrap.style.display = (catSel.value === 'Bait' || catSel.value === 'Dips') ? 'block' : 'none';
+    // The known-flavour catalog is filtered by category (is_bait/is_dips),
+    // so a stale suggestion from before the switch could otherwise sit there
+    // offering a scent that doesn't actually apply to the new category.
+    refreshKnownFlavourSuggestion();
   });
 
   // Known-flavour suggestion — only worth checking while there's no flavour
