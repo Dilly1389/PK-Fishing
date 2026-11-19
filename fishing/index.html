@@ -7677,13 +7677,15 @@ document.getElementById('tackle-flavours-summary-btn').addEventListener('click',
   }
 });
 document.getElementById('tackle-bait-randomiser-btn').addEventListener('click', runBaitRandomiser);
-// Picks a random active Bait/Dips item from your own box (skips empty ones -
-// no point suggesting something with nothing left in it) and attaches your
-// own real catch-rate for it, if you've got one, via loadBaitInsight. A pick
-// with no logged history yet is framed as "worth a go", not left blank.
+// Picks a random active Bait/Dips item from your box (your own, plus shared
+// items you've ticked "Use" on - same scope as everywhere else, matching
+// the Timer screen's dice) and skips empty ones - no point suggesting
+// something with nothing left in it. Attaches your own real catch-rate for
+// it, if you've got one, via loadBaitInsight. A pick with no logged history
+// yet is framed as "worth a go", not left blank.
 async function runBaitRandomiser(){
   const resultEl = document.getElementById('tackle-bait-randomiser-result');
-  const candidates = ownTackleItems().filter(it=>
+  const candidates = activeTackleItems().filter(it=>
     (it.category === 'Bait' || it.category === 'Dips') && !it.inactive
     && (it.fill_level === null || it.fill_level === undefined || it.fill_level > 0)
   );
