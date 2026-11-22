@@ -6345,6 +6345,14 @@ async function notifyBoxShare(sharedWith){
   try{ await sbRpc('notify_box_share', {p_shared_with: sharedWith}); }
   catch(e){ console.error('notify_box_share failed', e); }
 }
+async function notifyPlanItemAssignment(tripPlanId, tackleItemId){
+  try{ await sbRpc('notify_plan_item_assignment', {p_trip_plan_id: tripPlanId, p_tackle_item_id: tackleItemId}); }
+  catch(e){ console.error('notify_plan_item_assignment failed', e); }
+}
+async function notifyPlanKitAssignment(tripPlanId, itemKey){
+  try{ await sbRpc('notify_plan_kit_assignment', {p_trip_plan_id: tripPlanId, p_item_key: itemKey}); }
+  catch(e){ console.error('notify_plan_kit_assignment failed', e); }
+}
 async function notifyFollow(followedFishermanId){
   try{ await sbRpc('notify_follow', {p_followed_fisherman_id: followedFishermanId}); }
   catch(e){ console.error('notify_follow failed', e); }
@@ -10881,16 +10889,35 @@ function renderKitSectionsHtml(plan, kitRows, isOwner, assignable){
 function wireKitSectionEvents(){
   const planId = planDetailCurrent.plan.id;
   const kitBody = document.getElementById('plan-kit-body');
+  // Keeps planDetailCurrent.kitRows (the responsibility list's data source)
+  // in step with a tick/assign without waiting on a refetch - find the row
+  // if setKitTick/setKitItemAssignment already created one, else add a
+  // local stand-in so "Who's bringing what" reflects it immediately.
+  function touchLocalKitRow(itemKey, category, patch){
+    let row = planDetailCurrent.kitRows.find(r=> r.item_key === itemKey);
+    if(!row){
+      row = {trip_plan_id: planId, item_key: itemKey, category, ticked: true, label: null, assigned_user_id: null};
+      planDetailCurrent.kitRows.push(row);
+    }
+    Object.assign(row, patch);
+  }
   kitBody.querySelectorAll('.plan-kit-check').forEach(cb=>{
     // Only a custom item carries data-label; a default item's label always
     // lives in KIT_CATEGORIES, never in the row, so it never gets written here -
     // otherwise ticking a default would make it look like a custom item too.
-    cb.addEventListener('change', ()=> setKitTick(planId, cb.dataset.itemKey, cb.dataset.category, cb.checked, cb.dataset.label || null));
+    cb.addEventListener('change', ()=>{
+      setKitTick(planId, cb.dataset.itemKey, cb.dataset.category, cb.checked, cb.dataset.label || null);
+      touchLocalKitRow(cb.dataset.itemKey, cb.dataset.category, {ticked: cb.checked});
+      renderResponsibilityList();
+    });
   });
   kitBody.querySelectorAll('.plan-kit-assign').forEach(sel=>{
     sel.addEventListener('change', ()=>{
       const [cat] = sel.dataset.itemKey.split(':');
       setKitItemAssignment(planId, sel.dataset.itemKey, cat, sel.value);
+      touchLocalKitRow(sel.dataset.itemKey, cat, {assigned_user_id: sel.value || null});
+      renderResponsibilityList();
+      if(sel.value) notifyPlanKitAssignment(planId, sel.dataset.itemKey);
     });
   });
   kitBody.querySelectorAll('.plan-kit-add').forEach(btn=>{
@@ -10917,8 +10944,68 @@ function wireKitSectionEvents(){
 async function refreshKitSection(){
   if(!planDetailCurrent) return;
   const kitRows = await loadKitRows(planDetailCurrent.plan.id);
+  planDetailCurrent.kitRows = kitRows;
   document.getElementById('plan-kit-body').innerHTML = renderKitSectionsHtml(planDetailCurrent.plan, kitRows, planDetailCurrent.isOwner, planDetailCurrent.assignable);
   wireKitSectionEvents();
+  renderResponsibilityList();
+}
+
+// A built-in kit item's label only lives client-side in KIT_CATEGORIES (its
+// row in trip_plan_kit_items has no label of its own); a custom item's real
+// label is on the row already. itemKey is "<category>:<key>" for built-ins,
+// "<category>:custom:<uid>" for custom ones - the latter never matches here
+// since custom keys don't appear in KIT_CATEGORIES' own item lists.
+function kitBuiltInLabel(category, itemKey){
+  const suffix = itemKey.slice(category.length + 1);
+  const cat = KIT_CATEGORIES.find(c=> c.key === category);
+  const item = cat && cat.items.find(it=> it.key === suffix);
+  return item ? item.label : null;
+}
+
+// "Who's bringing what" - a read-only, filterable roll-up of every assigned
+// item across both the tackle checklist and the kit checklist, since those
+// live in two separate tables and an assignee shouldn't have to check two
+// different lists to see their own name. Pro-only, same as assignment itself.
+function renderResponsibilityHtml(assignable){
+  if(!assignable || !assignable.length) return '';
+  const filterOptions = '<option value="">Everyone</option>'
+    + assignable.map(p=> '<option value="' + escapeHtml(p.user_id) + '">' + escapeHtml(p.name) + '</option>').join('');
+  return '<details class="ins-group" data-plan-group="responsibility" open><summary><span class="ins-group-title">Who’s bringing what</span></summary>'
+    + '<div class="ins-group-body">'
+    + '<select id="plan-responsibility-filter" style="margin-bottom:10px;">' + filterOptions + '</select>'
+    + '<div id="plan-responsibility-list"></div>'
+    + '</div></details>';
+}
+function responsibilityEntries(){
+  const d = planDetailCurrent;
+  if(!d) return [];
+  const entries = [];
+  d.items.forEach(it=>{
+    const userId = d.assignments.get(it.id);
+    if(!userId) return;
+    entries.push({label: it.name, ticked: d.ticks.get(it.id) || false, userId});
+  });
+  (d.kitRows || []).forEach(r=>{
+    if(!r.assigned_user_id) return;
+    const label = r.label || kitBuiltInLabel(r.category, r.item_key) || 'Item';
+    entries.push({label, ticked: !!r.ticked, userId: r.assigned_user_id});
+  });
+  return entries;
+}
+function renderResponsibilityList(){
+  const listEl = document.getElementById('plan-responsibility-list');
+  if(!listEl || !planDetailCurrent) return;
+  const filterEl = document.getElementById('plan-responsibility-filter');
+  const filterId = filterEl ? filterEl.value : '';
+  const entries = responsibilityEntries().filter(e=> !filterId || e.userId === filterId);
+  if(!entries.length){ listEl.innerHTML = '<div class="empty">Nothing assigned yet.</div>'; return; }
+  const byPerson = new Map();
+  entries.forEach(e=>{ (byPerson.get(e.userId) || byPerson.set(e.userId, []).get(e.userId)).push(e); });
+  listEl.innerHTML = [...byPerson.entries()].map(([userId, list])=>{
+    const person = planDetailCurrent.assignable.find(p=> p.user_id === userId);
+    const chips = list.map(e=> '<span style="display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;background:var(--card-bg);' + (e.ticked ? 'opacity:0.55;' : '') + '">' + (e.ticked ? '✓ ' : '') + escapeHtml(e.label) + '</span>').join(' ');
+    return '<div style="margin-bottom:10px;"><div class="pc-line" style="font-weight:700;margin-bottom:4px;">' + escapeHtml(person ? person.name : 'Someone') + '</div><div style="display:flex;flex-wrap:wrap;gap:6px;">' + chips + '</div></div>';
+  }).join('');
 }
 
 let planDetailCurrent = null; // {plan, items, isOwner, assignable} for whichever plan is open in the dialog
@@ -10988,7 +11075,7 @@ async function openPlanDetail(planId){
     });
   }
 
-  planDetailCurrent = {plan, items, isOwner, assignable};
+  planDetailCurrent = {plan, items, isOwner, assignable, ticks, assignments: planTicks.assignments, kitRows};
 
   const hasCoords = venue && venue.latitude != null && venue.longitude != null;
   const ownerName = isOwner ? null : (people.find(p=> p.user_id === plan.owner_user_id) || {}).name;
@@ -11011,6 +11098,7 @@ async function openPlanDetail(planId){
     + (hasCoords ? '<div id="plan-detail-map" style="height:220px;border-radius:10px;overflow:hidden;border:1px solid var(--line);margin-bottom:14px;"></div>' : '')
     + shareSectionHtml
     + renderPlanRecapHtml(recap) + renderVenueInsightsHtml(venueInsightRows) + '<div id="plan-detail-forecast">' + forecastHtml + '</div>'
+    + renderResponsibilityHtml(assignable)
     // The Tackle box checklist and restock banner are the OWNER's own private
     // gear - a shared mate's own tackle box has nothing to do with this trip,
     // and may not even be visible to them (tackle sharing is a separate,
@@ -11026,12 +11114,24 @@ async function openPlanDetail(planId){
   if(hasCoords) renderPlanDetailMap(venue);
 
   body.querySelectorAll('.plan-pack-check').forEach(cb=>{
-    cb.addEventListener('change', ()=> setPlanTick(plan.id, cb.dataset.itemId, cb.checked));
+    cb.addEventListener('change', ()=>{
+      setPlanTick(plan.id, cb.dataset.itemId, cb.checked);
+      planDetailCurrent.ticks.set(cb.dataset.itemId, cb.checked);
+      renderResponsibilityList();
+    });
   });
   body.querySelectorAll('.plan-pack-assign').forEach(sel=>{
-    sel.addEventListener('change', ()=> setPlanItemAssignment(plan.id, sel.dataset.itemId, sel.value));
+    sel.addEventListener('change', ()=>{
+      setPlanItemAssignment(plan.id, sel.dataset.itemId, sel.value);
+      planDetailCurrent.assignments.set(sel.dataset.itemId, sel.value || null);
+      renderResponsibilityList();
+      if(sel.value) notifyPlanItemAssignment(plan.id, sel.dataset.itemId);
+    });
   });
   wireKitSectionEvents();
+  renderResponsibilityList();
+  const respFilter = document.getElementById('plan-responsibility-filter');
+  if(respFilter) respFilter.addEventListener('change', renderResponsibilityList);
 
   const calendarBtn = document.getElementById('plan-detail-calendar-btn');
   if(calendarBtn) calendarBtn.addEventListener('click', ()=>{
