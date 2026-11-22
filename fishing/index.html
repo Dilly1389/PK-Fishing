@@ -10715,14 +10715,19 @@ const KIT_CATEGORIES = [
   {key:'comfort', label:'Clothing & comfort', items:[
     {key:'rain_jacket', label:'Rain jacket'},
     {key:'warm_layer', label:'Warm layer'},
+    {key:'dry_clothes', label:'Dry change of clothes (sealed in a bag)'},
+    {key:'waterproof_footwear', label:'Waterproof footwear'},
     {key:'chair', label:'Chair'},
     {key:'shade', label:'Shade / umbrella'}
   ]},
   {key:'tools', label:'Tools & accessories', items:[
     {key:'landing_net', label:'Landing net'},
     {key:'unhooking_mat', label:'Unhooking mat'},
+    {key:'weigh_sling', label:'Weigh sling'},
     {key:'scale', label:'Scale'},
     {key:'forceps', label:'Forceps / disgorger'},
+    {key:'bite_alarms', label:'Bite alarms and receiver'},
+    {key:'bank_sticks', label:'Bank sticks / rod pod'},
     {key:'batteries', label:'Spare batteries'}
   ]},
   // The next three are only worth asking about on a multi-day trip - on a
@@ -10733,6 +10738,7 @@ const KIT_CATEGORIES = [
     {key:'gazebo', label:'Gazebo'},
     {key:'ground_sheet', label:'Ground sheet'},
     {key:'pegs_straps', label:'Pegs and storm straps'},
+    {key:'mallet', label:'Mallet'},
     {key:'bedchair', label:'Bedchair / sleeping gear'},
     {key:'gas_stove', label:'Gas bottle and stove'},
     {key:'cooler_box', label:'Cooler box'},
@@ -10857,22 +10863,23 @@ function tripIcsText(plan){
 function renderKitSectionsHtml(plan, kitRows, isOwner, assignable){
   const byKey = new Map(kitRows.map(r=>[r.item_key, r]));
   return KIT_CATEGORIES.filter(cat=> !cat.multiDayOnly || isMultiDay(plan)).map(cat=>{
-    const defaultRows = cat.items.map(it=>{
+    // Built-in and custom items merged into one alphabetical list, rather
+    // than built-ins always first - a custom item you actually need to pack
+    // shouldn't be buried below ones you don't.
+    const builtIn = cat.items.map(it=>{
       const fullKey = cat.key + ':' + it.key;
       const row = byKey.get(fullKey);
-      const checked = row ? row.ticked : true; // defaults start ticked until you say otherwise
-      return '<label class="plan-item-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
-        + '<input type="checkbox" class="plan-kit-check" data-item-key="' + escapeHtml(fullKey) + '" data-category="' + escapeHtml(cat.key) + '"' + (checked ? ' checked' : '') + '>'
-        + '<span>' + escapeHtml(it.label) + '</span>'
-        + planAssignSelectHtml('plan-kit-assign', 'item-key', fullKey, row ? row.assigned_user_id : null, assignable)
-        + '</label>';
-    }).join('');
-    const customRows = kitRows.filter(r=> r.category === cat.key && r.label).map(r=>
+      return {key: fullKey, label: it.label, checked: row ? row.ticked : true, assignedTo: row ? row.assigned_user_id : null, custom: false};
+    });
+    const custom = kitRows.filter(r=> r.category === cat.key && r.label).map(r=>
+      ({key: r.item_key, label: r.label, checked: r.ticked, assignedTo: r.assigned_user_id, custom: true})
+    );
+    const rows = builtIn.concat(custom).sort((a,b)=> a.label.localeCompare(b.label)).map(r=>
       '<label class="plan-item-row" style="display:flex;align-items:center;gap:8px;padding:6px 0;">'
-        + '<input type="checkbox" class="plan-kit-check" data-item-key="' + escapeHtml(r.item_key) + '" data-category="' + escapeHtml(cat.key) + '" data-label="' + escapeHtml(r.label) + '"' + (r.ticked ? ' checked' : '') + '>'
+        + '<input type="checkbox" class="plan-kit-check" data-item-key="' + escapeHtml(r.key) + '" data-category="' + escapeHtml(cat.key) + '"' + (r.custom ? ' data-label="' + escapeHtml(r.label) + '"' : '') + (r.checked ? ' checked' : '') + '>'
         + '<span>' + escapeHtml(r.label) + '</span>'
-        + planAssignSelectHtml('plan-kit-assign', 'item-key', r.item_key, r.assigned_user_id, assignable)
-        + (isOwner ? '<button type="button" class="mini-btn plan-kit-remove" data-item-key="' + escapeHtml(r.item_key) + '" style="margin-left:8px;padding:2px 8px;">Remove</button>' : '') + '</label>'
+        + planAssignSelectHtml('plan-kit-assign', 'item-key', r.key, r.assignedTo, assignable)
+        + (r.custom && isOwner ? '<button type="button" class="mini-btn plan-kit-remove" data-item-key="' + escapeHtml(r.key) + '" style="margin-left:8px;padding:2px 8px;">Remove</button>' : '') + '</label>'
     ).join('');
     // Structurally changing the checklist (adding/removing a custom item) stays
     // owner-only, same as editing dates - a shared mate ticks and assigns, but
@@ -10880,9 +10887,9 @@ function renderKitSectionsHtml(plan, kitRows, isOwner, assignable){
     const addBtn = !isOwner ? '' : (isPro()
       ? '<button type="button" class="mini-btn plan-kit-add" data-category="' + escapeHtml(cat.key) + '" style="margin-top:4px;">+ Add item</button>'
       : '<button type="button" class="mini-btn plan-kit-upgrade" style="margin-top:4px;">+ Add item (Pro)</button>');
-    return '<details class="ins-group" data-plan-group="' + escapeHtml(cat.key) + '" open>'
+    return '<details class="ins-group" data-plan-group="' + escapeHtml(cat.key) + '">'
       + '<summary><span class="ins-group-title">' + escapeHtml(cat.label) + '</span></summary>'
-      + '<div class="ins-group-body">' + defaultRows + customRows + addBtn + '</div></details>';
+      + '<div class="ins-group-body">' + rows + addBtn + '</div></details>';
   }).join('');
 }
 
@@ -10970,7 +10977,7 @@ function renderResponsibilityHtml(assignable){
   if(!assignable || !assignable.length) return '';
   const filterOptions = '<option value="">Everyone</option>'
     + assignable.map(p=> '<option value="' + escapeHtml(p.user_id) + '">' + escapeHtml(p.name) + '</option>').join('');
-  return '<details class="ins-group" data-plan-group="responsibility" open><summary><span class="ins-group-title">Who’s bringing what</span></summary>'
+  return '<details class="ins-group" data-plan-group="responsibility"><summary><span class="ins-group-title">Who’s bringing what</span></summary>'
     + '<div class="ins-group-body">'
     + '<select id="plan-responsibility-filter" style="margin-bottom:10px;">' + filterOptions + '</select>'
     + '<div id="plan-responsibility-list"></div>'
@@ -11001,11 +11008,14 @@ function renderResponsibilityList(){
   if(!entries.length){ listEl.innerHTML = '<div class="empty">Nothing assigned yet.</div>'; return; }
   const byPerson = new Map();
   entries.forEach(e=>{ (byPerson.get(e.userId) || byPerson.set(e.userId, []).get(e.userId)).push(e); });
-  listEl.innerHTML = [...byPerson.entries()].map(([userId, list])=>{
-    const person = planDetailCurrent.assignable.find(p=> p.user_id === userId);
-    const chips = list.map(e=> '<span style="display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;background:var(--card-bg);' + (e.ticked ? 'opacity:0.55;' : '') + '">' + (e.ticked ? '✓ ' : '') + escapeHtml(e.label) + '</span>').join(' ');
-    return '<div style="margin-bottom:10px;"><div class="pc-line" style="font-weight:700;margin-bottom:4px;">' + escapeHtml(person ? person.name : 'Someone') + '</div><div style="display:flex;flex-wrap:wrap;gap:6px;">' + chips + '</div></div>';
-  }).join('');
+  listEl.innerHTML = [...byPerson.entries()]
+    .map(([userId, list])=> ({userId, list, name: (planDetailCurrent.assignable.find(p=> p.user_id === userId) || {}).name || 'Someone'}))
+    .sort((a,b)=> a.name.localeCompare(b.name))
+    .map(({name, list})=>{
+      list.sort((a,b)=> a.label.localeCompare(b.label));
+      const chips = list.map(e=> '<span style="display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px;background:var(--card-bg);' + (e.ticked ? 'opacity:0.55;' : '') + '">' + (e.ticked ? '✓ ' : '') + escapeHtml(e.label) + '</span>').join(' ');
+      return '<div style="margin-bottom:10px;"><div class="pc-line" style="font-weight:700;margin-bottom:4px;">' + escapeHtml(name) + '</div><div style="display:flex;flex-wrap:wrap;gap:6px;">' + chips + '</div></div>';
+    }).join('');
 }
 
 let planDetailCurrent = null; // {plan, items, isOwner, assignable} for whichever plan is open in the dialog
@@ -11105,7 +11115,7 @@ async function openPlanDetail(planId){
     // per-item/per-box decision). The kit list below is plan data, not tied
     // to anyone's private tackle box, so that's where the shared value is.
     + (isOwner ? renderPlanRestockHtml()
-      + '<details class="ins-group" data-plan-group="tackle" open><summary><span class="ins-group-title">Tackle box</span></summary>'
+      + '<details class="ins-group" data-plan-group="tackle"><summary><span class="ins-group-title">Tackle box</span></summary>'
         + '<div class="ins-group-body">' + renderPlanChecklistHtml(items, ticks, planTicks.assignments, assignable) + '</div></details>' : '')
     + '<div id="plan-kit-body">' + renderKitSectionsHtml(plan, kitRows, isOwner, assignable) + '</div>';
 
