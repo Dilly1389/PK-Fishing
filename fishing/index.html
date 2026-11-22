@@ -2350,9 +2350,9 @@
     <h3 style="margin-top:0;">Friends</h3>
 
     <div class="field">
-      <label>Find a friend by their email</label>
+      <label>Find a friend by name, nickname or email</label>
       <div style="display:flex;gap:8px;">
-        <input type="email" maxlength="200" id="friend-search-email" placeholder="angler@example.com" style="flex:1;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input type="text" maxlength="200" id="friend-search-email" placeholder="Name, nickname or email" style="flex:1;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         <button type="button" class="mini-btn" id="friend-search-btn">Search</button>
       </div>
     </div>
@@ -5614,41 +5614,52 @@ document.getElementById('friends-x').addEventListener('click', ()=>{
 
 document.getElementById('friend-search-btn').addEventListener('click', async ()=>{
   const resultEl = document.getElementById('friend-search-result');
-  const email = document.getElementById('friend-search-email').value.trim();
+  const term = document.getElementById('friend-search-email').value.trim().toLowerCase();
   const myId = getMyFishermanId();
-  if(!email){ resultEl.innerHTML = '<div class="empty">Type an email to search.</div>'; return; }
+  if(!term){ resultEl.innerHTML = '<div class="empty">Type a name, nickname or email to search.</div>'; return; }
   resultEl.innerHTML = '<div class="empty">Searching...</div>';
   try{
-    const rows = await sbGet('fishermen?select=id,name,first_name,last_name,email&email=ilike.'+encodeURIComponent(email)+'&limit=1');
-    const found = rows[0];
-    if(!found){
-      resultEl.innerHTML = '<div class="empty">No PK Fishing angler with that email.</div>';
+    // Same three-way match as the Feed's angler search, reusing the same
+    // already-loaded directory: nickname or full name (substring), or an
+    // exact email match - which is allowed to surface someone even if
+    // they've hidden from general directory browsing, since knowing their
+    // exact email already implies you know them.
+    const matches = people.filter(p=>{
+      if(p.id === myId || p.archived) return false;
+      const fullName = ((p.first_name || '') + ' ' + (p.last_name || '')).trim().toLowerCase();
+      const nameHit = p.name.toLowerCase().includes(term);
+      const fullNameHit = fullName && fullName.includes(term);
+      const emailHit = p.email && p.email.toLowerCase() === term;
+      if(p.hide_from_directory && !emailHit) return false;
+      return nameHit || fullNameHit || emailHit;
+    }).slice(0, 8);
+    if(!matches.length){
+      resultEl.innerHTML = '<div class="empty">No PK Fishing angler matches that.</div>';
       return;
     }
-    if(found.id === myId){
-      resultEl.innerHTML = '<div class="empty">That\'s you.</div>';
-      return;
-    }
-    const existing = await sbGet('friend_requests?select=id,from_fisherman_id,to_fisherman_id,status&or=(and(from_fisherman_id.eq.'+myId+',to_fisherman_id.eq.'+found.id+'),and(from_fisherman_id.eq.'+found.id+',to_fisherman_id.eq.'+myId+'))&limit=1');
-    const rel = existing[0];
-    let actionHtml;
-    if(!rel){
-      actionHtml = '<button type="button" class="mini-btn" id="friend-send-request-btn">Send request</button>';
-    }else if(rel.status === 'accepted'){
-      actionHtml = '<span class="pc-line muted">Already friends</span>';
-    }else if(rel.from_fisherman_id === myId){
-      actionHtml = '<span class="pc-line muted">Request pending</span>';
-    }else{
-      actionHtml = '<span class="pc-line muted">They\'ve already asked you — check Requests below</span>';
-    }
-    resultEl.innerHTML = '<div class="profile-catch" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;"><b>'+escapeHtml(friendDisplayName(found))+'</b>'+actionHtml+'</div>';
-    const sendBtn = document.getElementById('friend-send-request-btn');
-    if(sendBtn){
+    const rels = await Promise.all(matches.map(found=>
+      sbGet('friend_requests?select=id,from_fisherman_id,to_fisherman_id,status&or=(and(from_fisherman_id.eq.'+myId+',to_fisherman_id.eq.'+found.id+'),and(from_fisherman_id.eq.'+found.id+',to_fisherman_id.eq.'+myId+'))&limit=1')
+    ));
+    resultEl.innerHTML = matches.map((found, i)=>{
+      const rel = rels[i][0];
+      let actionHtml;
+      if(!rel){
+        actionHtml = '<button type="button" class="mini-btn friend-send-request-btn" data-id="'+found.id+'">Send request</button>';
+      }else if(rel.status === 'accepted'){
+        actionHtml = '<span class="pc-line muted">Already friends</span>';
+      }else if(rel.from_fisherman_id === myId){
+        actionHtml = '<span class="pc-line muted">Request pending</span>';
+      }else{
+        actionHtml = '<span class="pc-line muted">They\'ve already asked you — check Requests below</span>';
+      }
+      return '<div class="profile-catch" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;"><b>'+escapeHtml(friendDisplayName(found))+'</b>'+actionHtml+'</div>';
+    }).join('');
+    resultEl.querySelectorAll('.friend-send-request-btn').forEach(sendBtn=>{
       sendBtn.addEventListener('click', async ()=>{
         sendBtn.disabled = true;
         sendBtn.textContent = 'Sending...';
         try{
-          await sbPost('friend_requests', {id: uid(), from_fisherman_id: myId, to_fisherman_id: found.id, status: 'pending'});
+          await sbPost('friend_requests', {id: uid(), from_fisherman_id: myId, to_fisherman_id: sendBtn.dataset.id, status: 'pending'});
           document.getElementById('friend-search-btn').click();
           loadFriendData();
         }catch(e){
@@ -5658,7 +5669,7 @@ document.getElementById('friend-search-btn').addEventListener('click', async ()=
           alert('Could not send that request.');
         }
       });
-    }
+    });
   }catch(e){
     console.error('friend search failed', e);
     resultEl.innerHTML = '<div class="empty">Could not search right now.</div>';
