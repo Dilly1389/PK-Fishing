@@ -10862,7 +10862,7 @@ function tripIcsText(plan){
 
 function renderKitSectionsHtml(plan, kitRows, isOwner, assignable){
   const byKey = new Map(kitRows.map(r=>[r.item_key, r]));
-  return KIT_CATEGORIES.filter(cat=> !cat.multiDayOnly || isMultiDay(plan)).map(cat=>{
+  return KIT_CATEGORIES.filter(cat=> !cat.multiDayOnly || isMultiDay(plan)).slice().sort((a,b)=> a.label.localeCompare(b.label)).map(cat=>{
     // Built-in and custom items merged into one alphabetical list, rather
     // than built-ins always first - a custom item you actually need to pack
     // shouldn't be buried below ones you don't.
