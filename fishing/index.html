@@ -1675,7 +1675,7 @@
         <p class="pc-line muted" style="margin-bottom:10px;">The latest catches from you and everyone you follow, newest first.</p>
         <div class="field">
           <label>Search by name (optional)</label>
-          <input type="text" maxlength="100" id="feed-search-input" placeholder="Narrow down to one angler..." autocomplete="pk-field-8" name="friend-search" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <input type="text" maxlength="100" id="feed-search-input" placeholder="Search by nickname, name, or email..." autocomplete="pk-field-8" name="friend-search" role="presentation" data-form-type="other" autocorrect="off" autocapitalize="off" spellcheck="false">
         </div>
         <div id="feed-list"><div class="empty">No catches yet — this is where recent catches from you and your friends will appear.</div></div>
       </section>
@@ -17574,10 +17574,24 @@ async function renderFeed(refetch){
   let matchingPeople = null;
   let matchingIds = null;
   if(searchTerm){
-    matchingPeople = people.filter(p => !p.archived && !p.hide_from_directory && p.name.toLowerCase().includes(searchTerm));
+    // Three ways in on purpose: nickname (the open-directory browse case),
+    // full name (for someone who only knows a mate's real name), or an exact
+    // email match. Email is exact rather than substring - a partial match
+    // would let someone fish for who's on a given domain; an exact match
+    // means they already know this person, which is enough to surface them
+    // even if they've hidden from general directory browsing.
+    matchingPeople = people.filter(p => {
+      if(p.archived) return false;
+      const nameHit = p.name.toLowerCase().includes(searchTerm);
+      const fullName = ((p.first_name || '') + ' ' + (p.last_name || '')).trim().toLowerCase();
+      const fullNameHit = fullName && fullName.includes(searchTerm);
+      const emailHit = p.email && p.email.toLowerCase() === searchTerm;
+      if(p.hide_from_directory && !emailHit) return false;
+      return nameHit || fullNameHit || emailHit;
+    });
     matchingIds = matchingPeople.map(p => p.id);
     if(matchingIds.length === 0){
-      el.innerHTML = '<div class="empty">No anglers match that name.</div>';
+      el.innerHTML = '<div class="empty">No anglers match that.</div>';
       return;
     }
   }
