@@ -9114,10 +9114,24 @@ function isHailCode(code){ return code === 96 || code === 99; }
 // weather_code alone sometimes misses or mistimes. CAPE alone says nothing
 // about hail specifically, so hail risk stays keyed off the weather code only.
 function isStormRisk(code, cape){ return isStormCode(code) || (cape != null && cape >= 1000); }
-function stormWarningHtml(isHail){
+// whenText is a short pre-formatted fragment ("from 17:00", "on Tue") saying
+// when the risk actually kicks in - every call site already has the hourly
+// or daily data to work that out, so this never needs a fetch of its own.
+// Left blank when the risk is already live right now; no point saying "from
+// now".
+function stormWarningHtml(isHail, whenText){
+  const when = whenText ? ' ' + whenText : '';
   return isHail
-    ? `<div class="storm-warning">⚠️ <b>Hail risk</b> — thunderstorm with hail possible. Stay safe, and get off the water if it closes in.</div>`
-    : `<div class="storm-warning">⚠️ <b>Storm risk</b> — lightning possible. Stay safe, and get off the water if it closes in.</div>`;
+    ? `<div class="storm-warning">⚠️ <b>Hail risk${when}</b> — thunderstorm with hail possible. Stay safe, and get off the water if it closes in.</div>`
+    : `<div class="storm-warning">⚠️ <b>Storm risk${when}</b> — lightning possible. Stay safe, and get off the water if it closes in.</div>`;
+}
+// A weather object (from fetchWeather) always carries both stormRiskAt and
+// hailRiskAt - this just picks the one that matches whichever warning is
+// about to be shown, so every call site doesn't have to repeat that choice.
+function weatherStormWhen(w){
+  if(!w) return '';
+  const at = w.hailRisk ? w.hailRiskAt : w.stormRiskAt;
+  return at ? 'from ' + fmtClock(at) : '';
 }
 
 async function fetchForecast(lat, lng){
@@ -9183,8 +9197,16 @@ async function fetchWeather(lat, lng){
     const nowIdx = times.findIndex(t=> new Date(t) >= new Date());
     const upcoming = nowIdx >= 0 ? codes.slice(nowIdx) : [];
     const upcomingCapes = nowIdx >= 0 ? capes.slice(nowIdx) : [];
-    const stormRisk = isStormRisk(c.weather_code, c.cape) || upcoming.some((code, i)=> isStormRisk(code, upcomingCapes[i]));
-    const hailRisk = isHailCode(c.weather_code) || upcoming.some(code=> isHailCode(code));
+    const upcomingTimes = nowIdx >= 0 ? times.slice(nowIdx) : [];
+    const riskIdx = upcoming.findIndex((code, i)=> isStormRisk(code, upcomingCapes[i]));
+    const hailIdx = upcoming.findIndex(code=> isHailCode(code));
+    const stormRisk = isStormRisk(c.weather_code, c.cape) || riskIdx >= 0;
+    const hailRisk = isHailCode(c.weather_code) || hailIdx >= 0;
+    // Null when the risk is already live on the "current" reading itself,
+    // not just an upcoming hour - "from 17:00" would be misleading for
+    // something that's already happening.
+    const stormRiskAt = (!isStormRisk(c.weather_code, c.cape) && riskIdx >= 0) ? new Date(upcomingTimes[riskIdx]) : null;
+    const hailRiskAt = (!isHailCode(c.weather_code) && hailIdx >= 0) ? new Date(upcomingTimes[hailIdx]) : null;
     return {
       temp: c.temperature_2m,
       windSpeed: c.wind_speed_10m,
@@ -9197,6 +9219,8 @@ async function fetchWeather(lat, lng){
       pressureChange,
       stormRisk,
       hailRisk,
+      stormRiskAt,
+      hailRiskAt,
       // Same host as everything else above, so sunrise/sunset survive even
       // on a network/ad-blocker that's fine with Open-Meteo but blocks the
       // separate astronomy API (fetchSunMoon) - see combineSunMoon().
@@ -9645,7 +9669,7 @@ async function renderSessionWeather(){
 
   el.style.cursor = weatherCache.coords ? 'pointer' : 'default';
   el.style.display = 'block';
-  el.innerHTML = (weather && weather.stormRisk ? stormWarningHtml(weather.hailRisk) : '') +
+  el.innerHTML = (weather && weather.stormRisk ? stormWarningHtml(weather.hailRisk, weatherStormWhen(weather)) : '') +
     // A floated "Forecast ›" here used to fight the weather text for the same
     // line - fine when short, but wrapped and landed in odd spots once the
     // text got long (wind, cloud and pressure all present). Flex keeps the
@@ -9851,7 +9875,14 @@ async function openForecast(){
     });
   }
 
-  let html = hours.some(h=> isStormRisk(h.code, h.cape)) ? stormWarningHtml(hours.some(h=> isHailCode(h.code))) : '';
+  const stormHour = hours.find(h=> isStormRisk(h.code, h.cape));
+  const hailHour = hours.find(h=> isHailCode(h.code));
+  const isHailNow = !!hailHour;
+  const whenHour = isHailNow ? hailHour : stormHour;
+  // Only worth saying "from HH:MM" when it's not the very first hour shown -
+  // that one's already now, so a time would just repeat the obvious.
+  const whenText = (whenHour && whenHour !== hours[0]) ? 'from ' + fmtClock(whenHour.time) : '';
+  let html = stormHour ? stormWarningHtml(isHailNow, whenText) : '';
 
   // A short plain-language line above the data, same idea as Apple Weather's
   // "Highlights" callout - translate the numbers into the one thing worth
@@ -10606,8 +10637,16 @@ async function renderPlanForecastHtml(venue, plan){
     const d = t.slice(0, 10);
     if(hCapes[j] != null && (maxCapeByDay[d] == null || hCapes[j] > maxCapeByDay[d])) maxCapeByDay[d] = hCapes[j];
   });
-  const anyStorm = dayIdxs.some(i=> isStormRisk(data.daily.weather_code?.[i], maxCapeByDay[times[i]]));
-  const anyHail = dayIdxs.some(i=> isHailCode(data.daily.weather_code?.[i]));
+  const stormDayIdx = dayIdxs.find(i=> isStormRisk(data.daily.weather_code?.[i], maxCapeByDay[times[i]]));
+  const hailDayIdx = dayIdxs.find(i=> isHailCode(data.daily.weather_code?.[i]));
+  const anyStorm = stormDayIdx != null;
+  const anyHail = hailDayIdx != null;
+  // A single-day plan needs no day name (it's just "today"); a multi-day one
+  // says which day, same short format the rows below already use.
+  const stormWhenIdx = anyHail ? hailDayIdx : stormDayIdx;
+  const stormWhenText = (anyStorm && dayIdxs.length > 1 && stormWhenIdx != null)
+    ? 'on ' + new Date(times[stormWhenIdx] + 'T12:00').toLocaleDateString(dateLocale(), {weekday:'short'})
+    : '';
   const rows = dayIdxs.map(i=>{
     const max = data.daily.temperature_2m_max?.[i], min = data.daily.temperature_2m_min?.[i];
     const rain = data.daily.precipitation_probability_max?.[i], wind = data.daily.wind_speed_10m_max?.[i];
@@ -10624,7 +10663,7 @@ async function renderPlanForecastHtml(venue, plan){
   // A trip longer than the 7-day forecast window still shows what it can
   const beyondWindow = endStr > times[times.length - 1];
   return '<div class="profile-catch">'
-    + (anyStorm ? stormWarningHtml(anyHail) : '')
+    + (anyStorm ? stormWarningHtml(anyHail, stormWhenText) : '')
     + '<div class="pc-head">' + (dayIdxs.length > 1 ? 'Weather for your trip' : 'Weather for the day') + '</div>'
     + rows
     + (beyondWindow ? '<div class="pc-line muted" style="margin-top:6px;">The rest of your trip is still too far out for a forecast.</div>' : '')
@@ -17382,7 +17421,7 @@ async function renderHomeWeather(){
       const moon = box(`<span style="font-size:32px;line-height:46px;" aria-hidden="true">${m.emoji}</span><b style="font-size:14px;">Moon</b><span>${escapeHtml(m.label)}</span>`);
       const uv = (w.uvIndex != null && w.uvIndex >= 3) ? box(`<span style="font-size:32px;line-height:46px;" aria-hidden="true">☀️</span><b style="font-size:14px;">UV ${Math.round(w.uvIndex)}</b><span>${escapeHtml(uvCategory(w.uvIndex))}</span>`) : '';
       el.innerHTML = `
-        ${w.stormRisk ? stormWarningHtml(w.hailRisk) : ''}
+        ${w.stormRisk ? stormWarningHtml(w.hailRisk, weatherStormWhen(w)) : ''}
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
           <span style="font-size:40px;line-height:1;" aria-hidden="true">${sky.icon}</span>
           <div style="flex:1;min-width:0;">
@@ -17405,14 +17444,14 @@ async function renderHomeWeather(){
       if(w.uvIndex != null && w.uvIndex >= 3) tiles.push(tile(String(Math.round(w.uvIndex)), 'UV · ' + uvCategory(w.uvIndex)));
       tiles.push(tile(m.emoji, m.label));
       el.innerHTML = `
-        ${w.stormRisk ? stormWarningHtml(w.hailRisk) : ''}
+        ${w.stormRisk ? stormWarningHtml(w.hailRisk, weatherStormWhen(w)) : ''}
         ${sunMoonHtml}
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px;">${tiles.join('')}</div>
         ${signalHtml}
         <div style="font-size:12px;color:var(--muted);text-align:right;margin-top:8px;">Forecast ›</div>`;
     }else{
       el.innerHTML = `
-      ${w.stormRisk ? stormWarningHtml(w.hailRisk) : ''}
+      ${w.stormRisk ? stormWarningHtml(w.hailRisk, weatherStormWhen(w)) : ''}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div style="font-size:13.5px;color:var(--ink);">
           ${w.temp != null ? fmtTemp(w.temp) : ''}
